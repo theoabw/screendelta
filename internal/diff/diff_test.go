@@ -1137,3 +1137,40 @@ func TestAReturnDoesNotAssignItsIdentityToAnotherChange(t *testing.T) {
 		}
 	}
 }
+
+// TestTheDefaultAreaFloorFiltersASmallChange covers the default minimum region area, which mutation testing
+// showed was undefended: lowering it from 64 pixels to 4 left the suite green, because no case changes an area
+// between the two.
+func TestTheDefaultAreaFloorFiltersASmallChange(t *testing.T) {
+	width, height := 320, 240
+	// A three by three panel is nine pixels, well above the noise floor in level, and the margin the engine
+	// grows a reported region by turns it into seven by seven, which is forty nine and still below the floor.
+	// The first version of this test used five by five, which the margin grew to eighty one and the floor
+	// therefore did not filter: the test was measuring the margin rather than the floor.
+	small := panel{x: 100, y: 100, w: 3, h: 3, value: 200}
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{small}),
+	}
+
+	cfg := defaults()
+	regions, _, err := New().Compare(frames[0], frames[1], cfg)
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) != 0 {
+		t.Fatalf("a change that grows to forty nine pixels was reported at the default area floor of %d pixels: %+v", cfg.MinRegionAreaPixels, regions)
+	}
+
+	// The same change with the floor lowered is reported, which is what makes this a test of the floor rather
+	// than of the change being invisible.
+	lowered := defaults()
+	lowered.MinRegionAreaPixels = 4
+	regions, _, err = New().Compare(frames[0], frames[1], lowered)
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the change is invisible even with the area floor lowered, so this test does not test the floor")
+	}
+}

@@ -1053,3 +1053,90 @@ func TestLiveElementsAreOnlyTheLiveOnesInOrder(t *testing.T) {
 }
 
 func ptrSignature(s identity.Signature) *identity.Signature { return &s }
+
+// The size gate has no test of its own here, and the reason is worth recording: mutation testing showed that
+// relaxing its lower bound from half to a twentieth changes no identity, because a small area inside a larger
+// element is matched by the containment rule by design, which is what "a part is naturally much smaller than
+// the whole" means. What the lower bound does change is which explanation answers, and therefore the
+// confidence, which TestAPartOfALargerElementIsMatchedByContainmentNotOverlap asserts.
+// TestContainmentBelowTheInteriorFractionIsNotACover covers the containment rule on the identity side, which
+// the mutations could relax from nine tenths to four tenths without any test objecting.
+func TestContainmentBelowTheInteriorFractionIsNotACover(t *testing.T) {
+	m := identity.New(4, 8)
+	element := m.Appear(boundsOf(100, 100, 100, 100), frameWidth, frameHeight, 1, nil)
+
+	// An area that contains half the element and reaches past it: the cover rule needs nine tenths of the
+	// element to be contained before the element counts as gone.
+	half := boundsOf(100, 100, 50, 200)
+	enclosed := m.Enclosed(half, frameWidth, frameHeight)
+	for _, candidate := range enclosed {
+		if candidate.ID == element.ID {
+			t.Fatalf("an area containing half of identity %d treated it as contained and gone", element.ID)
+		}
+	}
+
+	// Nine tenths is inside the rule, so the same question has the other answer there.
+	most := boundsOf(100, 100, 90, 200)
+	found := false
+	for _, candidate := range m.Enclosed(most, frameWidth, frameHeight) {
+		if candidate.ID == element.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("an area containing nine tenths of identity %d did not treat it as contained", element.ID)
+	}
+}
+
+// TestAPartOfALargerElementIsMatchedByContainmentNotOverlap pins which of the two matching explanations is
+// used, which mutation testing showed was undefended: relaxing the size gate let the overlap explanation
+// answer for a part, and the identity came out the same, so only the confidence reveals the difference.
+//
+// The distinction matters because the two explanations mean different things. A containment match says the
+// area is part of a larger element the engine is sure about, which is a confidence of one; an overlap match
+// says the area and the element mostly coincide, which is a partial match and scores lower.
+func TestAPartOfALargerElementIsMatchedByContainmentNotOverlap(t *testing.T) {
+	m := identity.New(1, 8)
+	element := m.Appear(boundsOf(100, 100, 100, 100), frameWidth, frameHeight, 1, nil)
+
+	// A part of the element, fully inside it and smaller than half its area, so the size gate keeps the
+	// overlap explanation out and containment answers.
+	assignment := m.Carry(boundsOf(120, 120, 63, 63), boundsOf(120, 120, 63, 63), frameWidth, frameHeight, 2, nil)
+	if assignment.ID != element.ID {
+		t.Fatalf("a part of the element was given identity %d instead of %d", assignment.ID, element.ID)
+	}
+	if assignment.Confidence != 1 {
+		t.Fatalf("a part of the element was matched with confidence %v, so the overlap explanation answered instead of containment",
+			assignment.Confidence)
+	}
+}
+
+// TestAReturnWithAnIncompatibleAppearanceIsRefused covers the appearance ceiling, whose mutation to a hundred
+// thousand left the suite green: the rule that refuses a hopeless candidate was untested.
+//
+// The numbers are chosen so the ceiling is the only rule that refuses. The area's appearance sits between the
+// two candidates, sixty two levels per cell from the retired element and a hundred and twenty five from the one
+// on the screen, so the relative comparison favours the retired element and the ceiling is what says the
+// resemblance is too weak to be evidence of anything.
+func TestAReturnWithAnIncompatibleAppearanceIsRefused(t *testing.T) {
+	m := identity.New(1, 8)
+	original := m.Appear(boundsOf(100, 100, 60, 40), frameWidth, frameHeight, 1, ptrSignature(filledSignature(190)))
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	// The element is retired, as the classifier retires it when something covers it. Calling EndFrame with the
+	// covering area is not enough on its own: EndFrame ages elements and the classifier is what retires them,
+	// which the first version of this test got wrong, so the rule it means to exercise was never consulted.
+	m.RetireByID(original.ID)
+
+	// What is on the screen now is a different element in the same place.
+	live := m.Appear(boundsOf(90, 90, 80, 60), frameWidth, frameHeight, 3, ptrSignature(filledSignature(3)))
+	if live.ID == original.ID {
+		t.Fatalf("the covering element was given the retired element's identity %d", original.ID)
+	}
+
+	decision := m.Return(boundsOf(90, 90, 80, 60), ptrSignature(filledSignature(128)), frameWidth, frameHeight, 4,
+		map[uint64]bool{live.ID: true})
+	if decision.IsReturn {
+		t.Fatalf("a return was reported for an area whose resemblance is too weak to be evidence: %+v", decision)
+	}
+}
