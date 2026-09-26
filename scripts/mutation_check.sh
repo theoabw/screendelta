@@ -4,27 +4,42 @@
 # Coverage says which lines the tests execute. It does not say whether a test would fail if the line were
 # wrong, and this project's own history is the argument for asking: three separate measurement harnesses once
 # reported success while measuring nothing, and a mutant that calls every region changed would have passed the
-# first accuracy suite. This script answers the narrower, harder question for a fixed list of mutations: apply
-# each one to a non-test file, run the packages that should care, and report whether anything failed.
+# first accuracy suite.
 #
-# A mutation that no test catches is a gap, and the list is chosen from the rules the requirements name rather
-# than at random: the identity thresholds, the cover rule, the noise floor, the luma weights, the growth margin,
-# the signature tolerance and the document ordering.
+# A mutation is killed only when a test actually fails. A non-zero exit with no failing test is a build or
+# package failure, which says nothing about whether the suite noticed the change, so it is counted as neither
+# and reported as inconclusive. Survivors make the run fail: the finding is a rule no test defends, and an exit
+# code is what a caller reads.
 #
 # Usage: scripts/mutation_check.sh [output file]
 #
-# The working tree must be clean. Every mutation is reverted immediately after its run, and the script verifies
-# that the tree is clean again at the end.
+# The working tree must be clean apart from the output file. Every mutation is reverted immediately, and the
+# script checks the tree again at the end to prove it.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
 output="${1:-docs/vv/evidence/mutation-$(date +%F).txt}"
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+
 packages="./internal/diff/... ./internal/identity/... ./internal/score/... ./internal/stream/... ./internal/delta/... ./internal/frame/... ./internal/config/..."
 
-if [ -n "$(git status --porcelain)" ]; then
+# The output file lives in the repository by default, so it is excluded from the cleanliness check: otherwise a
+# second run refuses to start, and a leftover mutation cannot be told apart from the script's own artefact.
+dirty() {
+  local status
+  status="$(git status --porcelain -- . ":(exclude)$output" 2>/dev/null)"
+  if [ -z "$status" ]; then
+    status="$(git status --porcelain 2>/dev/null | grep -vF -- "$output")"
+  fi
+  printf '%s' "$status"
+}
+
+if [ -n "$(dirty)" ]; then
   echo "mutation_check: the working tree is not clean, refusing to mutate it" >&2
-  exit 1
+  echo "note: $output is excluded from this check, so a dirty tree means a leftover mutation or an unrelated edit." >&2
+  exit 2
 fi
 
 # file|search|replace|what the mutation breaks
@@ -40,32 +55,37 @@ mutations=(
   "internal/diff/diff.go|wordBytes = 8|wordBytes = 2|the word size used to compare pixels"
   "internal/config/config.go|DefaultNoiseFloor            = 0.02|DefaultNoiseFloor            = 0.0|the default noise floor"
   "internal/config/config.go|DefaultMinRegionAreaPixels   = 64|DefaultMinRegionAreaPixels   = 4|the default minimum region area"
-  "internal/delta/delta.go|a.Bounds.H < b.Bounds.H|a.Bounds.H <= b.Bounds.H|the last key of the region order, made non-strict"
+  "internal/delta/delta.go|if a.Class != b.Class {|if false {|the class tie-breaker in the region order"
+  "internal/delta/delta.go|return a.AreaPixels < b.AreaPixels|return false|the area tie-breaker in the region order"
+  "internal/delta/required.go|if raw == nil || isNull(*raw) {|if false {|the check that a required field is present"
 )
 
 total=0
 killed=0
+inconclusive=0
 survived=()
+notapplied=()
 
 {
   echo "Mutation testing, $(date +%F)."
   echo "Command: scripts/mutation_check.sh"
   echo
-  echo "Each row applies one change to a non-test file, runs $packages, and records whether anything failed."
-  echo "A mutation that survives is a rule the suite does not defend: either the rule is untested or the test"
-  echo "asserts something that the mutation does not affect."
+  echo "Each row applies one change to a non-test file, runs the packages that should care, and records whether a"
+  echo "test failed. A mutation that survives is a rule the suite does not defend. A mutation that makes the"
+  echo "package fail to build is counted as neither, because a build failure is not evidence that a test noticed."
   echo
   printf '%-58s %-12s %s\n' "MUTATION" "RESULT" "NOTE"
 } > "$output"
 
 for entry in "${mutations[@]}"; do
   IFS='|' read -r file search replace note <<< "$entry"
-  total=$((total + 1))
 
   if ! grep -qF -- "$search" "$file"; then
-    printf '%-58s %-12s %s\n' "$note" "not applied" "the pattern is not in $file" >> "$output"
+    notapplied+=("$note")
+    printf '%-58s %-12s %s\n' "$note" "NOT APPLIED" "the pattern is not in $file" >> "$output"
     continue
   fi
+  total=$((total + 1))
 
   python3 - "$file" "$search" "$replace" <<'PY'
 import pathlib, sys
@@ -74,15 +94,19 @@ p = pathlib.Path(path)
 p.write_text(p.read_text().replace(search, replace, 1))
 PY
 
-  if go test $packages -count=1 > /tmp/mutation-run.txt 2>&1; then
-    outcome="survived"
+  go test $packages -count=1 > "$log" 2>&1
+  status=$?
+  failing="$(grep -m1 -E '^--- FAIL: ' "$log")"
+
+  if [ "$status" -eq 0 ]; then
     survived+=("$note")
-    printf '%-58s %-12s %s\n' "$note" "SURVIVED" "no test failed; see the note at the end" >> "$output"
-  else
-    outcome="killed"
+    printf '%-58s %-12s %s\n' "$note" "SURVIVED" "no test failed" >> "$output"
+  elif [ -n "$failing" ]; then
     killed=$((killed + 1))
-    failing=$(grep -m1 -E "^--- FAIL|^FAIL" /tmp/mutation-run.txt | head -1)
     printf '%-58s %-12s %s\n' "$note" "killed" "$failing" >> "$output"
+  else
+    inconclusive=$((inconclusive + 1))
+    printf '%-58s %-12s %s\n' "$note" "INCONCLUSIVE" "$(grep -m1 -E '^(FAIL|# |cannot)' "$log")" >> "$output"
   fi
 
   git checkout -- "$file"
@@ -90,21 +114,30 @@ done
 
 {
   echo
-  echo "Score: $killed of $total mutations killed."
+  echo "Score: $killed of $total applied mutations killed."
+  if [ "$inconclusive" -gt 0 ]; then
+    echo "$inconclusive mutation(s) produced a non-zero exit with no failing test, which is a build or package"
+    echo "failure rather than a kill, and is counted as neither."
+  fi
+  if [ ${#notapplied[@]} -gt 0 ]; then
+    echo "${#notapplied[@]} mutation(s) were never applied because their pattern was not found."
+  fi
   if [ ${#survived[@]} -gt 0 ]; then
     echo
     echo "Surviving mutations, each of which is a rule no test defends:"
     for item in "${survived[@]}"; do echo "  - $item"; done
   fi
   echo
-  if [ -n "$(git status --porcelain)" ]; then
-    echo "WARNING: the working tree is not clean after the run."
+  if [ -n "$(dirty)" ]; then
+    echo "WARNING: the working tree is not clean after the run, so a mutation may not have been reverted."
   else
-    echo "The working tree is clean and every mutation was reverted."
+    echo "The working tree is clean after the run: every mutation was reverted."
   fi
 } >> "$output"
 
-echo "mutation_check: $killed of $total mutations killed, written to $output"
+echo "mutation_check: $killed of $total applied mutations killed, written to $output"
 if [ ${#survived[@]} -gt 0 ]; then
   echo "survivors: ${survived[*]}"
+  exit 1
 fi
+exit 0
