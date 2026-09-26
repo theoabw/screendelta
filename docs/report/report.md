@@ -421,7 +421,7 @@ catches.
 | Level | What it establishes | Mechanism | Where the result is recorded |
 |---|---|---|---|
 | Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Three fuzz targets: the document decoder, the frame decoder and the comparison | `docs/vv/evidence/fuzz-2026-09-27.txt` |
-| Mutation testing | That the tests would notice if a rule were wrong, which coverage cannot say | Twelve targeted changes to the rules the requirements name, each run against the packages that should care | `docs/vv/evidence/mutation-2026-09-27.txt` |
+| Mutation testing | That the tests would notice if a rule were wrong, which coverage cannot say | Fourteen targeted changes to the rules the requirements name, each run against the packages that should care | `docs/vv/evidence/mutation-2026-09-27.txt` |
 | Unit and package tests | That each rule behaves as its comment says, including the boundary cases | `go test ./...`, one test per decision named for the behaviour | Test names in `docs/traceability.md` |
 | Integration and functional tests | That the parts agree: the engine, the differ, the identity map and the document validator | The corpus harness runs the real engine over generated frames and scores the documents | `docs/vv/results.md` |
 | Measurement | That the non-functional targets hold, and that the harness that says so is not lying | `make accuracy`, `make perf`, `make memcheck`, each defeated deliberately before it is believed | `docs/vv/evidence/` |
@@ -493,7 +493,7 @@ Current state, from the commands named:
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 85.8 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | four runs encoded and compared | byte-identical output | identical across two thread counts and two collector settings | pass in part | NFR-004 |
 | Fuzzing | three fuzz targets, 12.3 million executions | no panic, and the checked invariant holds | no panic on any input; the region order invariant failed and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
-| Mutation testing | twelve rules changed, one at a time | every mutation is caught | ten of twelve killed; the one survivor changes only how much work the comparison does, and the two order tie-breakers are now killed by a test | pass with two recorded exceptions | NFR-009 |
+| Mutation testing | fourteen rules changed, one at a time | every mutation is caught | thirteen of fourteen killed; the one survivor changes only how much work the comparison does, which is why no test can distinguish it | pass with one recorded exception | NFR-009 |
 | Requirement traceability | `make check-strict` | every requirement traced to a task, a test and existing evidence | 33 rows, 29 verified, 0 errors, 0 warnings | pass | the process gate |
 
 29 of 33 requirements are verified, meaning a test passes and its output is committed. The rest are
