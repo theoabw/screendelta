@@ -1140,3 +1140,45 @@ func TestAReturnWithAnIncompatibleAppearanceIsRefused(t *testing.T) {
 		t.Fatalf("a return was reported for an area whose resemblance is too weak to be evidence: %+v", decision)
 	}
 }
+
+// TestAReturnNeedsTheOverlappedElementsOwnPixels pins the rule that a return is a statement about the element's
+// own pixels rather than about the area that changed, which only the caller can measure.
+//
+// The regression check found this rule was not pinned: reverting it left TestRepaintingInsideACoverDoesNotRetireTheCover
+// passing, because the appearance ceiling refuses that particular area for a second reason. A fix that two rules
+// defend needs a case where only one of them can answer, and this is that case at the layer that owns the rule: the
+// area looks like the retired element, and the element on the screen is one whose own pixels the caller did not
+// report as changed, so the answer has to be no.
+func TestAReturnNeedsTheOverlappedElementsOwnPixels(t *testing.T) {
+	build := func() (*identity.Map, uint64, uint64, identity.Signature) {
+		m := identity.New(1, 8)
+		original := m.Appear(boundsOf(100, 100, 60, 40), frameWidth, frameHeight, 1, ptrSignature(filledSignature(90)))
+		m.EndFrame(1, nil, frameWidth, frameHeight)
+		m.RetireByID(original.ID)
+		live := m.Appear(boundsOf(90, 90, 80, 60), frameWidth, frameHeight, 3, ptrSignature(filledSignature(220)))
+		return m, original.ID, live.ID, filledSignature(90)
+	}
+	area := boundsOf(90, 90, 80, 60)
+
+	t.Run("the element's own pixels did not change", func(t *testing.T) {
+		m, originalID, liveID, appearance := build()
+		decision := m.Return(area, ptrSignature(appearance), frameWidth, frameHeight, 4, map[uint64]bool{})
+		if decision.IsReturn {
+			t.Fatalf("a return was reported although the element on the screen is one whose own pixels did not change: %+v", decision)
+		}
+		if decision.CoveredID == liveID || decision.CoveredID == originalID {
+			t.Fatalf("a return named an element it should not have: %+v", decision)
+		}
+	})
+
+	t.Run("the element's own pixels did change", func(t *testing.T) {
+		m, _, liveID, appearance := build()
+		decision := m.Return(area, ptrSignature(appearance), frameWidth, frameHeight, 4, map[uint64]bool{liveID: true})
+		if !decision.IsReturn {
+			t.Fatalf("the same area and appearance produced no return once the caller reported the element's own pixels changed: %+v", decision)
+		}
+		if decision.CoveredID != liveID {
+			t.Fatalf("the return named %d rather than the element whose pixels changed, %d", decision.CoveredID, liveID)
+		}
+	})
+}

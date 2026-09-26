@@ -35,18 +35,19 @@ fi
 
 # defect|file|search|revert to|the test the defect row names
 cases=(
-  "AUD-021|internal/delta/required.go|if raw == nil || isNull(*raw) {|if false {|TestDecodeRejectsAMissingRequiredField"
+  "AUD-021|internal/delta/required.go|return missing(field)|return nil|TestDecodeRejectsAMissingRequiredField"
   "AUD-033|internal/corpus/sweep.go|for _, cell := range cells {|for cell := range chosen {|TestTheGeneratorIsDeterministic"
   "AUD-036|internal/delta/delta.go|return regionLess(regions[i], regions[j])|return regions[i].Bounds.Y < regions[j].Bounds.Y|TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder"
-  "AUD-038|internal/delta/required.go|if err := present(prefix+\"bounds.\"+member.name, member.raw); err != nil {|if err := error(nil); err != nil {|TestDecodeRejectsBoundsMissingAMember"
+  "AUD-038|internal/delta/required.go|{\"x\", region.Bounds.X},|{\"x\", region.Identity},|TestDecodeRejectsBoundsMissingAMember"
   "AUD-039|internal/delta/delta.go|if seenConditions[condition] {|if false {|TestDecodeAndValidateRejectDuplicateConditions"
   "AUD-041|internal/delta/delta.go|if a.Magnitude != b.Magnitude {|if false {|TestTheRegionOrderSettlesEveryFieldPair"
   "AUD-042|internal/delta/encode.go|if err := checkNullObjects(raw); err != nil {|if err := error(nil); err != nil {|TestDecodeRejectsNullObjects"
-  "AUD-022|internal/identity/identity.go|if signature != nil {\n\t\t\tif !element.SignatureSet {|if signature != nil {\n\t\t\tif signature.Close(element.Signature) {|TestAResizedReturnIsRecognisedAsUncertain"
+  "AUD-022|internal/identity/identity.go|if signature.Distance(element.Signature) > returnAppearanceCeiling*SignatureCells {|if !signature.Close(element.Signature) {|TestAResizedReturnIsRecognisedAsUncertain"
   "AUD-023|internal/diff/classify.go|taken = append(taken, enclosed)|if len(taken) == 0 { taken = append(taken, enclosed) }|TestOneCoveringAreaRetiresEveryElementItCovers"
-  "AUD-027|internal/diff/classify.go|if !goneElements[state.ID] {\n\t\t\t\tcontinue\n\t\t\t}|if false {\n\t\t\t\tcontinue\n\t\t\t}|TestGrowthAtTheFrameEdgeIsNotACover"
-  "AUD-028|internal/identity/identity.go|if gone != nil && !gone[live.ID] {|if false {|TestRepaintingInsideACoverDoesNotRetireTheCover"
+  "AUD-027|internal/diff/classify.go|if !goneElements[state.ID] {|if false {|TestGrowthAtTheFrameEdgeIsNotACover"
   "AUD-032|internal/diff/classify.go|if d.changedFraction(live.Bounds, current) >= coverInteriorFraction {|if true {|TestRepaintingInsideACoverDoesNotRetireTheCover"
+  "AUD-028|internal/identity/identity.go|if gone != nil && !gone[live.ID] {|if false {|TestAReturnNeedsTheOverlappedElementsOwnPixels"
+  "AUD-032|internal/diff/classify.go|if !inner.Empty() {|if false {|TestAResizedReturnIsRecognisedAsUncertain"
   "AUD-031|internal/identity/identity.go|if !withinTolerance(candidate, rect, m.motionTolerancePixels) &&|if false &&|TestReturnNeedsEvidenceInBothDirections"
 )
 
