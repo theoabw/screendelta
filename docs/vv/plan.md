@@ -18,7 +18,7 @@ its users.
 | Unit | Tests written from the specification before the implementation, one test per requirement branch | TBD with the stack | `tests/`, `docs/vv/results.md` |
 | Integration | Tests across module and storage boundaries, including failure paths | TBD with the stack | `tests/`, `docs/vv/evidence/` |
 | Functional | The `quickstart.md` scenarios from `specs/001-<slug>/` executed end to end | TBD with the stack | `docs/vv/evidence/` |
-| Requirement verification | Each `FR-###`, `NFR-###` and `SC-###` mapped to a test or a measurement in `docs/traceability.md` | `make check` | `docs/traceability.md` |
+| Requirement verification | Each `FR-###`, `NFR-###` and `SC-###` has a row in `docs/traceability.md`; a row marked in-progress or verified names a real task entry, and a verified row names existing test and evidence files | `make check` | `docs/traceability.md` |
 | Non-functional | Measurements against the targets in `NFR-###`: latency, concurrency, coverage, dependency audit | TBD with the stack | `docs/vv/evidence/` |
 | User acceptance | Stakeholder walks through the primary user stories against the acceptance scenarios | Manual script in `docs/vv/acceptance.md` | Written outcome per scenario |
 | Compliance | No secret in the repository, dependency licences acceptable, personal data handling as specified | `gitleaks` or equivalent, `pip-audit` or equivalent | CI log in `docs/vv/evidence/` |
@@ -48,12 +48,16 @@ as work proceeds; each entry gets the commit that fixes it.
 
 `docs/traceability.md` is the single matrix. `python3 scripts/check_traceability.py`
 verifies that every requirement defined in a specification has a row, that a row
-marked `in-progress` or `verified` names a task listed in the feature's
-`tasks.md`, and that a row marked `verified` names a test file and an evidence
-file that exist. A requirement therefore cannot be declared verified on the
-strength of a fictional test. A `planned` requirement may pass the check without
-a task, by design, so the check is a floor and not a substitute for review: only a
-reviewer can judge whether the named test exercises the requirement.
+marked `in-progress` or `verified` names a task that exists as a task entry in the
+feature's `tasks.md`, and that a row marked `verified` names a test file and an
+evidence file that exist inside the repository. A verification claim therefore
+cannot rest on a file that does not exist, and a task cannot be a passing mention
+in prose.
+
+Two limits are inherent and are stated in `docs/traceability.md`: the check cannot
+tell whether an existing test exercises the requirement, and a `planned` row may
+name neither a task nor a test, so the check is a floor and not a substitute for
+review. Run it with `--require-specs` once the first specification exists.
 
 ## Definition of done for a feature
 

@@ -106,5 +106,5 @@
   <!-- Cross-cutting record -->
   <rect class="side" x="40" y="626" width="960" height="62" rx="8"/>
   <text class="note" x="56" y="650">Written at every agent phase: docs/prompt-log/NNNN-topic.md, with the verbatim prompt, the expectation, the actual output and the correction.</text>
-  <text class="note" x="56" y="672">Updated at every phase transition: docs/traceability.md. Checked by make check, which fails when a requirement has no task or no test.</text>
+  <text class="note" x="56" y="672">Updated at every phase transition: docs/traceability.md. Checked by make check: a verified requirement must name a real task entry and existing test and evidence files.</text>
 </svg>

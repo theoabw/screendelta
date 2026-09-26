@@ -22,8 +22,9 @@ Rules for this repository:
 3. `spec.md` is the source of truth. Code that is not traceable to a requirement
    in a spec is out of scope, however useful it looks.
 4. Requirement identifiers (FR-###, NFR-###, SC-###) are stable once approved.
-   `scripts/check_traceability.py` fails the build when an identifier is missing
-   from `docs/traceability.md` or from `tasks.md`.
+   `scripts/check_traceability.py` fails when an identifier defined here is missing
+   from `docs/traceability.md`, or, when `tasks.md` exists, is not referenced
+   there, unless its row is `deferred` or `withdrawn`.
 5. Changes to an approved spec are made by editing `spec.md` and recording the
    change in `docs/prompt-log/`, not by editing the code and back-filling later.
 

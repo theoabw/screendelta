@@ -49,13 +49,17 @@ Between steps 7 and 8, every requirement identifier must appear in
    corrections are the valuable part of that record.
 6. **`make check` passes before every commit.** It verifies that every requirement
    defined in `specs/` has a matrix row, that a row marked `in-progress` or
-   `verified` names a task listed in that feature's `tasks.md`, and that a row
-   marked `verified` names a test file and an evidence file that exist. It cannot
-   judge whether a test really exercises a requirement, so that stays a review
-   duty.
+   `verified` names a task that exists as a task entry in that feature's
+   `tasks.md`, and that a row marked `verified` names a test file and an evidence
+   file that exist as files inside the repository. Values it cannot judge, such as
+   an external URL or a command string, produce a warning instead of a failure.
+   A `planned` row may name no task and no test. It cannot judge whether a test
+   really exercises a requirement, so that stays a review duty. Run it with
+   `--require-specs` once the first specification exists, so that a repository
+   with no specifications fails rather than passing quietly.
 7. **Analyze reports are captured.** `/speckit.analyze` writes nothing, so its
-   output is pasted into `docs/analysis/NNNN-<feature>-analyze.md` in the same
-   session.
+   output is pasted into `docs/analysis/NNN-<feature-slug>-analyze-YYYY-MM-DD.md`
+   in the same session, following `docs/analysis/README.md`.
 
 ## Branches, merges and review
 
@@ -82,10 +86,18 @@ Prompt: docs/prompt-log/0004-specify-first-feature.md
 `type` is one of `spec`, `plan`, `task`, `feat`, `fix`, `test`, `docs`, `chore`,
 `ci`. The `Spec`, `Req`, `Task` and `Prompt` trailers are what make the git
 history answer the report question about linking code to specification changes
-and prompt iterations. A commit that implements behaviour without a `Req` line
-is a process failure. A commit that changes only process documentation
-implements no requirement, so it may omit `Req`; when an agent session produced
-it, it still carries `Prompt`.
+and prompt iterations.
+
+Which trailers apply:
+
+| Commit | Trailers |
+|---|---|
+| Implements or fixes behaviour | `Spec`, `Req`, `Task`, and `Prompt` when an agent session produced it |
+| Changes a specification or a plan | `Spec`, and `Prompt` when an agent session produced it |
+| Changes the process itself, such as `CONTRIBUTING.md`, `AGENTS.md` or `scripts/check_traceability.py` | `Prompt` when an agent session produced it; `Spec`, `Req` and `Task` are omitted because no requirement is involved |
+| Documentation that describes no requirement, such as the report draft | `Prompt` when an agent session produced it |
+
+A commit that implements behaviour without a `Req` line is a process failure.
 
 ## What never goes into the repository
 

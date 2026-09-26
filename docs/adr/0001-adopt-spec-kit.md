@@ -41,8 +41,10 @@ report. It also does not run `git init` and creates no root `.gitignore`.
 
 - Every artifact the report cites exists as a file in the repository, so the
   report is assembled from evidence rather than recalled.
-- The specification set and the traceability matrix must be updated together;
-  `make check` fails otherwise.
+- The specification set and the traceability matrix must be updated together:
+  adding or removing a requirement identifier without a matching matrix row fails
+  `make check`. Editing only the text of an existing requirement is not detected
+  by the check, so review still carries that responsibility.
 - Three command surfaces mean more files to keep in step after a Spec Kit
   upgrade, mitigated by `specify integration upgrade <key>`.
 - `specify integration status` reports an advisory finding because the Copilot

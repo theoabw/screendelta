@@ -9,21 +9,36 @@ Run `make check` after every change. `scripts/check_traceability.py` fails when:
 
 - a requirement defined in a specification has no row here;
 - a row names a specification that does not define its identifier, or omits the
-  specification that does;
+  specification that does, or traverses outside the repository;
 - a row appears twice for the same specification and identifier;
+- a specification defines the same identifier twice, or an HTML comment is left
+  unterminated;
 - a status is not one of the allowed values;
-- a row marked `in-progress` or `verified` names no task, names a task that is not
-  an identifier such as `T012`, or names a task that the feature's `tasks.md` does
-  not list;
-- a row marked `verified` names no test or no evidence, or names a test file or an
-  evidence file that does not exist in the repository;
+- a row marked `in-progress` or `verified` names no task, names something other
+  than an identifier such as `T012`, names a task that is not a task entry in the
+  feature's `tasks.md`, or names a task while another task entry is the one that
+  references the requirement;
+- a row marked `verified` names no test or no evidence, or names a path that does
+  not exist, is a directory, is absolute, or resolves outside the repository;
 - a requirement of a feature that has a `tasks.md` is not referenced there, unless
-  its row is `deferred` or `withdrawn`.
+  its row is `deferred` or `withdrawn`;
+- a matrix row's identifier cell looks like an identifier but is malformed.
+
+It warns, rather than fails, when it cannot judge a value: an external URL used as
+evidence, or a command string such as `pytest -q` instead of a file path.
 
 What it cannot check, and what therefore remains a reviewer's job: that the named
-test actually exercises the requirement, and that the evidence really shows what
-the row claims. The check makes a false claim fail the build; only review catches
-a misleading one.
+test actually exercises the requirement, and that the evidence shows what the row
+claims. The check rejects a verification claim whose test or evidence file does not
+exist, and rejects a task that is not a real task entry; it cannot tell a relevant
+test from an irrelevant one that happens to exist.
+
+A `planned` row may name no task and no test, by design, so a green run is a floor
+rather than a statement that everything is implemented. While `specs/` holds no
+specification at all, the check warns and succeeds unless it is run with
+`--require-specs`, which is the flag to use from the moment the first
+specification exists. CI currently runs without that flag; add it to
+`.gitlab-ci.yml` with the first specification.
 
 ## Identifier namespaces
 

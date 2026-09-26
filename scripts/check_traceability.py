@@ -7,21 +7,31 @@ identified by its spec path plus its identifier. A requirement is only defined
 where it appears as a definition line, which is a bullet whose first element is
 the bold identifier, for example "- **FR-001**: ...". Other mentions are treated
 as references and are ignored, so a spec may cite another spec's identifier.
+Definitions inside fenced code blocks are ignored, because they are examples.
 
-Checks:
-  1. Every identifier defined in a spec has a matrix row naming that spec.
-  2. Every matrix row names a spec in which its identifier is defined.
-  3. Every status is one of the allowed values.
-  4. A row marked in-progress or verified names a task, and that task is listed in
-     the feature's tasks.md.
-  5. A row marked verified names a test file that exists and evidence that exists,
-     which is what makes the verification claim checkable rather than asserted.
-  6. Every identifier of a feature whose tasks.md exists is referenced there,
-     unless it is deferred or withdrawn.
-  7. Matrix rows whose identifier cell is malformed are reported instead of being
-     silently skipped.
+What a green run means:
+  - every requirement defined in a specification has a matrix row naming that
+    specification;
+  - every row names a specification that defines its identifier, with no duplicate
+    row for the same specification and identifier;
+  - every status is one of the allowed values;
+  - a row marked in-progress or verified names a task that exists as a task entry
+    in that feature's tasks.md;
+  - a row marked verified names a test file and an evidence file that both exist
+    inside the repository and are files, not directories;
+  - a requirement of a feature that has a tasks.md is referenced there, unless its
+    row is deferred or withdrawn.
 
-Identifiers ending in -000 are treated as format examples and ignored.
+What a green run does not mean:
+  - that the named test actually exercises the requirement, which no static check
+    can establish;
+  - that the evidence proves what the row claims;
+  - that every requirement is implemented. A planned row may name neither a task
+    nor a test, by design.
+
+Warnings are printed for values the checker cannot judge, such as an external URL
+used as evidence or a command string used instead of a file path. Run without
+--require-specs while no specification exists yet, and with it afterwards.
 
 Usage:
     python3 scripts/check_traceability.py [--quiet] [--require-specs]
@@ -43,12 +53,15 @@ SPECS_DIR = REPO_ROOT / "specs"
 MATRIX_PATH = REPO_ROOT / "docs" / "traceability.md"
 
 ID_PATTERN = re.compile(r"\b(?:FR|NFR|SC)-\d{3}\b")
+LOOSE_ID_PATTERN = re.compile(r"(?:FR|NFR|SC)-\d+")
 DEFINITION_PATTERN = re.compile(r"^\s*[-*+]\s+\*\*((?:FR|NFR|SC)-\d{3})\*\*")
-REFERENCE_PATTERN = re.compile(r"\b(?:FR|NFR|SC)-\d{3}\b")
 ROW_PATTERN = re.compile(r"^\|\s*((?:FR|NFR|SC)-\d{3})\s*\|")
-CELL_ID_PATTERN = re.compile(r"^\**(?:FR|NFR|SC)-\d{3}\**$")
-COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
+TASK_ENTRY_PATTERN = re.compile(
+    r"^\s*(?:[-*+]|\d+\.)\s*(?:\[[ xX]\]\s*)?(T\d{2,})\b"
+)
+TASK_HEADING_PATTERN = re.compile(r"^#{2,6}\s+(T\d{2,})\b")
 TASK_PATTERN = re.compile(r"^T\d{2,}$")
+FENCE_PATTERN = re.compile(r"^\s*(?:```|~~~)")
 
 STATUSES = {"planned", "in-progress", "verified", "deferred", "withdrawn"}
 INACTIVE_STATUSES = {"deferred", "withdrawn"}
@@ -63,27 +76,6 @@ COLUMNS = [
     "Evidence",
     "Status",
 ]
-FILE_SUFFIXES = {
-    ".py",
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-    ".java",
-    ".go",
-    ".rs",
-    ".rb",
-    ".cs",
-    ".kt",
-    ".sh",
-    ".feature",
-    ".log",
-    ".txt",
-    ".json",
-    ".xml",
-    ".html",
-    ".md",
-}
 
 
 class Findings:
@@ -102,20 +94,6 @@ def is_example(identifier: str) -> bool:
     return identifier.endswith("-000")
 
 
-def without_comments(text: str) -> str:
-    return COMMENT_PATTERN.sub("", text)
-
-
-def read_text(findings: Findings, path: Path) -> str | None:
-    try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        findings.error(f"{relative(path)} is not valid UTF-8")
-    except OSError as error:
-        findings.error(f"{relative(path)} could not be read: {error.strerror}")
-    return None
-
-
 def relative(path: Path) -> str:
     try:
         return path.relative_to(REPO_ROOT).as_posix()
@@ -123,9 +101,84 @@ def relative(path: Path) -> str:
         return path.as_posix()
 
 
+def read_lines(findings: Findings, path: Path) -> list[str] | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        findings.error(f"{relative(path)} is not valid UTF-8")
+        return None
+    except OSError as error:
+        findings.error(f"{relative(path)} could not be read: {error.strerror}")
+        return None
+    return text.splitlines()
+
+
+def blank_comments(
+    findings: Findings, lines: list[str], location: str
+) -> list[str]:
+    """Blank HTML comments while preserving line numbering."""
+    output: list[str] = []
+    inside = False
+    for line in lines:
+        result: list[str] = []
+        index = 0
+        while index < len(line):
+            if inside:
+                end = line.find("-->", index)
+                if end == -1:
+                    index = len(line)
+                else:
+                    inside = False
+                    index = end + 3
+            else:
+                start = line.find("<!--", index)
+                if start == -1:
+                    result.append(line[index:])
+                    index = len(line)
+                else:
+                    result.append(line[index:start])
+                    inside = True
+                    index = start + 4
+        output.append("".join(result))
+    if inside:
+        findings.error(
+            f"{location}: unterminated HTML comment; everything after it is ignored"
+        )
+    return output
+
+
+def blank_code_fences(lines: list[str]) -> list[str]:
+    """Blank fenced code blocks, which hold examples rather than definitions."""
+    output: list[str] = []
+    inside = False
+    for line in lines:
+        if FENCE_PATTERN.match(line):
+            inside = not inside
+            output.append("")
+            continue
+        output.append("" if inside else line)
+    return output
+
+
+def prepare(findings: Findings, lines: list[str], location: str) -> list[str]:
+    return blank_code_fences(blank_comments(findings, lines, location))
+
+
 def normalise_spec(value: str) -> str:
-    cleaned = value.strip().strip("`").lstrip("./")
+    cleaned = value.strip().strip("`").strip()
+    if cleaned.startswith("./"):
+        cleaned = cleaned[2:]
     return cleaned
+
+
+def spec_path_problem(spec_path: str) -> str | None:
+    if not spec_path:
+        return "does not name its specification, so it cannot be matched to a requirement"
+    if spec_path.startswith("/"):
+        return "must be a repository-relative path, not an absolute one"
+    if ".." in Path(spec_path).parts:
+        return "must not traverse outside the repository"
+    return None
 
 
 def split_row(line: str) -> list[str]:
@@ -167,11 +220,11 @@ def collect_definitions(
     """Map (spec path, identifier) to the line where it is defined."""
     definitions: dict[tuple[str, str], int] = {}
     for spec in specs:
-        text = read_text(findings, spec)
-        if text is None:
+        lines = read_lines(findings, spec)
+        if lines is None:
             continue
         location = relative(spec)
-        for number, line in enumerate(without_comments(text).splitlines(), start=1):
+        for number, line in enumerate(prepare(findings, lines, location), start=1):
             match = DEFINITION_PATTERN.match(line)
             if match is None:
                 continue
@@ -189,26 +242,54 @@ def collect_definitions(
     return definitions
 
 
+def collect_task_entries(
+    findings: Findings, specs: list[Path]
+) -> dict[str, dict[str, tuple[int, str]]]:
+    """Map feature directory name to task entries: identifier to (line, text)."""
+    entries: dict[str, dict[str, tuple[int, str]]] = {}
+    for spec in specs:
+        tasks = spec.parent / "tasks.md"
+        if not tasks.is_file():
+            continue
+        lines = read_lines(findings, tasks)
+        if lines is None:
+            continue
+        feature = spec.parent.name
+        found: dict[str, tuple[int, str]] = {}
+        for number, line in enumerate(
+            prepare(findings, lines, relative(tasks)), start=1
+        ):
+            match = TASK_ENTRY_PATTERN.match(line) or TASK_HEADING_PATTERN.match(line)
+            if match is None:
+                continue
+            identifier = match.group(1)
+            found.setdefault(identifier, (number, line.strip()))
+        entries[feature] = found
+    return entries
+
+
 def parse_matrix(findings: Findings) -> list[dict[str, object]]:
     if not MATRIX_PATH.is_file():
         findings.error("docs/traceability.md is missing")
         return []
-    text = read_text(findings, MATRIX_PATH)
-    if text is None:
+    lines = read_lines(findings, MATRIX_PATH)
+    if lines is None:
         return []
     rows: list[dict[str, object]] = []
-    for number, line in enumerate(without_comments(text).splitlines(), start=1):
+    for number, line in enumerate(
+        prepare(findings, lines, "docs/traceability.md"), start=1
+    ):
         if not line.strip().startswith("|"):
             continue
         cells = split_row(line)
         first = cells[0] if cells else ""
         strict = ROW_PATTERN.match(line)
         if strict is None:
-            if CELL_ID_PATTERN.match(first):
+            if LOOSE_ID_PATTERN.search(first):
                 findings.error(
                     f"docs/traceability.md:{number}: row starts with '{first}' but "
                     "is not a well-formed row; the identifier must be the first "
-                    "cell, unformatted and followed by a pipe"
+                    "cell, unformatted, three digits, and followed by a pipe"
                 )
             continue
         identifier = strict.group(1)
@@ -231,40 +312,63 @@ def feature_of(spec_path: str) -> str:
     return spec_path.split("/")[1] if "/" in spec_path else spec_path
 
 
-def check_path_evidence(
+def check_file_value(
     findings: Findings,
     row: dict[str, object],
     identifier: str,
     column: str,
 ) -> None:
+    """Require the named file to exist inside the repository."""
     value = str(row[column]).strip()
-    line = row["line"]
     if not value:
         return
+    line = row["line"]
     if value.startswith(("http://", "https://")):
         findings.warn(
-            f"docs/traceability.md:{line}: {identifier} uses external {column.lower()} "
-            f"'{value}', which cannot be checked from the repository"
+            f"docs/traceability.md:{line}: {identifier} uses external "
+            f"{column.lower()} '{value}', which cannot be checked from the repository"
         )
         return
-    candidate = value.split("::")[0].split("#")[0].strip().strip("`")
+    candidate = value.split("::")[0].split("#")[0].strip().strip("`").strip()
     if not candidate:
         findings.error(
-            f"docs/traceability.md:{line}: {identifier} has an unusable {column.lower()} "
-            f"value '{value}'"
+            f"docs/traceability.md:{line}: {identifier} has an unusable "
+            f"{column.lower()} value '{value}'"
         )
         return
-    suffix = Path(candidate).suffix.lower()
-    if suffix not in FILE_SUFFIXES:
+    if any(character.isspace() for character in candidate):
         findings.warn(
             f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
-            f"'{value}', which does not look like a file path and cannot be checked"
+            f"'{value}', which looks like a command rather than a file path; "
+            "name the file that holds the evidence"
         )
         return
-    if not (REPO_ROOT / candidate).exists():
+    path = Path(candidate)
+    if path.is_absolute():
+        findings.error(
+            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
+            f"'{candidate}', which is an absolute path outside the repository"
+        )
+        return
+    resolved = (REPO_ROOT / path).resolve()
+    try:
+        resolved.relative_to(REPO_ROOT)
+    except ValueError:
+        findings.error(
+            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
+            f"'{candidate}', which resolves outside the repository"
+        )
+        return
+    if not resolved.exists():
         findings.error(
             f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
             f"'{candidate}', which does not exist"
+        )
+        return
+    if not resolved.is_file():
+        findings.error(
+            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
+            f"'{candidate}', which is not a file"
         )
 
 
@@ -272,7 +376,7 @@ def check_rows(
     findings: Findings,
     definitions: dict[tuple[str, str], int],
     rows: list[dict[str, object]],
-    task_texts: dict[str, set[str]],
+    task_entries: dict[str, dict[str, tuple[int, str]]],
 ) -> None:
     seen: set[tuple[str, str]] = set()
 
@@ -282,17 +386,16 @@ def check_rows(
         spec_path = str(row["spec_path"])
         status = str(row["Status"]).lower()
 
-        if not spec_path:
-            findings.error(
-                f"docs/traceability.md:{line}: {identifier} does not name its "
-                "specification, so it cannot be matched to a requirement"
-            )
+        problem = spec_path_problem(spec_path)
+        if problem is not None:
+            findings.error(f"docs/traceability.md:{line}: {identifier} {problem}")
             continue
 
         key = (spec_path, identifier)
         if key in seen:
             findings.error(
-                f"docs/traceability.md:{line}: duplicate row for {identifier} in {spec_path}"
+                f"docs/traceability.md:{line}: duplicate row for {identifier} in "
+                f"{spec_path}"
             )
             continue
         seen.add(key)
@@ -322,6 +425,7 @@ def check_rows(
 
         task = str(row["Task"]).strip()
         if status in TRACED_STATUSES:
+            feature = feature_of(spec_path)
             if not task:
                 findings.error(
                     f"docs/traceability.md:{line}: {identifier} is {status} but "
@@ -333,17 +437,36 @@ def check_rows(
                     f"'{task}', expected an identifier such as T012"
                 )
             else:
-                tasks_in_feature = task_texts.get(feature_of(spec_path))
-                if tasks_in_feature is None:
+                entries = task_entries.get(feature)
+                if entries is None:
                     findings.error(
                         f"docs/traceability.md:{line}: {identifier} is {status} but "
                         f"{spec_path.rsplit('/', 1)[0]}/tasks.md does not exist"
                     )
-                elif task not in tasks_in_feature:
+                elif task not in entries:
                     findings.error(
-                        f"docs/traceability.md:{line}: {identifier} names task {task}, "
-                        "which is not listed in that feature's tasks.md"
+                        f"docs/traceability.md:{line}: {identifier} names task "
+                        f"{task}, which is not a task entry in that feature's "
+                        "tasks.md"
                     )
+                elif identifier not in entries[task][1]:
+                    owners = sorted(
+                        other
+                        for other, (_, text) in entries.items()
+                        if identifier in text and other != task
+                    )
+                    if owners:
+                        findings.error(
+                            f"docs/traceability.md:{line}: {identifier} names task "
+                            f"{task}, but the requirement is referenced by "
+                            f"{', '.join(owners)} in that feature's tasks.md"
+                        )
+                    else:
+                        findings.warn(
+                            f"docs/traceability.md:{line}: task {task} in "
+                            f"{feature}/tasks.md does not mention {identifier} at "
+                            "all; confirm that the mapping is right"
+                        )
 
         if status == "verified":
             if not str(row["Test"]).strip():
@@ -352,14 +475,14 @@ def check_rows(
                     "names no test"
                 )
             else:
-                check_path_evidence(findings, row, identifier, "Test")
+                check_file_value(findings, row, identifier, "Test")
             if not str(row["Evidence"]).strip():
                 findings.error(
                     f"docs/traceability.md:{line}: {identifier} is verified but "
                     "names no evidence"
                 )
             else:
-                check_path_evidence(findings, row, identifier, "Evidence")
+                check_file_value(findings, row, identifier, "Evidence")
 
     for (spec_path, identifier), number in sorted(definitions.items()):
         if (spec_path, identifier) not in seen:
@@ -383,13 +506,13 @@ def check_task_coverage(
         tasks = spec.parent / "tasks.md"
         if not tasks.is_file():
             continue
-        text = read_text(findings, tasks)
-        if text is None:
+        lines = read_lines(findings, tasks)
+        if lines is None:
             continue
-        referenced = {
-            match.group(0) for match in REFERENCE_PATTERN.finditer(without_comments(text))
-        }
         location = relative(spec)
+        referenced: set[str] = set()
+        for line in prepare(findings, lines, relative(tasks)):
+            referenced.update(match.group(0) for match in ID_PATTERN.finditer(line))
         for (spec_path, identifier), number in sorted(definitions.items()):
             if spec_path != location:
                 continue
@@ -400,21 +523,6 @@ def check_task_coverage(
                     f"{location}:{number}: {identifier} is not referenced in "
                     f"{relative(tasks)}"
                 )
-
-
-def collect_task_ids(findings: Findings, specs: list[Path]) -> dict[str, set[str]]:
-    """Map feature directory name to the set of task identifiers listed."""
-    task_texts: dict[str, set[str]] = {}
-    for spec in specs:
-        tasks = spec.parent / "tasks.md"
-        if not tasks.is_file():
-            continue
-        text = read_text(findings, tasks)
-        if text is None:
-            continue
-        feature = spec.parent.name
-        task_texts[feature] = set(re.findall(r"\bT\d{2,}\b", without_comments(text)))
-    return task_texts
 
 
 def main() -> int:
@@ -433,9 +541,9 @@ def main() -> int:
     specs = feature_specs()
     definitions = collect_definitions(findings, specs)
     rows = parse_matrix(findings)
-    task_texts = collect_task_ids(findings, specs)
+    task_entries = collect_task_entries(findings, specs)
 
-    check_rows(findings, definitions, rows, task_texts)
+    check_rows(findings, definitions, rows, task_entries)
     check_task_coverage(findings, specs, definitions, rows)
 
     if not specs:

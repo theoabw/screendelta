@@ -46,7 +46,7 @@ membership and the role split are recorded here and in
 | `docs/traceability.md` | Requirement to task to test to evidence matrix. |
 | `docs/course-context.md` | What the course requires, captured from Moodle. |
 | `.github/`, `.opencode/`, `.dsh/` | The same Spec Kit commands rendered for Copilot in VS Code, opencode and dsh. |
-| `scripts/check_traceability.py` | Fails the build when a requirement is not traced to a task and a test. |
+| `scripts/check_traceability.py` | Fails when a requirement is not traced: a row marked in-progress or verified must name a real task, and a verified row must name existing files. |
 
 ## The workflow
 
@@ -91,10 +91,17 @@ Checks:
 
 ```bash
 make check    # requirement traceability: every requirement defined in specs/ has
-              # a matrix row, traced rows name a task listed in tasks.md, and
-              # verified rows name a test file and an evidence file that exist
+              # a matrix row; an in-progress or verified row must name a task that
+              # is a task entry in tasks.md; a verified row must name an existing
+              # test file and an existing evidence file inside the repository.
+              # A planned row may name neither, by design.
 make help     # list targets
 ```
+
+CI runs the check without `--require-specs`, so it is green while no
+specification exists yet. Add `--require-specs` to the `.gitlab-ci.yml` job once
+`specs/001-<slug>/spec.md` exists, so that a repository with no specifications
+fails instead of passing quietly.
 
 ## Open decisions
 
