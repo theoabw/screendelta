@@ -1,0 +1,57 @@
+Element identity measurement, 2026-09-26.
+Commands: go test ./internal/identity/... -v, and the identity tests in internal/diff.
+
+User story 2 acceptance scenarios, each with the test that demonstrates it:
+
+1. A region that moves a few pixels per frame keeps one identifier throughout.
+   internal/identity:  TestAMovingElementKeepsOneIdentity (ten steps of four pixels, one identity)
+   internal/diff:      TestATrackedElementKeepsOneIdentityAcrossFrames (eight steps of three pixels,
+                       and confidence stays inside 0 to 1)
+   internal/diff:      TestContinuityOfAnIdentity (the identity never moves further than the
+                       tolerance between frames, so a consumer can follow it)
+
+2. A region that disappears behind an overlay and returns carries a new identifier with an
+   explicit uncertainty marker.
+   internal/identity:  TestReappearanceAfterOcclusionIsNewAndUncertain
+   internal/diff:      TestAnOccludedElementReturnsWithANewUncertainIdentity (the element is
+                       tracked, covered for longer than the window, then visible again: the new
+                       region carries a different identity, identityUncertain true, and a positive
+                       confidence recording the evidence that something was there)
+   internal/identity:  TestAnElementHiddenWithinTheWindowKeepsItsIdentity (the negative case: a
+                       cover shorter than the window is not a reason to lose the identity)
+
+3. A thousand frames in which a region appears and disappears repeatedly reuse no identifier and
+   grow no memory.
+   internal/identity:  TestIdentifiersAreNeverReused (a thousand frames of four-frame cycles:
+                       every identity is issued once, every retirement is recorded, and no retired
+                       identity is ever handed out again)
+   internal/identity:  TestMemoryDoesNotGrowWithStreamLength (the live set stays bounded by the
+                       occlusion window after a thousand frames)
+   internal/stream:    TestMemoryCeiling (10,000 frames, heap identical at frame 1,000 and
+                       frame 10,000)
+
+Requirements this measures:
+  FR-006  identifiers stable across a stream and never reused within a session      met
+  FR-007  identity confidence reported and an unreestablishable identity marked
+          uncertain rather than silently matched                                   met
+  NFR-009 at least 80 percent line coverage on the geometry and identity modules
+          met: internal/diff 80.2 percent, internal/identity 80.6 percent
+
+Two design decisions this round had to make, both recorded in the contract:
+
+Element footprints, not changed areas. A translation changes two areas and both belong to one
+element, so a moved region is looked up by where the element was and the element's footprint for
+the frame is the union of the regions that named it. Reporting the changed area as the element's
+position instead gave each half of a movement its own identity, which the debug trace showed
+directly.
+
+A viewport change retires every element and keeps the identifier counter rising. Bounds are
+normalised, so a rectangle tracked at one frame size means nothing at another; the first version
+of this rebuilt the identity table instead, which restarted the identifier sequence mid-session
+and would have handed a consumer a number that used to mean something else. A rule change is
+different and is applied in place, because relaxing the motion tolerance says nothing about where
+anything is.
+
+FR-006 and FR-007 are the first requirements in this project whose evidence is an acceptance
+scenario rather than a measurement, so the scenario numbers above are the independent test the
+specification names.

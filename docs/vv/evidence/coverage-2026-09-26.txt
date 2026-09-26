@@ -1,0 +1,17 @@
+Coverage, 2026-09-26.
+Command: go test -cover ./internal/diff/... ./internal/identity/...
+
+  internal/diff      80.2% of statements
+  internal/identity  80.6% of statements
+
+Requirement this measures:
+  NFR-009  at least 80 percent line coverage on the geometry and identity modules, reported by the
+           standard tool for the chosen stack
+           met: 80.2 and 80.6 percent, reported by go test -cover
+
+Both figures were below the target when the identity layer landed, at 79.4 and 74.7 percent. The
+gap was real rather than a measurement artefact: the paths that had no test were the viewport
+change that ends every element, a rule change applied to a live table, retirement with nothing to
+retire, the size boundary of a match, and the sorted view of the table. Each is now covered by a
+test named for the behaviour rather than for the function, which is why the numbers rose by
+covering decisions rather than lines.
