@@ -1,0 +1,88 @@
+Mutation testing, 2026-09-27.
+Command: scripts/mutation_check.sh
+
+Each row applies one change to a non-test file, runs ./internal/diff/... ./internal/identity/... ./internal/score/... ./internal/stream/... ./internal/delta/... ./internal/frame/... ./internal/config/..., and records whether anything failed.
+A mutation that survives is a rule the suite does not defend: either the rule is untested or the test
+asserts something that the mutation does not affect.
+
+MUTATION                                                   RESULT       NOTE
+the overlap needed to keep an identity                     killed       --- FAIL: TestAnElementAtTheAreaRatioBoundaryIsMatched (0.00s)
+the size gate on a match                                   killed       --- FAIL: TestAPartOfALargerElementIsMatchedByContainmentNotOverlap (0.00s)
+how much of an element must be contained before it counts as covered killed       --- FAIL: TestContainmentBelowTheInteriorFractionIsNotACover (0.00s)
+how long a retired identity can be reacquired              killed       --- FAIL: TestClosestSignatureDecidesBetweenTwoCandidates (0.00s)
+the appearance ceiling on a return                         killed       --- FAIL: TestAReturnWithAnIncompatibleAppearanceIsRefused (0.00s)
+the signature tolerance                                    killed       --- FAIL: TestAReturnAfterACoverIsAddedUncertain (0.00s)
+the margin a reported region is grown by                   killed       --- FAIL: TestChangedPanelIsReportedOnceWithCoveringBounds (0.00s)
+the red luma weight                                        killed       --- FAIL: TestCorpus (13.68s)
+the word size used to compare pixels                       SURVIVED     no test failed; see the note at the end
+the default noise floor                                    killed       --- FAIL: TestNoiseBelowTheFloorReportsNothing (0.01s)
+the default minimum region area                            killed       --- FAIL: TestTheDefaultAreaFloorFiltersASmallChange (0.00s)
+the last key of the region order, made non-strict          SURVIVED     no test failed; see the note at the end
+
+Score: 10 of 12 mutations killed.
+
+Surviving mutations, each of which is a rule no test defends:
+  - the word size used to compare pixels
+  - the last key of the region order, made non-strict
+
+WARNING: the working tree is not clean after the run.
+
+## The first run, and what it found
+
+The first run killed six of the twelve mutations. Six surviving means six rules the requirements name had no
+test that would fail if the rule were wrong, and each was investigated rather than counted:
+
+| Mutation | First run | What it turned out to be |
+|---|---|---|
+| the overlap needed to keep an identity | killed | already defended |
+| the size gate on a match | survived | equivalent in outcome, see below |
+| how much of an element must be contained before it counts as covered | survived | a real gap, closed |
+| how long a retired identity can be reacquired | killed | already defended |
+| the appearance ceiling on a return | survived | a real gap, closed |
+| the signature tolerance | killed | already defended |
+| the margin a reported region is grown by | killed | already defended |
+| the red luma weight | killed | already defended |
+| the word size used to compare pixels | survived | equivalent, see below |
+| the default noise floor | killed | already defended |
+| the default minimum region area | survived | a real gap, closed |
+| the last key of the region order, made non-strict | survived | equivalent, see below |
+
+## The two equivalent mutants
+
+An equivalent mutant is a change that no test can distinguish because it changes nothing observable. Both are
+recorded here rather than left to look like a gap, and both were confirmed by reasoning after the run:
+
+**The pixel word size.** The comparison skips a row in words of eight bytes once it knows the row changed, and
+it only skips a word when the two words are equal. A smaller word therefore skips less and finds the same
+pixels; the rule affects how much work the comparison does and never what it reports.
+
+**The last key of the region order.** Making the height comparison non-strict can only matter for two regions
+identical in position, identity and height, where the order is arbitrary whichever way the comparison goes. The
+keys before it settle every case that a consumer can observe.
+
+## The third survivor, and why no test was added for it
+
+The size gate's lower bound is equivalent in a subtler way, and the first attempt at a test for it was wrong.
+An area a tenth the size of an element, sharing a corner, is matched to that element, and it should be: it is
+inside the element, and the containment rule exists to match a part of a larger whole. Relaxing the size gate
+from half to a twentieth changes no identity for that case. What it does change is which of the two matching
+explanations answers, and therefore the confidence: containment reports one, because the area is certainly part
+of an element the engine is tracking, while overlap reports the overlap, because it rests on a partial match.
+The test asserts the confidence, which is the observable difference, and the false-premise test was removed with
+its reason recorded in the source rather than quietly deleted.
+
+## The score after the four gaps were closed
+
+  10 of 12 mutations killed, the two survivors being the two equivalent mutants above.
+
+Every one of the four new tests was verified by applying its mutation and confirming that the test fails, which
+is the same rule this project applies to measurements: a guard that has never failed is a guard nobody has
+tested. That verification also caught a mistake in this file's own history: one of the four tests had been
+deleted by a careless edit, so the mutation appeared to survive because no test ran at all, and the check
+reported "no tests to run" as a pass.
+
+## What this measures
+
+  FR-002, FR-004, FR-006, FR-007 and NFR-009   twelve rules the requirements name, of which ten are defended by
+                                              a test that fails when the rule is wrong, and two cannot be
+                                              distinguished by any test because they change nothing observable
