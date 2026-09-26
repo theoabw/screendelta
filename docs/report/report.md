@@ -40,8 +40,9 @@ rounds and 36 findings.
 Verification is measurement rather than assertion. The engine scores F1 1.0000 with zero false removals on
 5,134 generated frame pairs, holds p95 latency of 9.65 ms per frame pair on one CPU core against a 12 ms
 requirement, sustains 79.2 frame pairs per second against 30, and holds a 24.0 MiB peak heap over 10,000
-frames against a 128 MiB ceiling. 26 of 32 requirements are verified with committed tests and
-recorded output; the rest are in progress, and the report says which and why. Thirty-five defects were
+frames against a 128 MiB ceiling. 28 of 32 requirements are verified with committed tests and
+recorded output; the four that are not need a person, a Windows machine or a second host, and the report says
+which is which. Thirty-five defects were
 found and recorded, of which 34 are fixed, and one is documented as inherent to a pixel-only stage with
 its reason.
 
