@@ -47,7 +47,7 @@ vet: ## Run go vet
 lint: ## Run golangci-lint when installed, otherwise go vet
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint not installed, running go vet"; $(GO) vet ./...; fi
 
-bench: ## Report per-frame latency percentiles from the benchmark harness
+bench: ## Report per-frame latency percentiles from the benchmark harness (T040)
 	$(BENCH_ENV) $(GO) test -run '^$$' -bench . -benchmem -count 3 ./internal/diff/... | tee bench.txt
 	@echo "compare against a previous run with: benchstat bench.txt"
 
@@ -55,10 +55,16 @@ corpus: ## Generate the ground-truth corpus
 	$(GO) run ./tools/corpusgen --out corpus
 
 accuracy: ## Score the engine against the generated corpus
-	$(GO) test ./internal/score/... -run TestCorpus -v
+	@out=$$($(GO) test ./internal/score/... -run TestCorpus -count=1 -v 2>&1); status=$$?; echo "$$out"; \
+	if echo "$$out" | grep -qE "no tests to run|no test files|matched no packages"; then \
+		echo "accuracy: the corpus scoring test does not exist yet (task T023), so nothing was measured" >&2; exit 1; fi; \
+	exit $$status
 
 memcheck: ## Stream 10,000 frames and report peak resident memory
-	$(GO) test ./internal/stream/... -run TestMemoryCeiling -v
+	@out=$$($(GO) test ./internal/stream/... -run TestMemoryCeiling -count=1 -v 2>&1); status=$$?; echo "$$out"; \
+	if echo "$$out" | grep -qE "no tests to run|no test files|matched no packages"; then \
+		echo "memcheck: the memory ceiling test does not exist yet (task T042), so nothing was measured" >&2; exit 1; fi; \
+	exit $$status
 
 clean: ## Remove build and benchmark output
 	rm -rf bin coverage.txt coverage.html bench.txt
