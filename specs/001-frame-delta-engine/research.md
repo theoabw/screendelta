@@ -90,6 +90,17 @@ published alongside it for exact-match caches.
 comparison alone cannot be used as a cache key. Publishing both lets a consumer
 choose, and keeps FR-008 and FR-009 honest.
 
+**Amendment, 2026-09-26**: a cell holds the mean of a strided sample of its pixels, at a
+stride of a quarter of a cell in each axis, rather than the mean of every pixel. The first
+implementation summed every pixel of every cell, which was a second full walk over the
+frame at 2.8 ms per 1080p pair, and measuring showed it cost more than the comparison the
+fingerprint helps. A fingerprint is compared with tolerance by design, so a sixteenth of the
+samples measures the same thing: the accuracy corpus is unaffected because it scores regions
+rather than fingerprints, and the cell values remain deterministic for a given geometry.
+Fusing the accumulation into the luma conversion was tried first and measured slower, 8.2 ms
+against 6.7 ms per pair, because the per-pixel cell index cost more than the pass it
+replaced.
+
 **Alternatives rejected**: perceptual hashes tuned for images, which are optimised
 for visual similarity rather than for "same screen, same plan".
 
