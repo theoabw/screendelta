@@ -288,3 +288,87 @@ func diffTrees(before, after map[string]int64) []string {
 	}
 	return changed
 }
+
+// TestAnIndependentConsumerAcceptsTheEnginesOutput is SC-006: a program that shares no code with the engine
+// reads its output against the published schema and finds nothing wrong.
+//
+// The consumer's types are written from the JSON Schema and it validates every rule the schema states,
+// including the ones the engine could get wrong: required fields, the class-specific rules for previous
+// bounds, bounds inside the frame, and a stream whose frames are in order. If it exits zero, a document that
+// the schema forbids was not emitted.
+func TestAnIndependentConsumerAcceptsTheEnginesOutput(t *testing.T) {
+	dir, _ := frames(t, "sweep", corpus.Options{Width: 320, Height: 240, Frames: 12, Seed: 20260926})
+	stream := filepath.Join(t.TempDir(), "stream.ndjson")
+
+	if got := run(t, nil, "stream", "--source", dir, "--out", stream); got.code != 0 {
+		t.Fatalf("the engine exited %d: %s", got.code, got.stderr)
+	}
+
+	consumer := buildTool(t, "screendelta-consumer", "github.com/theoabw/screendelta/tools/consumer")
+	command := exec.Command(consumer, "--source", stream)
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		t.Fatalf("the consumer rejected the engine's output: %v\n%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "documents 12") {
+		t.Fatalf("the consumer's summary does not describe the stream: %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "reissued after retirement 0") {
+		t.Fatalf("the consumer saw an identity reissued after retirement: %q", stdout.String())
+	}
+}
+
+// TestTheConsumerRejectsADocumentTheSchemaForbids falsifies the consumer: a guard that has never failed is a
+// guard nobody has tested, and this one is the evidence for SC-006.
+func TestTheConsumerRejectsADocumentTheSchemaForbids(t *testing.T) {
+	// The sweep case produces added regions, which the corruption below needs; a case without them would
+	// skip and the falsification would prove nothing.
+	dir, _ := frames(t, "sweep", corpus.Options{Width: 320, Height: 240, Frames: 8, Seed: 20260926})
+	stream := filepath.Join(t.TempDir(), "stream.ndjson")
+	if got := run(t, nil, "stream", "--source", dir, "--out", stream); got.code != 0 {
+		t.Fatalf("the engine exited %d: %s", got.code, got.stderr)
+	}
+
+	body, err := os.ReadFile(stream)
+	if err != nil {
+		t.Fatalf("cannot read the stream: %v", err)
+	}
+	// An added region carrying previous bounds is exactly what the schema forbids.
+	broken := strings.Replace(string(body), `"class":"added"`, `"class":"added","previousBounds":{"x":0,"y":0,"w":0.1,"h":0.1}`, 1)
+	if broken == string(body) {
+		t.Fatal("the corpus case produced no added region, so this falsification would prove nothing")
+	}
+	brokenPath := filepath.Join(t.TempDir(), "broken.ndjson")
+	if err := os.WriteFile(brokenPath, []byte(broken), 0o644); err != nil {
+		t.Fatalf("cannot write the fixture: %v", err)
+	}
+
+	consumer := buildTool(t, "screendelta-consumer-broken", "github.com/theoabw/screendelta/tools/consumer")
+	command := exec.Command(consumer, "--source", brokenPath, "--summary=false")
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	err = command.Run()
+	if err == nil {
+		t.Fatal("the consumer accepted a document the schema forbids")
+	}
+	if !strings.Contains(stderr.String(), "previous bounds") {
+		t.Fatalf("the consumer rejected the document without naming the rule: %q", stderr.String())
+	}
+}
+
+// buildTool builds one of the repository's commands and returns its path.
+func buildTool(t *testing.T, name, packagePath string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), name)
+	if os.PathSeparator == '\\' {
+		path += ".exe"
+	}
+	command := exec.Command("go", "build", "-o", path, packagePath)
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		t.Fatalf("cannot build %s: %v", packagePath, err)
+	}
+	return path
+}

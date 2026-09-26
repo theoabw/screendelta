@@ -54,3 +54,24 @@ Requirements this measures:
             line only, so the library half is covered by its own tests rather than here   partly
   NFR-008   CPU only, no network at runtime: the network half is met; the Windows half is the cross-build
             in CI, and a smoke test on Windows is still outstanding
+
+Second part, same day: the independent consumer.
+
+tools/consumer is a second reader of delta documents that shares no code with the engine. Its types are
+written from the published JSON Schema, it validates every rule the schema states, and it summarises the
+element lifecycle it observes. It exists to test the contract rather than the engine.
+
+  TestAnIndependentConsumerAcceptsTheEnginesOutput
+      builds the consumer, streams twelve frames of the sweep case through the engine, and requires the
+      consumer to accept every document and report twelve documents, five frames with regions and no
+      identity reissued after retirement.
+
+  TestTheConsumerRejectsADocumentTheSchemaForbids
+      falsifies the consumer itself: it corrupts one document by giving an added region previous bounds,
+      which the schema forbids, and requires the consumer to reject the stream and name the rule. A guard
+      that has never failed is a guard nobody has tested, and this is the evidence for SC-006.
+
+The consumer finds the engine's output conformant, which is a weaker statement than it sounds and worth
+stating precisely: it proves that the engine emits documents this independent implementation, written from
+the schema, will read, and that the two agree on what the schema requires. It does not prove that either
+interpretation matches every reader's, and it does not exercise documents from any other producer.
