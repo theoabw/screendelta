@@ -99,23 +99,23 @@ been removed now that the first specification defines real requirements.
 | FR-007 | Report identity confidence and mark uncertain identity instead of guessing | specs/001-frame-delta-engine/spec.md | US2 | T028 |  |  | planned |
 | FR-008 | Compute a per-frame fingerprint stable under sub-threshold noise | specs/001-frame-delta-engine/spec.md | US3 | T035 |  |  | planned |
 | FR-009 | Compare a frame against a stored fingerprint and report equal or different | specs/001-frame-delta-engine/spec.md | US3 | T037 |  |  | planned |
-| FR-010 | Emit one self-contained document per frame when streaming | specs/001-frame-delta-engine/spec.md | US2 | T011 |  |  | planned |
+| FR-010 | Emit one self-contained document per frame when streaming | specs/001-frame-delta-engine/spec.md | US2 | T011 | | | planned |
 | FR-011 | Accept externally supplied regions of interest and restrict output to them | specs/001-frame-delta-engine/spec.md | US2 | T031 |  |  | planned |
 | FR-012 | Accept a validated configuration document with documented defaults | specs/001-frame-delta-engine/spec.md | US1 | T009 |  |  | planned |
 | FR-013 | Expose the same capabilities through CLI and library interfaces | specs/001-frame-delta-engine/spec.md | US1 | T010 |  |  | planned |
-| FR-014 | Declare a schema version in every emitted document | specs/001-frame-delta-engine/spec.md | US3 | T008 |  |  | planned |
+| FR-014 | Declare a schema version in every emitted document | specs/001-frame-delta-engine/spec.md | US3 | T008 | `internal/delta/delta_test.go::TestDecodeRejectsAnUnknownVersion` | | in-progress |
 | FR-015 | Fail explicitly without partial output on unusable input | specs/001-frame-delta-engine/spec.md | US1 | T006 | `internal/frame/frame_test.go::TestDecodePNGRejectsGarbage` |  | in-progress |
 | FR-016 | Operate without network access and write only to the declared output path | specs/001-frame-delta-engine/spec.md | US1 | T044 |  |  | planned |
 | NFR-001 | p95 delta latency at or below 12 ms per 1080p frame pair on one CPU core | specs/001-frame-delta-engine/spec.md | US1 | T040 |  |  | planned |
 | NFR-002 | At least 30 frames per second sustained at 1080p on one CPU core | specs/001-frame-delta-engine/spec.md | US2 | T033 |  |  | planned |
 | NFR-003 | At most 128 MB resident memory streaming 10,000 frames, no growth with length | specs/001-frame-delta-engine/spec.md | US2 | T020 |  |  | planned |
-| NFR-004 | Byte-identical output for identical input, independent of thread count | specs/001-frame-delta-engine/spec.md | US2 | T013 |  |  | planned |
+| NFR-004 | Byte-identical output for identical input, independent of thread count | specs/001-frame-delta-engine/spec.md | US2 | T013 | `internal/delta/delta_test.go::TestEncodeIsByteIdenticalRegardlessOfInputOrder` | | in-progress |
 | NFR-005 | Zero false removals on the noise corpus | specs/001-frame-delta-engine/spec.md | US1 | T019 |  |  | planned |
 | NFR-006 | Region detection F1 at or above 0.98 on the generated corpus | specs/001-frame-delta-engine/spec.md | US1 | T022 |  |  | planned |
 | NFR-007 | A new user produces a delta document from the README within two minutes | specs/001-frame-delta-engine/spec.md | US1 | T049 |  |  | planned |
 | NFR-008 | CPU only, no GPU, no network, runs on Linux and Windows | specs/001-frame-delta-engine/spec.md | US1 | T004 |  |  | planned |
 | NFR-009 | At least 80 percent line coverage on the geometry and identity modules | specs/001-frame-delta-engine/spec.md | US2 | T046 |  |  | planned |
-| NFR-010 | Versioned schema, and consumers can reject unknown versions | specs/001-frame-delta-engine/spec.md | US3 | T039 |  |  | planned |
+| NFR-010 | Versioned schema, and consumers can reject unknown versions | specs/001-frame-delta-engine/spec.md | US3 | T039 | | | planned |
 | SC-001 | Detection F1 at or above 0.98 and zero false removals on 5,000 generated frame pairs | specs/001-frame-delta-engine/spec.md | US1 | T023 |  |  | planned |
 | SC-002 | Benchmark reports p95 at or below 12 ms and p99 at or below 25 ms | specs/001-frame-delta-engine/spec.md | US1 | T041 |  |  | planned |
 | SC-003 | 10,000 frame stream within the memory ceiling with no identifier reuse | specs/001-frame-delta-engine/spec.md | US2 | T042 |  |  | planned |
