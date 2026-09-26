@@ -35,6 +35,15 @@ Rules that are part of the contract:
    standard input. `--source <dir>` reads files in lexicographic order and treats
    the first frame as the `first-frame` condition case.
 
+### What each subcommand can classify
+
+`diff` compares two frames with no history, so it reports every region as `changed`: it
+knows that pixels differ but not whether an element was there before, and calling the
+region `added` would assert an absence it cannot see. `moved` and `removed` both need a
+baseline, which only a stream provides, so a consumer that needs them must use `stream`.
+This is a consequence of the failure semantics, not a limitation of the comparison, and
+`quickstart.md` exercises each class where it can actually occur.
+
 ### Exit codes
 
 | Code | Meaning |
