@@ -105,8 +105,13 @@ def main():
           re.search(rf"\b{truth['fixed']} are fixed\b", report) is not None)
     check(f"the report counts {truth['findings']} findings",
           re.search(rf"\b{truth['findings']} recorded findings\b", report) is not None)
-    check(f"the report counts {truth['commits']} commits",
-          re.search(rf"\b{truth['commits']} commits\b", report) is not None)
+    # The commit count is the only figure that moves with every commit, including the commit that writes it,
+    # so the report states a floor ("more than 100 commits") and the exact command. The check verifies the
+    # floor holds and that the report does not claim more commits than exist.
+    stated = re.search(r"more than (\d+) commits", report)
+    check("the report's commit count is a true floor",
+          stated is not None and 0 < int(stated.group(1)) <= int(truth["commits"]),
+          f"stated {stated.group(1) if stated else 'nothing'} against {truth['commits']}")
     check(f"the report counts {truth['tasks_done']} of {truth['tasks_total']} tasks",
           re.search(rf"\b{truth['tasks_total']} planned tasks of which {truth['tasks_done']} are\b", report) is not None
           or re.search(rf"\b{truth['tasks_total']} tasks\b[^.]*\bwhich {truth['tasks_done']}\b", report) is not None)

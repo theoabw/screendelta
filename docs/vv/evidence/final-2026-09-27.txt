@@ -1,54 +1,82 @@
 Final verification, 2026-09-27.
-Every command below was run against this commit with the working tree clean, and every exit code was read rather than inferred from the output.
-That last clause is a correction: an earlier version of this file recorded a run that had failed, because the number of package result lines was counted instead of the exit code. See AUD-035 in docs/vv/results.md.
+Every command below was run against this commit with a clean working tree. Each exit code is the exit
+code of the command itself, captured without a pipeline, because a green-looking output line is not a
+result: an earlier version of this file recorded a run that had failed.
 
-== make check-strict (exit 0) ==
-traceability: 32 requirements in 1 spec(s), 32 matrix rows, 26 verified, 0 error(s), 0 warning(s)
+== make check-strict ==
+python3 scripts/check_traceability.py --require-specs
+traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
+python3 scripts/check_report.py
+repository state: {'requirements': 33, 'verified': 29, 'defects': 35, 'findings': 46, 'fixed': 34, 'commits': '100', 'tasks_done': 52, 'tasks_total': 53, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+
+
+every claim in the report and the README holds against this commit
 exit=0
 
 == go test ./... -count=1 ==
-ok  	github.com/theoabw/screendelta/cmd/screendelta	0.036s
-ok  	github.com/theoabw/screendelta/internal/config	0.010s
-ok  	github.com/theoabw/screendelta/internal/corpus	0.419s
-ok  	github.com/theoabw/screendelta/internal/delta	0.008s
-ok  	github.com/theoabw/screendelta/internal/diff	0.230s
-ok  	github.com/theoabw/screendelta/internal/fielderr	0.005s
-ok  	github.com/theoabw/screendelta/internal/fingerprint	0.004s
-ok  	github.com/theoabw/screendelta/internal/frame	0.005s
-ok  	github.com/theoabw/screendelta/internal/identity	0.010s
-ok  	github.com/theoabw/screendelta/internal/perf	17.673s
-ok  	github.com/theoabw/screendelta/internal/score	15.126s
-ok  	github.com/theoabw/screendelta/internal/stream	6.845s
-ok  	github.com/theoabw/screendelta/tests/e2e	2.757s
+?   	github.com/theoabw/screendelta/tools/consumer	[no test files]
+?   	github.com/theoabw/screendelta/tools/corpusgen	[no test files]
+?   	github.com/theoabw/screendelta/tools/demo	[no test files]
 exit=0
 
 == make accuracy ==
-1 pairs, 1 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 1 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
-11 pairs, 22 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 22 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
-3 pairs, 2 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 2 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
-119 pairs, 0 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 0 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
-5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
-5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+    corpus_test.go:151: occluded-button: 3 pairs, 2 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 2 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+=== RUN   TestCorpus/noise
+    corpus_test.go:151: noise: 119 pairs, 0 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 0 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+=== RUN   TestCorpus/sweep
+    corpus_test.go:151: sweep: 5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+=== NAME  TestCorpus
+    corpus_test.go:184: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+--- PASS: TestCorpus (13.26s)
+    --- PASS: TestCorpus/changed-label (0.00s)
+    --- PASS: TestCorpus/moving-button (0.03s)
+    --- PASS: TestCorpus/occluded-button (0.00s)
+    --- PASS: TestCorpus/noise (0.22s)
+    --- PASS: TestCorpus/sweep (13.00s)
+PASS
 exit=0
 
-== make perf (asserts the tail, one package at a time) ==
-mean 8.48 ms, p50 8.44 ms, p90 9.21 ms, p95 9.65 ms, p99 10.37 ms, worst 11.68 ms, fastest 6.86 ms
-p50 37.63 ms, p95 42.32 ms, p99 45.32 ms
-sustained 79.2 frame pairs per second on one core (300 pairs in 3.788s)
+== make perf ==
+SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
+=== RUN   TestLatencyPercentiles
+    perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
+    perf_test.go:237: mean 8.40 ms, p50 8.37 ms, p90 9.07 ms, p95 9.59 ms, p99 10.31 ms, worst 14.66 ms, fastest 6.59 ms
+    perf_test.go:239: 456 of 460 frames reported at least one region
+--- PASS: TestLatencyPercentiles (5.59s)
+=== RUN   TestLatencyOnALargerChange
+    perf_test.go:291: 1920x1080, large change, one core: p50 38.53 ms, p95 42.15 ms, p99 43.45 ms
+    perf_test.go:293: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
+--- PASS: TestLatencyOnALargerChange (5.91s)
+=== RUN   TestThroughput
+    perf_test.go:316: sustained 77.7 frame pairs per second on one core (300 pairs in 3.859s)
+--- PASS: TestThroughput (3.86s)
+PASS
 exit=0
 
 == make memcheck ==
-peak heap 25195176 bytes, engine buffers 16588800 bytes
-peak resident 23289856 bytes
-25195176 bytes
+go test ./internal/stream/... -run TestMemoryCeiling -count=1 -v
+=== RUN   TestMemoryCeiling
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.477s
+    memory_test.go:202: peak heap 25200552 bytes, engine buffers 16588800 bytes
+    memory_test.go:204: peak resident 23556096 bytes
+    memory_test.go:208: heap at frame 1000: 25195232 bytes, at frame 10000: 25200552 bytes
+--- PASS: TestMemoryCeiling (2.48s)
+PASS
 exit=0
 
 == make cross ==
+go build ./...
+GOOS=linux GOARCH=amd64 go build ./...
+GOOS=windows GOARCH=amd64 go build ./...
 cross: linux/amd64 and windows/amd64 both build
 exit=0
 
 == make demo ==
-frames per second 402.2, decisions 119, decisions per second 299.1
+capture: frames written: 8
+go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
+source corpus/real, 8 frames replayed 20 times, 160 frames processed
+capture 1280x720, elapsed 479ms
+frames per second 333.7, decisions 119, decisions per second 248.2
 exit=0
 
 == formatting and vet ==

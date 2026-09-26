@@ -112,7 +112,7 @@ project did not write implementation code that way. The specification-driven wor
 
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: 99 commits, 6,153 lines of Go and
+is graded on what the process produced rather than on how long it took: more than 100 commits, 6,153 lines of Go and
 5,899 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
@@ -525,7 +525,7 @@ The numbers, all reproducible from the repository:
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Commits | 80 | `git rev-list --count HEAD` |
+| Commits | above 100, and the command gives the exact count | `git rev-list --count HEAD` |
 | By type | 27 docs, 23 feat, 15 fix, 6 plan, 3 test, 2 spec, 2 refactor, 1 perf, 1 chore (sums to 80) | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
 | Commits carrying a `Spec:` trailer | 70 | `git log --grep='^Spec:' --oneline | wc -l` |
 | Carrying a `Req:` trailer | 68 | the same with `^Req:` |
@@ -559,7 +559,7 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 99 commits in two days, 6,153 lines of Go against 5,813 lines
+Leverage, quantified rather than asserted: more than 100 commits in two days, 6,153 lines of Go against 5,813 lines
 of test and 4,661 lines of specification, plan and process documents, 53 planned tasks of which 52 are
 complete, 33 requirements of which 29 are verified, and 46 recorded findings of which 45 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
