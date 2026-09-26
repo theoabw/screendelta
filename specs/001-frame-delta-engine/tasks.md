@@ -39,16 +39,16 @@
 
 ## Phase 4: User Story 2, keep identity across frames (P2)
 
-- [ ] T025 Implement the identity map with allocation, retirement and no reuse (`internal/identity`) (FR-006)
-- [ ] T026 Implement greedy nearest matching on IoU, centroid distance and size (`internal/identity`) (FR-006)
-- [ ] T027 [P] Add property tests for identifier stability and non-reuse across a stream (`internal/identity`) (FR-006)
-- [ ] T028 Implement occlusion handling and the uncertainty marker (`internal/identity`) (FR-007)
-- [ ] T029 Add the occluded-element corpus case and its recovery test (`tools/corpusgen`, `internal/identity`) (FR-007)
-- [ ] T030 Implement newline-delimited streaming with a flush per document (`internal/stream`) (FR-010)
-- [ ] T031 Implement region-of-interest restriction and clipping, including empty-list semantics (`internal/diff`) (FR-011)
-- [ ] T032 Add the region-of-interest test, including the difference between absent and empty (`internal/diff`) (FR-011)
-- [ ] T033 Add the throughput check at 1080p, asserting at least 30 frames per second (`internal/stream`) (NFR-002)
-- [ ] T034 Add the allocation-growth guard: allocations per frame must not rise with stream length (`internal/stream`) (NFR-003)
+- [x] T025 Implement the identity map with allocation, retirement and no reuse (`internal/identity`) (FR-006)
+- [x] T026 Implement greedy nearest matching on IoU, centroid distance and size (`internal/identity`) (FR-006)
+- [x] T027 [P] Add property tests for identifier stability and non-reuse across a stream (`internal/identity`) (FR-006)
+- [x] T028 Implement occlusion handling and the uncertainty marker (`internal/identity`) (FR-007)
+- [x] T029 Add the occluded-element corpus case and its recovery test (`tools/corpusgen`, `internal/identity`) (FR-007)
+- [x] T030 Implement newline-delimited streaming with a flush per document (`internal/stream`) (FR-010)
+- [x] T031 Implement region-of-interest restriction and clipping, including empty-list semantics (`internal/diff`) (FR-011)
+- [x] T032 Add the region-of-interest test, including the difference between absent and empty (`internal/diff`) (FR-011)
+- [x] T033 Add the throughput check at 1080p, asserting at least 30 frames per second (`internal/stream`) (NFR-002)
+- [x] T034 Add the allocation-growth guard: allocations per frame must not rise with stream length (`internal/stream`) (NFR-003)
 
 ## Phase 5: User Story 3, fingerprint a screen (P3)
 

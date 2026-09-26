@@ -95,8 +95,8 @@ been removed now that the first specification defines real requirements.
 | FR-003 | Classify regions as added, changed, removed or moved | specs/001-frame-delta-engine/spec.md | US1 | T018 | `internal/diff/diff_test.go::TestMovedElementIsReportedAsMoved` | | in-progress |
 | FR-004 | Report change magnitude per region with a configurable reporting floor | specs/001-frame-delta-engine/spec.md | US1 | T016 | `internal/diff/diff_test.go::TestChangedPanelIsReportedOnceWithCoveringBounds` | | in-progress |
 | FR-005 | Report no regions when differences stay below the noise floor | specs/001-frame-delta-engine/spec.md | US1 | T019 | `internal/diff/diff_test.go::TestNoiseBelowTheFloorReportsNothing` | | in-progress |
-| FR-006 | Assign element identifiers stable across a stream and never reused in a session | specs/001-frame-delta-engine/spec.md | US2 | T025 |  |  | planned |
-| FR-007 | Report identity confidence and mark uncertain identity instead of guessing | specs/001-frame-delta-engine/spec.md | US2 | T028 |  |  | planned |
+| FR-006 | Assign element identifiers stable across a stream and never reused in a session | specs/001-frame-delta-engine/spec.md | US2 | T025 | `internal/identity/identity_test.go::TestIdentifiersAreNeverReused` | `docs/vv/evidence/identity-2026-09-26.txt` | verified |
+| FR-007 | Report identity confidence and mark uncertain identity instead of guessing | specs/001-frame-delta-engine/spec.md | US2 | T028 | `internal/identity/identity_test.go::TestReappearanceAfterOcclusionIsNewAndUncertain` | `docs/vv/evidence/identity-2026-09-26.txt` | verified |
 | FR-008 | Compute a per-frame fingerprint stable under sub-threshold noise | specs/001-frame-delta-engine/spec.md | US3 | T035 | `internal/diff/diff_test.go::TestFingerprintTracksContentNotNoise` | | in-progress |
 | FR-009 | Compare a frame against a stored fingerprint and report equal or different | specs/001-frame-delta-engine/spec.md | US3 | T037 |  |  | planned |
 | FR-010 | Emit one self-contained document per frame when streaming | specs/001-frame-delta-engine/spec.md | US2 | T011 | `internal/stream/stream_test.go::TestFirstFrameCarriesTheConditionAndNoRegions` | | in-progress |
@@ -114,7 +114,7 @@ been removed now that the first specification defines real requirements.
 | NFR-006 | Region detection F1 at or above 0.98 on the generated corpus | specs/001-frame-delta-engine/spec.md | US1 | T022 | `internal/score/corpus_test.go::TestCorpus` | `docs/vv/evidence/accuracy-2026-09-26.txt` | verified |
 | NFR-007 | A new user produces a delta document from the README within two minutes | specs/001-frame-delta-engine/spec.md | US1 | T049 |  |  | planned |
 | NFR-008 | CPU only, no GPU, no network, runs on Linux and Windows | specs/001-frame-delta-engine/spec.md | US1 | T004 |  |  | planned |
-| NFR-009 | At least 80 percent line coverage on the geometry and identity modules | specs/001-frame-delta-engine/spec.md | US2 | T046 | `internal/diff/diff_test.go::TestCompareIsDeterministic` | | in-progress |
+| NFR-009 | At least 80 percent line coverage on the geometry and identity modules | specs/001-frame-delta-engine/spec.md | US2 | T046 | `internal/identity/identity_test.go::TestSetRulesChangesTheWindowWithoutLosingIdentities` | `docs/vv/evidence/coverage-2026-09-26.txt` | verified |
 | NFR-010 | Versioned schema, and consumers can reject unknown versions | specs/001-frame-delta-engine/spec.md | US3 | T039 | | | planned |
 | SC-001 | Detection F1 at or above 0.98 and zero false removals on 5,000 generated frame pairs | specs/001-frame-delta-engine/spec.md | US1 | T023 | `internal/score/corpus_test.go::TestCorpus` | `docs/vv/evidence/accuracy-2026-09-26.txt` | verified |
 | SC-002 | Benchmark reports p95 at or below 12 ms and p99 at or below 25 ms | specs/001-frame-delta-engine/spec.md | US1 | T041 | `internal/perf/perf_test.go::TestLatencyPercentiles` | `docs/vv/evidence/perf-2026-09-26.txt` | verified |
