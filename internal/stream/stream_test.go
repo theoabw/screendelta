@@ -447,3 +447,49 @@ func TestDifferErrorKeepsItsCause(t *testing.T) {
 		t.Fatalf("errors.Is no longer finds the cause: %v", err)
 	}
 }
+
+func TestTypedNilDifferErrorDoesNotPanic(t *testing.T) {
+	// A typed nil satisfies an error type assertion and then panics on use, so a differ
+	// defect must not become an engine crash.
+	var typedNil *fielderr.Error
+	differ := &stubDiffer{err: typedNil}
+	engine := newEngine(t, differ)
+	if _, err := engine.Push(testFrame(1, 8, 8, 0x10)); err != nil {
+		t.Fatalf("Push failed on the first frame: %v", err)
+	}
+	_, err := engine.Push(testFrame(2, 8, 8, 0x10))
+	if err == nil {
+		t.Fatal("Push hid a typed nil error")
+	}
+	if !strings.Contains(err.Error(), "typed nil") {
+		t.Fatalf("error does not explain what the differ did: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "frame 2") {
+		t.Fatalf("error does not name the frame: %q", err.Error())
+	}
+}
+
+func TestStructuredDifferErrorNamesTheOperationAndFrame(t *testing.T) {
+	// The differ's own subject and frame number are not the engine's: the engine knows
+	// which frame it handed over, and labelling that number as a tile is misleading.
+	shared := &fielderr.Error{Subject: "tile", Sequence: 99, Field: "x", Problem: "bad"}
+	differ := &stubDiffer{fingerprintErr: shared}
+	engine := newEngine(t, differ)
+
+	_, err := engine.Push(testFrame(12, 8, 8, 0x10))
+	if err == nil {
+		t.Fatal("Push hid the differ error")
+	}
+	message := err.Error()
+	for _, want := range []string{"stream.Push", "frame 12", "fingerprint", "x", "bad"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message %q does not contain %q", message, want)
+		}
+	}
+	if strings.Contains(message, "tile 12") {
+		t.Fatalf("message labels the engine's frame number as a tile: %q", message)
+	}
+	if shared.Subject != "tile" || shared.Sequence != 99 {
+		t.Fatalf("the caller's error was rewritten: %+v", shared)
+	}
+}

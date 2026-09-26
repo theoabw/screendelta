@@ -55,16 +55,14 @@ corpus: ## Generate the ground-truth corpus
 	$(GO) run ./tools/corpusgen --out corpus
 
 accuracy: ## Score the engine against the generated corpus
-	@out=$$($(GO) test ./internal/score/... -run TestCorpus -count=1 -v 2>&1); status=$$?; echo "$$out"; \
-	if echo "$$out" | grep -qE "no tests to run|no test files|matched no packages"; then \
-		echo "accuracy: the corpus scoring test does not exist yet (task T023), so nothing was measured" >&2; exit 1; fi; \
-	exit $$status
+	@if ! $(GO) test ./internal/score/... -list 'TestCorpus' 2>/dev/null | grep -q '^TestCorpus$$'; then \
+		echo "accuracy: the corpus scoring test does not exist yet (task T023), so there is nothing to measure" >&2; exit 1; fi
+	$(GO) test ./internal/score/... -run TestCorpus -count=1 -v
 
 memcheck: ## Stream 10,000 frames and report peak resident memory
-	@out=$$($(GO) test ./internal/stream/... -run TestMemoryCeiling -count=1 -v 2>&1); status=$$?; echo "$$out"; \
-	if echo "$$out" | grep -qE "no tests to run|no test files|matched no packages"; then \
-		echo "memcheck: the memory ceiling test does not exist yet (task T042), so nothing was measured" >&2; exit 1; fi; \
-	exit $$status
+	@if ! $(GO) test ./internal/stream/... -list 'TestMemoryCeiling' 2>/dev/null | grep -q '^TestMemoryCeiling$$'; then \
+		echo "memcheck: the memory ceiling test does not exist yet (task T042), so there is nothing to measure" >&2; exit 1; fi
+	$(GO) test ./internal/stream/... -run TestMemoryCeiling -count=1 -v
 
 clean: ## Remove build and benchmark output
 	rm -rf bin coverage.txt coverage.html bench.txt

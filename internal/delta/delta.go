@@ -213,6 +213,9 @@ func validateFrame(f FrameRef) error {
 	if f.Height < 1 {
 		return &FieldError{Op: "delta.Validate", Subject: "document", Field: "frame.height", Problem: "must be at least 1"}
 	}
+	if !isFinite(f.ScaleFactor) {
+		return &FieldError{Op: "delta.Validate", Subject: "document", Field: "frame.scaleFactor", Problem: "must be a finite number, not NaN or infinity"}
+	}
 	if f.ScaleFactor <= 0 {
 		return &FieldError{Op: "delta.Validate", Subject: "document", Field: "frame.scaleFactor", Problem: "must be greater than 0"}
 	}

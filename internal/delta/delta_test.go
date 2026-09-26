@@ -106,6 +106,8 @@ func TestValidateRejectsBrokenInvariants(t *testing.T) {
 		{"frame sequence zero", func(d *Document) { d.Frame.Sequence = 0 }, "frame.sequence"},
 		{"frame width zero", func(d *Document) { d.Frame.Width = 0 }, "frame.width"},
 		{"frame scale zero", func(d *Document) { d.Frame.ScaleFactor = 0 }, "frame.scaleFactor"},
+		{"frame scale not finite", func(d *Document) { d.Frame.ScaleFactor = math.NaN() }, "frame.scaleFactor"},
+		{"frame scale infinite", func(d *Document) { d.Frame.ScaleFactor = math.Inf(1) }, "frame.scaleFactor"},
 		{"algorithm empty", func(d *Document) { d.Fingerprint.Algorithm = "" }, "fingerprint.algorithm"},
 		{"grid size out of range", func(d *Document) { d.Fingerprint.GridSize = 4 }, "fingerprint.gridSize"},
 		{"cell count mismatch", func(d *Document) { d.Fingerprint.Cells = d.Fingerprint.Cells[:10] }, "fingerprint.cells"},

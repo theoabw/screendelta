@@ -254,17 +254,32 @@ func ownFingerprint(fingerprint delta.Fingerprint) delta.Fingerprint {
 // be shared, and mutating it is how a message ends up naming the wrong frame. The cause
 // is preserved so a caller can still test for the original error.
 func wrapDifferError(operation string, sequence uint64, err error) error {
-	if fieldErr, ok := err.(*fielderr.Error); ok && fieldErr != nil {
-		context := *fieldErr
-		if context.Subject == "" {
-			context.Subject = "frame"
+	if fieldErr, ok := err.(*fielderr.Error); ok {
+		// A typed nil satisfies the assertion and then panics on use, which is a
+		// differ defect the engine has to survive rather than propagate as a crash.
+		if fieldErr == nil {
+			return &fielderr.Error{
+				Op:       "stream.Push",
+				Subject:  "frame",
+				Sequence: sequence,
+				Field:    operation,
+				Problem:  "differ returned a typed nil error",
+			}
 		}
-		// The frame number is always the one this engine handed to the differ. A
-		// differ that pools its errors can carry a stale number from an earlier call,
-		// and reporting that would send an operator to the wrong frame.
+		context := *fieldErr
+		context.Op = "stream.Push"
+		// The subject and the number both belong to this engine: it knows which frame
+		// it handed over and that the frame, not the differ's own subject, is what a
+		// reader needs. A pooled error carrying a stale number, or naming a tile,
+		// would send an operator to the wrong place.
+		context.Subject = "frame"
 		context.Sequence = sequence
-		if context.Op == "" {
-			context.Op = "stream.Push"
+		if context.Field == "" {
+			context.Field = operation
+		} else if context.Field != operation {
+			// Keep the differ's own field in the message rather than discarding it.
+			context.Problem = context.Field + ": " + context.Problem
+			context.Field = operation
 		}
 		context.Cause = err
 		return &context
