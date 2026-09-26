@@ -28,6 +28,18 @@ build/
 target/
 *.egg-info/
 
+# Go
+bin/
+*.exe
+*.test
+*.out
+coverage.txt
+coverage.html
+# Generated corpora and benchmark output stay out of the repository; the corpus
+# generator, its seed and the resulting metrics are what get committed.
+/corpus/
+/tmp-frames/
+
 # Editors and OS
 .DS_Store
 Thumbs.db
