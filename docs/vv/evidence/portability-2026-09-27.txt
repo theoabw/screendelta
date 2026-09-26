@@ -1,0 +1,58 @@
+Portability and cross-environment determinism, 2026-09-27.
+Commands: make cross, GOTOOLCHAIN=go1.25.0 go test ./..., docker run golang:1.25-bookworm
+
+NFR-004 says the output is byte-identical, independent of host, thread count and scheduling. NFR-008 says the
+engine runs on Linux and Windows with no GPU and no network. Neither can be demonstrated completely from one
+machine, and this file records exactly how far the evidence goes, because the difference between "verified" and
+"verified as far as this machine allows" is the difference this project has spent fifteen rounds insisting on.
+
+## Three environments, one digest
+
+The same forty frames were processed by three builds, and the output was compared byte for byte:
+
+  host, go1.26.0, Ubuntu 26.04                      sha256 140e2e764a19078cef62239a3052ba2cb675232519037c57e0cf122803fea1cd
+  host, go1.25.0, same machine                      sha256 140e2e764a19078cef62239a3052ba2cb675232519037c57e0cf122803fea1cd
+  container, go1.25.0, Debian bookworm, same kernel  sha256 140e2e764a19078cef62239a3052ba2cb675232519037c57e0cf122803fea1cd
+
+176,899 bytes each, identical to the byte. The three environments differ in the compiler that generated the code,
+the version of the standard library it was linked against, and the userland it ran on.
+
+Together with the checks in tests/e2e, the environments the output has been shown not to depend on are:
+
+  toolchain version        go1.25.0 and go1.26.0
+  userland                 Ubuntu 26.04 and Debian bookworm
+  thread count             GOMAXPROCS 1, 2 and 4
+  collector scheduling     GOGC 10, GOGC off and the default
+  process                  separate invocations, not two calls in one process
+  input path               PNG files and generated frames
+
+## What is not demonstrated, and why
+
+**A second physical machine.** This workstation has no architecture emulation registered, so a linux/arm64 run
+is not possible without a privileged container to install the emulator, which is a change to the host's
+configuration and not one to make for a course project's determinism check. The owner's two Windows machines
+were unreachable when this was attempted (one off the network, one with no route). So the claim is
+"independent of the toolchain, the userland, the thread count and the collector's scheduling, on this machine",
+and a second physical host is the one thing left.
+
+**A different architecture at runtime.** `make cross` builds linux/amd64, linux/arm64 and windows/amd64, so the
+code compiles for three targets and has no architecture-specific paths, but only amd64 was executed here.
+
+**Windows at runtime.** The windows/amd64 build succeeds and is checked on every commit, which is what CI can
+do on a Linux runner. Running the suite on Windows needs a Windows machine; Wine is not installed and would not
+be Windows in any case.
+
+## What this supports
+
+  NFR-004   byte-identical output across the toolchain, the userland, the thread count and the collector's
+            scheduling; a second physical host is untested, so the requirement stays in progress with the
+            residual named rather than closed on a weaker claim
+  NFR-008   three targets build and the suite passes on two Linux userlands; the Windows runtime half is
+            untested, so the requirement stays in progress
+
+## The suite in the container
+
+`go test ./... -count=1` in the Debian container reports every package ok, including the end to end tests and the
+eighty second measurement packages. Two environment details are worth recording because they are what a first
+run trip over: the container has no git checkout, so `-buildvcs=false` was needed, and the module is mounted
+read only, so the build cache lives in the container.

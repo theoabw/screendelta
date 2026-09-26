@@ -82,11 +82,12 @@ capture: ## Capture real screen frames for the pipeline demonstration (needs a h
 	done
 	@ls -1 $(CAPTURE_DIR)/*.png | wc -l | xargs echo "capture: frames written:"
 
-cross: ## Cross-build for Linux and Windows, which is what the CI portability check runs
+cross: ## Cross-build for the supported platforms, which is what the CI portability check runs
 	$(GO) build ./...
 	GOOS=linux GOARCH=amd64 $(GO) build ./...
+	GOOS=linux GOARCH=arm64 $(GO) build ./...
 	GOOS=windows GOARCH=amd64 $(GO) build ./...
-	@echo "cross: linux/amd64 and windows/amd64 both build"
+	@echo "cross: linux/amd64, linux/arm64 and windows/amd64 all build"
 
 demo: capture ## Run the pipeline demonstration on real captured frames and assert the decision rate
 	$(GO) run ./tools/demo --source $(CAPTURE_DIR) --passes 20 --assert-rate 20

@@ -173,11 +173,11 @@ result.
 | NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 8.89 ms, p99 11.30 ms |
 | NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 78.2 per second |
 | NFR-003 | Memory | At most 128 MB over 10,000 frames, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 22.5 MiB peak resident |
-| NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Two runs encoded and compared; GOMAXPROCS 1 and 4 | met in part: identical across thread counts on this host; cross-host is untested |
+| NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Three builds compared byte for byte; two thread counts and two collector settings; a container on a different userland | met in part: identical across the toolchain, the userland, the thread count and the collector, and a second physical host is untested |
 | NFR-005 | Reliability | Zero false removals on the noise corpus | `make accuracy`, noise case, every pair | met: zero |
 | NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs | `make accuracy`, corpus with generated ground truth | met: 5,134 frame pairs, F1 1.0000 |
 | NFR-007 | Usability | A new user produces a delta from their own screenshots within two minutes, from the README alone | Task timing with an external tester | not yet measured; the acceptance script exists and is not run |
-| NFR-008 | Portability | CPU only, no GPU, no network at runtime, Linux and Windows | Cross-build in CI, no-network test | partly met: cross-build done, no-network test outstanding |
+| NFR-008 | Portability | CPU only, no GPU, no network at runtime, Linux and Windows | Three cross-builds in CI, the no-network tests, and the suite run on a second Linux userland | partly met: three targets build and the suite passes on Ubuntu and Debian; the Windows runtime half is untested |
 | NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 81.9, identity 85.8 |
 | NFR-010 | Compatibility | Schema changes versioned, and a consumer can reject a version it does not understand | Decode-time rejection test, exit code 3 from the command line | met |
 | NFR-011 | Security | No network socket, no process execution, reads only the frames and configuration given, writes only to the declared output path | Two static checks over the syntax trees of every non-test file, and one dynamic check comparing the filesystem before and after a run | met: the checks fail when an import of `net/http` and a stray `os.WriteFile` are added, and pass again when they are removed |
@@ -443,7 +443,7 @@ catches.
 4. **The requirement is one number for a cost that follows the size of the change.** The asserted profile
    changes two elements per frame; a change covering half the screen costs about 40 ms and is reported
    separately. No single figure describes both.
-5. **Determinism is demonstrated across thread counts on one host**, not across hosts or Go versions.
+5. **Determinism is demonstrated across two toolchains, two userlands, two thread counts and two collector settings, all on one physical machine.** A second physical host and a second architecture were not available: this workstation has no emulation registered, and the owner's other machines were unreachable. The evidence file names that residual rather than closing the requirement on a weaker claim.
 6. **The independent review is an agent, not a person.** It is a different context, a different model and a
    brief that requires counterexamples, which is a real substitute for a second pair of eyes and not the
    same thing. Section 6.1 says what the single-author history cannot show.
@@ -491,7 +491,7 @@ Current state, from the commands named:
 | Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB, peak resident 22.5 MiB, identical heap at frames 1,000 and 10,000 | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | the two windows agree | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 85.8 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
-| Determinism | four runs encoded and compared | byte-identical output | identical across two thread counts and two collector settings | pass in part | NFR-004 |
+| Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | identical across two toolchains, two userlands, two thread counts and two collector settings | pass in part | NFR-004 |
 | Fuzzing | three fuzz targets, 12.3 million executions | no panic, and the checked invariant holds | no panic on any input; the region order invariant failed and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
 | Mutation testing | fourteen rules changed, one at a time | every mutation is caught | thirteen of fourteen killed; the one survivor changes only how much work the comparison does, which is why no test can distinguish it | pass with one recorded exception | NFR-009 |
 | Requirement traceability | `make check-strict` | every requirement traced to a task, a test and existing evidence | 33 rows, 29 verified, 0 errors, 0 warnings | pass | the process gate |
@@ -504,10 +504,10 @@ in progress and the matrix says which, and the honest summary of the gap is this
   inherent to a single frame pair, they are written into the specification with their reason, and both are
   pinned by tests. Verifying them is a decision about what the requirement says, and the evidence file says
   so rather than implying the engine got better.
-- **Two requirements are one step from verified and are held back deliberately**: NFR-004, because two of
-  its three named conditions are demonstrated (thread count and collector scheduling, four configurations)
-  and another host is not testable from here, and NFR-008, because the cross build is checked and running
-  the suite on Windows is not.
+- **Two requirements are one step from verified and are held back deliberately**: NFR-004, because the
+  output is shown independent of the toolchain, the userland, the thread count and the collector's scheduling,
+  and a second physical host is not available; and NFR-008, because three targets build and the suite passes on
+  two Linux userlands while the Windows runtime half is untested.
 - **Two requirements need testing that exists but has not been written**: FR-016 (no network, no stray
   writes) and NFR-008 (the Windows cross-build is in CI, the platform smoke test is not).
 - **Two need a human who is not the author**: NFR-007 and SC-005 (usability), which is what the acceptance
