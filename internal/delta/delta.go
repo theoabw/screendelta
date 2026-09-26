@@ -6,6 +6,8 @@
 package delta
 
 import (
+	"math"
+	"regexp"
 	"sort"
 
 	"github.com/theoabw/screendelta/internal/fielderr"
@@ -19,6 +21,18 @@ const SchemaVersion = "1.0"
 // boundsTolerance absorbs floating point error when checking that a region fits
 // inside the frame, so a region that lands exactly on an edge is not rejected.
 const boundsTolerance = 1e-9
+
+// areaTolerancePercent is the slack allowed between the area a consumer is told and
+// the area its bounds imply, because a region is rounded to whole pixels somewhere and
+// the two cannot be expected to agree to the byte.
+const areaTolerancePercent = 1
+
+// The schema states these patterns, so validation has to enforce them: a document that
+// encodes successfully must not be rejectable by an independent consumer's validator.
+var (
+	algorithmPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	hashPattern      = regexp.MustCompile(`^[0-9a-f]{16,128}$`)
+)
 
 // Bounds is a rectangle normalized to the frame extent, so a consumer is
 // independent of resolution.
@@ -151,8 +165,28 @@ func (d Document) Validate() error {
 	if err := validateFingerprint(d.Fingerprint); err != nil {
 		return err
 	}
+	// A first frame has no predecessor, so it cannot report content changes.
+	if hasCondition(d.Conditions, ConditionFirstFrame) && len(d.Regions) > 0 {
+		return &FieldError{
+			Op:      "delta.Validate",
+			Subject: "document",
+			Field:   "regions",
+			Problem: "must be empty when the first-frame condition is present",
+		}
+	}
+
+	identities := make(map[uint64]bool, len(d.Regions))
 	for index, region := range d.Regions {
-		if err := validateRegion(index, region); err != nil {
+		if identities[region.Identity] {
+			return &FieldError{
+				Op:      "delta.Validate",
+				Subject: "document",
+				Field:   "regions[" + itoa(index) + "].identity",
+				Problem: "is already used by another region in this document",
+			}
+		}
+		identities[region.Identity] = true
+		if err := validateRegion(index, region, d.Frame.Width, d.Frame.Height); err != nil {
 			return err
 		}
 	}
@@ -164,15 +198,6 @@ func (d Document) Validate() error {
 				Field:   "conditions",
 				Problem: "unknown condition " + quote(string(condition)),
 			}
-		}
-	}
-	// A first frame has no predecessor, so it cannot report content changes.
-	if hasCondition(d.Conditions, ConditionFirstFrame) && len(d.Regions) > 0 {
-		return &FieldError{
-			Op:      "delta.Validate",
-			Subject: "document",
-			Field:   "regions",
-			Problem: "must be empty when the first-frame condition is present",
 		}
 	}
 	return nil
@@ -195,8 +220,13 @@ func validateFrame(f FrameRef) error {
 }
 
 func validateFingerprint(fp Fingerprint) error {
-	if fp.Algorithm == "" {
-		return &FieldError{Op: "delta.Validate", Subject: "document", Field: "fingerprint.algorithm", Problem: "must not be empty"}
+	if !algorithmPattern.MatchString(fp.Algorithm) {
+		return &FieldError{
+			Op:      "delta.Validate",
+			Subject: "document",
+			Field:   "fingerprint.algorithm",
+			Problem: "must be a lower case identifier such as " + quote("grid-luma-1"),
+		}
 	}
 	if fp.GridSize < 8 || fp.GridSize > 256 {
 		return fielderr.Range("fingerprint.gridSize", 8, 256, fp.GridSize).At("delta.Validate", "document", 0)
@@ -214,18 +244,18 @@ func validateFingerprint(fp Fingerprint) error {
 			return fielderr.Range("fingerprint.cells", 0, 255, cell).At("delta.Validate", "document", 0)
 		}
 	}
-	if len(fp.StrictHash) < 16 {
+	if !hashPattern.MatchString(fp.StrictHash) {
 		return &FieldError{
 			Op:      "delta.Validate",
 			Subject: "document",
 			Field:   "fingerprint.strictHash",
-			Problem: "must be at least 16 hex characters",
+			Problem: "must be 16 to 128 lower case hexadecimal characters",
 		}
 	}
 	return nil
 }
 
-func validateRegion(index int, region Region) error {
+func validateRegion(index int, region Region, frameWidth, frameHeight int) error {
 	where := "regions[" + itoa(index) + "]"
 	if region.Identity == 0 {
 		return &FieldError{Op: "delta.Validate", Subject: "document", Field: where + ".identity", Problem: "must be at least 1"}
@@ -251,23 +281,59 @@ func validateRegion(index int, region Region) error {
 			return err
 		}
 	}
-	if region.Magnitude < 0 || region.Magnitude > 1 {
-		return &FieldError{Op: "delta.Validate", Subject: "document", Field: where + ".magnitude", Problem: "must be between 0 and 1"}
+	if !isFinite(region.Magnitude) || region.Magnitude < 0 || region.Magnitude > 1 {
+		return &FieldError{Op: "delta.Validate", Subject: "document", Field: where + ".magnitude", Problem: "must be a finite number between 0 and 1"}
 	}
 	if region.AreaPixels < 1 {
 		return &FieldError{Op: "delta.Validate", Subject: "document", Field: where + ".areaPixels", Problem: "must be at least 1"}
+	}
+	framePixels := frameWidth * frameHeight
+	if region.AreaPixels > framePixels {
+		return &FieldError{
+			Op:      "delta.Validate",
+			Subject: "document",
+			Field:   where + ".areaPixels",
+			Problem: "exceeds the " + itoa(framePixels) + " pixels of the frame it describes",
+		}
+	}
+	// The area a consumer is given has to agree with the area the bounds imply, or the
+	// document contradicts itself.
+	implied := int(math.Round(region.Bounds.W*float64(frameWidth))) * int(math.Round(region.Bounds.H*float64(frameHeight)))
+	slack := implied * areaTolerancePercent / 100
+	if slack < 1 {
+		slack = 1
+	}
+	if difference := region.AreaPixels - implied; difference > slack || difference < -slack {
+		return &FieldError{
+			Op:      "delta.Validate",
+			Subject: "document",
+			Field:   where + ".areaPixels",
+			Problem: "is " + itoa(region.AreaPixels) + " but the bounds imply " + itoa(implied),
+		}
 	}
 	return nil
 }
 
 func validateBounds(field string, b Bounds) error {
-	if b.X < 0 || b.Y < 0 || b.W <= 0 || b.H <= 0 {
-		return &FieldError{Op: "delta.Validate", Subject: "document", Field: field, Problem: "must have non-negative origin and positive size"}
+	for _, value := range []float64{b.X, b.Y, b.W, b.H} {
+		if !isFinite(value) {
+			return &FieldError{Op: "delta.Validate", Subject: "document", Field: field, Problem: "must be finite, not NaN or infinity"}
+		}
+	}
+	// Each coordinate is checked against the schema's own limits, separately from the
+	// tolerance used for the sum below: a width slightly over one is still a width the
+	// schema rejects.
+	if b.X < 0 || b.X > 1 || b.Y < 0 || b.Y > 1 || b.W <= 0 || b.W > 1 || b.H <= 0 || b.H > 1 {
+		return &FieldError{Op: "delta.Validate", Subject: "document", Field: field, Problem: "must have an origin and size inside 0 to 1"}
 	}
 	if b.X+b.W > 1+boundsTolerance || b.Y+b.H > 1+boundsTolerance {
 		return &FieldError{Op: "delta.Validate", Subject: "document", Field: field, Problem: "extends beyond the frame"}
 	}
 	return nil
+}
+
+func isFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 func hasCondition(conditions []Condition, want Condition) bool {

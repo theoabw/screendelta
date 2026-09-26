@@ -97,7 +97,7 @@ func TestFirstFrameCarriesTheConditionAndNoRegions(t *testing.T) {
 func TestSecondFrameIsCompared(t *testing.T) {
 	differ := &stubDiffer{
 		regions: []delta.Region{
-			{Identity: 1, Class: delta.ClassChanged, Bounds: delta.Bounds{X: 0, Y: 0, W: 0.5, H: 0.5}, Magnitude: 0.5, AreaPixels: 64},
+			{Identity: 1, Class: delta.ClassChanged, Bounds: delta.Bounds{X: 0, Y: 0, W: 0.5, H: 0.5}, Magnitude: 0.5, AreaPixels: 16},
 		},
 	}
 	engine := newEngine(t, differ)
@@ -121,7 +121,7 @@ func TestSecondFrameIsCompared(t *testing.T) {
 }
 
 func TestViewportChangeSkipsTheComparison(t *testing.T) {
-	differ := &stubDiffer{regions: []delta.Region{{Identity: 1, Class: delta.ClassChanged, Bounds: delta.Bounds{W: 0.5, H: 0.5}, Magnitude: 0.5, AreaPixels: 1}}}
+	differ := &stubDiffer{regions: []delta.Region{{Identity: 1, Class: delta.ClassChanged, Bounds: delta.Bounds{W: 0.5, H: 0.5}, Magnitude: 0.5, AreaPixels: 16}}}
 	engine := newEngine(t, differ)
 
 	if _, err := engine.Push(testFrame(1, 8, 8, 0x10)); err != nil {
@@ -237,8 +237,8 @@ func TestDocumentsAreDeterministicAcrossEngines(t *testing.T) {
 	run := func() []byte {
 		engine := newEngine(t, &stubDiffer{
 			regions: []delta.Region{
-				{Identity: 2, Class: delta.ClassChanged, Bounds: delta.Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.3, AreaPixels: 4},
-				{Identity: 1, Class: delta.ClassChanged, Bounds: delta.Bounds{X: 0.1, Y: 0.1, W: 0.1, H: 0.1}, Magnitude: 0.2, AreaPixels: 4},
+				{Identity: 2, Class: delta.ClassChanged, Bounds: delta.Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.3, AreaPixels: 1},
+				{Identity: 1, Class: delta.ClassChanged, Bounds: delta.Bounds{X: 0.1, Y: 0.1, W: 0.1, H: 0.1}, Magnitude: 0.2, AreaPixels: 1},
 			},
 			conditions: []delta.Condition{delta.ConditionViewportChanged, delta.ConditionOutOfOrderTimestamp},
 		})
@@ -303,7 +303,7 @@ func (d *reusingDiffer) Compare(previous, current frame.Frame, cfg config.Config
 		Bounds:         delta.Bounds{X: 0, Y: 0, W: 0.1, H: 0.1},
 		PreviousBounds: &d.previous,
 		Magnitude:      float64(d.frameNumber) / 10,
-		AreaPixels:     4,
+		AreaPixels:     1,
 	}}
 	return d.regions, nil, nil
 }

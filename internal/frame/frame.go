@@ -9,6 +9,7 @@ package frame
 
 import (
 	"math"
+	"strconv"
 
 	"github.com/theoabw/screendelta/internal/fielderr"
 )
@@ -101,14 +102,15 @@ func (f Frame) Validate() error {
 			Problem:  "must be greater than 0",
 		}
 	}
-	expected := f.Width * f.Height * 4
-	if len(f.Pixels) != expected {
+	// 64 bit arithmetic so the expected length cannot wrap on a 32 bit platform.
+	expected := int64(f.Width) * int64(f.Height) * 4
+	if int64(len(f.Pixels)) != expected {
 		return &FieldError{
 			Op:       operation,
 			Subject:  "frame",
 			Sequence: f.Sequence,
 			Field:    "pixels",
-			Problem:  "length does not match the declared layout, expected " + itoa(expected) + " bytes",
+			Problem:  "length does not match the declared layout, expected " + strconv.FormatInt(expected, 10) + " bytes",
 		}
 	}
 	return nil

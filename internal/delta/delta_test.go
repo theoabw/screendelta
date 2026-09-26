@@ -2,6 +2,7 @@ package delta
 
 import (
 	"bytes"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -24,11 +25,12 @@ func validDocument() Document {
 		},
 		Regions: []Region{
 			{
-				Identity:   1,
-				Class:      ClassChanged,
-				Bounds:     Bounds{X: 0.1, Y: 0.2, W: 0.3, H: 0.1},
-				Magnitude:  0.4,
-				AreaPixels: 500,
+				Identity:  1,
+				Class:     ClassChanged,
+				Bounds:    Bounds{X: 0.1, Y: 0.2, W: 0.3, H: 0.1},
+				Magnitude: 0.4,
+				// 0.3 of 1920 by 0.1 of 1080 is 576 by 108 pixels.
+				AreaPixels: 576 * 108,
 			},
 		},
 	}
@@ -58,8 +60,8 @@ func TestEncodeIsByteIdenticalRegardlessOfInputOrder(t *testing.T) {
 	first := validDocument()
 	second := validDocument()
 	second.Regions = []Region{
-		{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.6, Y: 0.7, W: 0.1, H: 0.1}, Magnitude: 0.2, AreaPixels: 10},
-		{Identity: 1, Class: ClassChanged, Bounds: Bounds{X: 0.1, Y: 0.2, W: 0.3, H: 0.1}, Magnitude: 0.4, AreaPixels: 500},
+		{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.6, Y: 0.7, W: 0.1, H: 0.1}, Magnitude: 0.2, AreaPixels: 192 * 108},
+		{Identity: 1, Class: ClassChanged, Bounds: Bounds{X: 0.1, Y: 0.2, W: 0.3, H: 0.1}, Magnitude: 0.4, AreaPixels: 576 * 108},
 	}
 	first.Regions = []Region{second.Regions[1], second.Regions[0]}
 	// Two conditions in opposite orders, neither of them first-frame, because a
@@ -119,6 +121,17 @@ func TestValidateRejectsBrokenInvariants(t *testing.T) {
 		{"bounds beyond frame", func(d *Document) { d.Regions[0].Bounds.X = 0.9 }, "regions[0].bounds"},
 		{"negative size", func(d *Document) { d.Regions[0].Bounds.W = 0 }, "regions[0].bounds"},
 		{"magnitude above one", func(d *Document) { d.Regions[0].Magnitude = 1.5 }, "regions[0].magnitude"},
+		{"magnitude not finite", func(d *Document) { d.Regions[0].Magnitude = math.NaN() }, "regions[0].magnitude"},
+		{"bounds not finite", func(d *Document) { d.Regions[0].Bounds.X = math.Inf(1) }, "regions[0].bounds"},
+		{"width beyond one", func(d *Document) { d.Regions[0].Bounds.W = 1.0000000005 }, "regions[0].bounds"},
+		{"algorithm not an identifier", func(d *Document) { d.Fingerprint.Algorithm = "BAD NAME" }, "fingerprint.algorithm"},
+		{"hash not hexadecimal", func(d *Document) { d.Fingerprint.StrictHash = strings.Repeat("z", 16) }, "fingerprint.strictHash"},
+		{"hash too long", func(d *Document) { d.Fingerprint.StrictHash = strings.Repeat("a", 129) }, "fingerprint.strictHash"},
+		{"duplicate identity", func(d *Document) {
+			d.Regions = append(d.Regions, d.Regions[0])
+		}, "regions[1].identity"},
+		{"area beyond the frame", func(d *Document) { d.Regions[0].AreaPixels = 1920*1080 + 1 }, "regions[0].areaPixels"},
+		{"area disagrees with bounds", func(d *Document) { d.Regions[0].AreaPixels = 1000 }, "regions[0].areaPixels"},
 		{"area zero", func(d *Document) { d.Regions[0].AreaPixels = 0 }, "regions[0].areaPixels"},
 		{"unknown condition", func(d *Document) { d.Conditions = []Condition{"scaled"} }, "conditions"},
 		{"first frame with regions", func(d *Document) {
