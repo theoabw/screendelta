@@ -382,24 +382,41 @@ func TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder(t *testing.T) {
 	// The published five keys do not settle a pair that agrees on all of them, which two regions of one element
 	// can: the same place, the same identity, the same size, different classes. Mutation testing found that
 	// nothing exercised that tie, so the tie-breakers that settle it were undefended.
-	tied := func(reverse bool) []Region {
-		regions := []Region{
-			{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 200, IdentityConfidence: 1},
-			{Identity: 3, Class: ClassAdded, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.6, AreaPixels: 100, IdentityConfidence: 1},
-		}
-		if reverse {
-			regions[0], regions[1] = regions[1], regions[0]
-		}
-		return regions
+	// Neither tie-breaker settles such a pair on its own: a pair differing only in class leaves area undecided,
+	// and a pair differing only in area leaves class undecided. Mutation testing found both, one at a time, each
+	// masked by the other, so the cases are separate here.
+	tied := []struct {
+		name  string
+		pairs [2]Region
+	}{
+		{name: "differing in class at the same size",
+			pairs: [2]Region{
+				{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 100, IdentityConfidence: 1},
+				{Identity: 3, Class: ClassAdded, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.6, AreaPixels: 100, IdentityConfidence: 1},
+			}},
+		{name: "differing in area in the same class",
+			pairs: [2]Region{
+				{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 200, IdentityConfidence: 1},
+				{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 100, IdentityConfidence: 1},
+			}},
+		{name: "differing in both",
+			pairs: [2]Region{
+				{Identity: 3, Class: ClassAdded, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 200, IdentityConfidence: 1},
+				{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 100, IdentityConfidence: 1},
+			}},
 	}
-	tiedForward, tiedBackward := tied(false), tied(true)
-	SortRegions(tiedForward)
-	SortRegions(tiedBackward)
-	if !reflect.DeepEqual(tiedForward, tiedBackward) {
-		t.Fatalf("two regions agreeing on every published key were left to discovery order:\n%+v\n%+v", tiedForward, tiedBackward)
-	}
-	if !Ordered(tiedForward) {
-		t.Fatalf("the tie-broken regions are not in the contract's order: %+v", tiedForward)
+	for _, tc := range tied {
+		pairForward := []Region{tc.pairs[0], tc.pairs[1]}
+		pairBackward := []Region{tc.pairs[1], tc.pairs[0]}
+		SortRegions(pairForward)
+		SortRegions(pairBackward)
+		if !reflect.DeepEqual(pairForward, pairBackward) {
+			t.Fatalf("%s: two regions agreeing on every published key were left to discovery order:\n%+v\n%+v",
+				tc.name, pairForward, pairBackward)
+		}
+		if !Ordered(pairForward) {
+			t.Fatalf("%s: the tie-broken regions are not in the contract's order: %+v", tc.name, pairForward)
+		}
 	}
 	if !Ordered(forward) {
 		t.Fatalf("the sorted regions are not in the contract's order: %+v", forward)
