@@ -1,8 +1,11 @@
 # An Experience Report on a Specification-Driven, AI-Assisted Software Construction Project
 
-**Status**: working draft. Sections 1 to 4 are written from the repository; section 5 is written from
-the running V&V record; the user acceptance testing in `docs/vv/acceptance.md` is outstanding and is
-marked as such where it belongs rather than being implied complete.
+**Status**: complete and verified against the course template. Sections 1 to 7 and the appendix are written
+from the repository, and every count and measurement in them is recomputed from the repository by
+`scripts/check_report.py`, which runs in `make check-strict`. One item is outstanding and is marked as such
+where it belongs rather than implied complete: the user acceptance testing in `docs/vv/acceptance.md`, which
+needs a person who is not the author and is the reason NFR-007 and SC-005 are the two requirements the
+traceability matrix still shows as unmet.
 
 ## Team Details (Team A)
 

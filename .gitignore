@@ -49,3 +49,6 @@ Thumbs.db
 # Spec Kit machine-local state is ignored by .specify/.gitignore
 # (feature.json, extensions/*/local-config.yml). All other .specify files are
 # committed on purpose: the workflow is part of the graded process.
+
+# The exported report is a build artefact of docs/report/report.md and the committed PDF is the submission,
+# so a regenerated copy is compared rather than ignored: the file is committed deliberately.
