@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 720" width="1040" height="720" role="img" aria-label="Proposed specification-driven development workflow">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3c4043"/>
+    </marker>
+  </defs>
+
+  <style>
+    .title { font: 700 20px Helvetica, Arial, sans-serif; fill: #202124; }
+    .sub { font: 400 13px Helvetica, Arial, sans-serif; fill: #5f6368; }
+    .phase { font: 700 12px Helvetica, Arial, sans-serif; fill: #5f6368; }
+    .name { font: 700 15px Helvetica, Arial, sans-serif; fill: #202124; }
+    .cmd { font: 400 12px Menlo, Consolas, monospace; fill: #3c4043; }
+    .art { font: 400 11px Helvetica, Arial, sans-serif; fill: #5f6368; }
+    .legend { font: 400 12px Helvetica, Arial, sans-serif; fill: #3c4043; }
+    .note { font: 400 12px Helvetica, Arial, sans-serif; fill: #3c4043; }
+    .human { fill: #e8f0fe; stroke: #1a56db; stroke-width: 2; }
+    .agent { fill: #e6f4ea; stroke: #137333; stroke-width: 2; }
+    .gate { fill: #fef7e0; stroke: #b06000; stroke-width: 2; }
+    .link { stroke: #3c4043; stroke-width: 2; fill: none; }
+    .side { stroke: #9aa0a6; stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+  </style>
+
+  <rect x="0" y="0" width="1040" height="720" fill="#ffffff"/>
+  <text class="title" x="40" y="42">Proposed specification-driven development workflow</text>
+  <text class="sub" x="40" y="64">Nine phases, three gates. Blue phases are human decisions, green phases are agent execution with human review, amber phases are gates.</text>
+
+  <rect class="human" x="700" y="86" width="16" height="16" rx="3"/>
+  <text class="legend" x="724" y="99">Human decision</text>
+  <rect class="agent" x="850" y="86" width="16" height="16" rx="3"/>
+  <text class="legend" x="874" y="99">Agent execution</text>
+  <rect class="gate" x="700" y="112" width="16" height="16" rx="3"/>
+  <text class="legend" x="724" y="125">Gate, cannot be skipped</text>
+
+  <!-- Row 1, left to right -->
+  <rect class="human" x="40" y="150" width="280" height="96" rx="8"/>
+  <text class="phase" x="56" y="172">PHASE 1</text>
+  <text class="name" x="56" y="193">Constitution</text>
+  <text class="cmd" x="56" y="213">/speckit.constitution</text>
+  <text class="art" x="56" y="232">.specify/memory/constitution.md</text>
+
+  <rect class="agent" x="380" y="150" width="280" height="96" rx="8"/>
+  <text class="phase" x="396" y="172">PHASE 2</text>
+  <text class="name" x="396" y="193">Specify</text>
+  <text class="cmd" x="396" y="213">/speckit.specify</text>
+  <text class="art" x="396" y="232">spec.md, checklists/requirements.md</text>
+
+  <rect class="gate" x="720" y="150" width="280" height="96" rx="8"/>
+  <text class="phase" x="736" y="172">PHASE 3, GATE</text>
+  <text class="name" x="736" y="193">Clarify</text>
+  <text class="cmd" x="736" y="213">/speckit.clarify</text>
+  <text class="art" x="736" y="232">no open question survives to phase 4</text>
+
+  <path class="link" d="M 320 198 L 372 198" marker-end="url(#arrow)"/>
+  <path class="link" d="M 660 198 L 712 198" marker-end="url(#arrow)"/>
+  <path class="link" d="M 860 246 L 860 300 L 500 300" marker-end="url(#arrow)"/>
+
+  <!-- Row 2, right to left -->
+  <rect class="agent" x="720" y="300" width="280" height="96" rx="8"/>
+  <text class="phase" x="736" y="322">PHASE 4</text>
+  <text class="name" x="736" y="343">Plan</text>
+  <text class="cmd" x="736" y="363">/speckit.plan</text>
+  <text class="art" x="736" y="382">plan.md, research.md, data-model.md, contracts/</text>
+
+  <rect class="gate" x="380" y="300" width="280" height="96" rx="8"/>
+  <text class="phase" x="396" y="322">PHASE 5, GATE</text>
+  <text class="name" x="396" y="343">Checklist</text>
+  <text class="cmd" x="396" y="363">/speckit.checklist</text>
+  <text class="art" x="396" y="382">reviewer-owned quality checklist</text>
+
+  <rect class="agent" x="40" y="300" width="280" height="96" rx="8"/>
+  <text class="phase" x="56" y="322">PHASE 6</text>
+  <text class="name" x="56" y="343">Tasks</text>
+  <text class="cmd" x="56" y="363">/speckit.tasks</text>
+  <text class="art" x="56" y="382">tasks.md, ordered and dependency-aware</text>
+
+  <path class="link" d="M 712 348 L 668 348" marker-end="url(#arrow)"/>
+  <path class="link" d="M 372 348 L 328 348" marker-end="url(#arrow)"/>
+  <path class="link" d="M 180 396 L 180 450 L 460 450" marker-end="url(#arrow)"/>
+
+  <!-- Row 3, left to right -->
+  <rect class="gate" x="40" y="450" width="280" height="96" rx="8"/>
+  <text class="phase" x="56" y="472">PHASE 7, GATE</text>
+  <text class="name" x="56" y="493">Analyze</text>
+  <text class="cmd" x="56" y="513">/speckit.analyze</text>
+  <text class="art" x="56" y="532">read-only report, captured in docs/analysis/</text>
+
+  <rect class="agent" x="380" y="450" width="280" height="96" rx="8"/>
+  <text class="phase" x="396" y="472">PHASE 8</text>
+  <text class="name" x="396" y="493">Implement</text>
+  <text class="cmd" x="396" y="513">/speckit.implement</text>
+  <text class="art" x="396" y="532">code, one task at a time, tests from the spec</text>
+
+  <rect class="agent" x="720" y="450" width="280" height="96" rx="8"/>
+  <text class="phase" x="736" y="472">PHASE 9</text>
+  <text class="name" x="736" y="493">Converge</text>
+  <text class="cmd" x="736" y="513">/speckit.converge</text>
+  <text class="art" x="736" y="532">remaining work appended to tasks.md</text>
+
+  <path class="link" d="M 320 498 L 372 498" marker-end="url(#arrow)"/>
+  <path class="link" d="M 660 498 L 712 498" marker-end="url(#arrow)"/>
+
+  <path class="link" d="M 860 546 L 860 596 L 60 596 L 60 470" marker-end="url(#arrow)"/>
+  <text class="note" x="300" y="590">next feature or iteration</text>
+
+  <!-- Cross-cutting record -->
+  <rect class="side" x="40" y="626" width="960" height="62" rx="8"/>
+  <text class="note" x="56" y="650">Written at every agent phase: docs/prompt-log/NNNN-topic.md, with the verbatim prompt, the expectation, the actual output and the correction.</text>
+  <text class="note" x="56" y="672">Updated at every phase transition: docs/traceability.md. Checked by make check, which fails when a requirement has no task or no test.</text>
+</svg>
