@@ -40,8 +40,13 @@ type Expectation struct {
 	Changes []Region `json:"changes"`
 	// NoChange is true when nothing may be reported at all, which is what the noise case
 	// measures.
-	NoChange    bool   `json:"noChange"`
-	Description string `json:"description"`
+	NoChange bool `json:"noChange"`
+	// Classes states the class expected for each changed rectangle, in the same order as
+	// Changes. Empty means the case does not assert classification, which is the case for
+	// the sweep: it measures localisation only, and asserting classes there would encode the
+	// implementation's opinion rather than the specification's.
+	Classes     []string `json:"classes,omitempty"`
+	Description string   `json:"description"`
 }
 
 // Manifest is written beside the frames and read by the scoring harness.
@@ -63,55 +68,80 @@ type Options struct {
 	Frames int
 	Pairs  int
 	Seed   int64
+	// MinLumaDifference is the difference below which a pixel does not count as changed,
+	// on the same 0 to 255 scale the engine's noise floor uses. The answer key has to know
+	// it: a change the engine is configured to ignore is not a change it failed to find.
+	MinLumaDifference float64
+	// NoiseAmplitude is the per-frame perturbation of the noise case. Zero derives it from
+	// MinLumaDifference as half the floor, so that the difference between two noisy frames
+	// cannot exceed the floor. Generating noise above the floor would make the case demand
+	// that a difference the specification calls a change go unreported.
+	NoiseAmplitude int
+}
+
+// noiseAmplitude is the perturbation the noise case applies per frame.
+func (o Options) noiseAmplitude() int {
+	if o.NoiseAmplitude > 0 {
+		return o.NoiseAmplitude
+	}
+	amplitude := int(o.MinLumaDifference / 2)
+	if amplitude < 1 {
+		amplitude = 1
+	}
+	return amplitude
 }
 
 // DefaultOptions are the sizes the committed metrics were produced with.
 func DefaultOptions() Options {
-	return Options{Width: 320, Height: 240, Frames: 4, Pairs: 20, Seed: 20260926}
+	return Options{
+		Width:  320,
+		Height: 240,
+		Frames: 4,
+		Pairs:  20,
+		Seed:   20260926,
+		// The engine's default noise floor is 0.02 of full scale, which is 5.1 levels.
+		MinLumaDifference: 0.02 * 255,
+	}
 }
 
-// Cases lists the case names Generate understands.
+// Cases lists the case names NewCase and Generate understand.
 func Cases() []string {
-	return []string{"changed-label", "noise", "moving-button", "occluded-button"}
+	return []string{"changed-label", "noise", "moving-button", "occluded-button", "sweep"}
 }
 
-// Generate writes a case into outDir and returns the manifest.
+// Generate writes a case into outDir as PNG frames plus a manifest, for inspection and for
+// the demo. The scored measurement does not use this: it renders the same cases in memory, so
+// a score never depends on the filesystem.
 func Generate(caseName, outDir string, opts Options) (Manifest, error) {
-	if opts.Width <= 0 || opts.Height <= 0 {
-		return Manifest{}, fmt.Errorf("corpus: width and height must be positive")
+	c, err := NewCase(caseName, opts)
+	if err != nil {
+		return Manifest{}, err
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return Manifest{}, fmt.Errorf("corpus: cannot create %s: %w", outDir, err)
 	}
 
-	var (
-		paths        []string
-		expectations []Expectation
-		err          error
-	)
-	switch caseName {
-	case "changed-label":
-		paths, expectations, err = generateChangedLabel(outDir, opts)
-	case "noise":
-		paths, expectations, err = generateNoise(outDir, opts)
-	case "moving-button":
-		paths, expectations, err = generateMovingButton(outDir, opts)
-	case "occluded-button":
-		paths, expectations, err = generateOccludedButton(outDir, opts)
-	default:
-		return Manifest{}, fmt.Errorf("corpus: unknown case %q, known cases are %v", caseName, Cases())
+	paths := make([]string, 0, c.Frames())
+	for index := 0; index < c.Frames(); index++ {
+		p := path(outDir, index+1)
+		if err := saveImage(c.Frame(index), p); err != nil {
+			return Manifest{}, err
+		}
+		paths = append(paths, p)
 	}
-	if err != nil {
-		return Manifest{}, err
+
+	expectations := make([]Expectation, 0, c.Frames()-1)
+	for index := 0; index+1 < c.Frames(); index++ {
+		expectations = append(expectations, c.Expectation(index))
 	}
 
 	manifest := Manifest{
-		Case:         caseName,
+		Case:         c.Name(),
 		Width:        opts.Width,
 		Height:       opts.Height,
 		ScaleFactor:  1,
 		Seed:         opts.Seed,
-		Frames:       len(paths),
+		Frames:       c.Frames(),
 		Paths:        paths,
 		Expectations: expectations,
 	}

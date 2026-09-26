@@ -1,242 +1,294 @@
 package corpus
 
 import (
+	"fmt"
 	"image"
 	"image/color"
-	"math/rand"
 )
 
 var (
 	panelFill   = color.RGBA{R: 90, G: 120, B: 170, A: 255}
 	panelAlt    = color.RGBA{R: 170, G: 110, B: 90, A: 255}
 	overlayFill = color.RGBA{R: 70, G: 70, B: 76, A: 255}
+	backdrop    = color.RGBA{R: 30, G: 34, B: 40, A: 255}
 )
+
+// Case renders a sequence in memory and states what changed between consecutive frames.
+//
+// Rendering in memory is what lets the accuracy measurement cover thousands of pairs: the
+// same cases write PNGs for inspection, but a scored run never touches the filesystem, so
+// nothing about the score depends on disk.
+type Case interface {
+	Name() string
+	Frames() int
+	Frame(index int) *image.RGBA
+	Expectation(index int) Expectation
+}
+
+// NewCase builds a case by name.
+func NewCase(name string, opts Options) (Case, error) {
+	if opts.Width <= 0 || opts.Height <= 0 {
+		return nil, fmt.Errorf("corpus: width and height must be positive")
+	}
+	if opts.Frames < 2 {
+		opts.Frames = 2
+	}
+	switch name {
+	case "changed-label":
+		return &changedLabel{opts: opts}, nil
+	case "noise":
+		return newNoise(opts), nil
+	case "moving-button":
+		return &movingButton{opts: opts}, nil
+	case "occluded-button":
+		return newOccluded(opts), nil
+	case "sweep":
+		return newSweep(opts), nil
+	default:
+		return nil, fmt.Errorf("corpus: unknown case %q, known cases are %v", name, Cases())
+	}
+}
 
 // baseLayout places three panels. The middle one is the element most cases change; the
 // others exist so that a change is not the only thing on the screen.
 func baseLayout(opts Options) []Region {
 	panelW := opts.Width / 4
 	panelH := opts.Height / 8
-	if panelW < 8 {
-		panelW = 8
+	if panelW < 16 {
+		panelW = 16
 	}
-	if panelH < 8 {
-		panelH = 8
+	if panelH < 16 {
+		panelH = 16
 	}
 	return []Region{
 		{Label: "toolbar", X: opts.Width / 16, Y: opts.Height / 16, W: panelW * 2, H: panelH},
 		{Label: "button", X: opts.Width / 4, Y: opts.Height / 2, W: panelW, H: panelH},
-		{Label: "footer", X: opts.Width / 16, Y: opts.Height - opts.Height/8, W: panelW * 3, H: panelH / 2},
+		{Label: "footer", X: opts.Width / 16, Y: opts.Height - opts.Height/8 - panelH, W: panelW * 3, H: panelH},
 	}
 }
 
-func newScreen(opts Options) *screen {
+func blank(opts Options) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, opts.Width, opts.Height))
-	fillAll(img, color.RGBA{R: 30, G: 34, B: 40, A: 255})
-	return &screen{img: img}
+	fillAll(img, backdrop)
+	return img
 }
 
-func drawLayout(opts Options, layout []Region, replace func(Region) (Region, bool)) *screen {
-	s := newScreen(opts)
-	for _, r := range layout {
-		if replacement, swapped := replace(r); swapped {
-			s.panel(replacement, panelFill)
-			continue
-		}
-		s.panel(r, panelFill)
-	}
-	return s
-}
-
-func generateChangedLabel(outDir string, opts Options) ([]string, []Expectation, error) {
-	layout := baseLayout(opts)
-	button := layout[1]
-
-	first := drawLayout(opts, layout, func(r Region) (Region, bool) { return r, false })
-	firstPath := path(outDir, 1)
-	if err := first.save(firstPath); err != nil {
-		return nil, nil, err
-	}
-
-	second := newScreen(opts)
+// drawBase draws the shared layout, replacing the button when asked to.
+func drawBase(opts Options, layout []Region, button *Region) *image.RGBA {
+	img := blank(opts)
 	for _, r := range layout {
 		if r.Label == "button" {
-			second.panel(r, panelAlt)
+			if button == nil {
+				continue
+			}
+			drawPanel(img, *button, panelFill)
 			continue
 		}
-		second.panel(r, panelFill)
+		drawPanel(img, r, panelFill)
 	}
-	secondPath := path(outDir, 2)
-	if err := second.save(secondPath); err != nil {
-		return nil, nil, err
-	}
-
-	return []string{firstPath, secondPath}, []Expectation{{
-		From:        1,
-		To:          2,
-		Changes:     []Region{button},
-		Description: "one panel changed colour, so exactly the panel's pixels should be reported",
-	}}, nil
+	return img
 }
 
-func generateNoise(outDir string, opts Options) ([]string, []Expectation, error) {
-	layout := baseLayout(opts)
-	base := drawLayout(opts, layout, func(r Region) (Region, bool) { return r, false })
-	rng := rand.New(rand.NewSource(opts.Seed))
+// changedLabel changes one panel's colour in place, which is the simplest case: same
+// footprint, different pixels.
+type changedLabel struct{ opts Options }
 
-	var (
-		paths        []string
-		expectations []Expectation
-	)
-	for pair := 1; pair <= opts.Pairs; pair++ {
-		for variant := 0; variant < 2; variant++ {
-			noisy := copyPixels(base)
-			addNoise(noisy, rng, 3)
-			p := path(outDir, (pair-1)*2+variant+1)
-			if err := (&screen{img: noisy}).save(p); err != nil {
-				return nil, nil, err
-			}
-			paths = append(paths, p)
+func (c *changedLabel) Name() string { return "changed-label" }
+func (c *changedLabel) Frames() int  { return 2 }
+func (c *changedLabel) Expectation(index int) Expectation {
+	return Expectation{From: 1, To: 2, Changes: c.changes(), Classes: []string{"changed"},
+		Description: "one panel changed colour in place, so the changed pixels are the panel"}
+}
+
+func (c *changedLabel) changes() []Region {
+	return Oracle(c.Frame(0), c.Frame(1), c.opts.MinLumaDifference)
+}
+
+func (c *changedLabel) Frame(index int) *image.RGBA {
+	layout := baseLayout(c.opts)
+	if index == 0 {
+		return drawBase(c.opts, layout, &layout[1])
+	}
+	img := blank(c.opts)
+	for _, r := range layout {
+		if r.Label == "button" {
+			drawPanel(img, r, panelAlt)
+			continue
 		}
-		expectations = append(expectations, Expectation{
-			From:        (pair-1)*2 + 1,
-			To:          (pair-1)*2 + 2,
-			NoChange:    true,
-			Description: "capture noise only, so no region may be reported",
-		})
+		drawPanel(img, r, panelFill)
 	}
-	return paths, expectations, nil
+	return img
 }
 
-func generateMovingButton(outDir string, opts Options) ([]string, []Expectation, error) {
-	layout := baseLayout(opts)
-	button := layout[1]
+// noise perturbs every pixel of an otherwise unchanged screen, which is the measurement of
+// the false-removal rule. Its expectations are deliberately not derived from pixels: noise
+// does change pixels, and the rule the case tests is that capture noise may not be reported
+// at all.
+type noiseCase struct {
+	opts   Options
+	frames []*image.RGBA
+}
 
-	step := opts.Width / 40
+func newNoise(opts Options) *noiseCase {
+	layout := baseLayout(opts)
+	base := drawBase(opts, layout, &layout[1])
+	rng := NewRand(opts.Seed)
+
+	amplitude := opts.noiseAmplitude()
+	frames := make([]*image.RGBA, 0, opts.Pairs*2)
+	for pair := 0; pair < opts.Pairs; pair++ {
+		for variant := 0; variant < 2; variant++ {
+			clone := image.NewRGBA(base.Rect)
+			copy(clone.Pix, base.Pix)
+			addNoise(clone, rng, amplitude)
+			frames = append(frames, clone)
+		}
+	}
+	return &noiseCase{opts: opts, frames: frames}
+}
+
+func (n *noiseCase) Name() string { return "noise" }
+func (n *noiseCase) Frames() int  { return len(n.frames) }
+func (n *noiseCase) Frame(index int) *image.RGBA {
+	return n.frames[index]
+}
+
+func (n *noiseCase) Expectation(index int) Expectation {
+	return Expectation{
+		From:     index + 1,
+		To:       index + 2,
+		NoChange: true,
+		Description: "capture noise at half the floor on each frame, so no region may be reported: " +
+			"the difference between two noisy frames cannot exceed the floor",
+	}
+}
+
+// movingButton translates one panel by a step per frame. The changed pixels are the strip
+// the panel left and the strip it arrived in, which the oracle computes rather than the
+// generator guessing, because at larger steps the two strips do not touch and at steps wider
+// than the panel they include the gap between them.
+type movingButton struct {
+	opts    Options
+	layouts []Region
+}
+
+func (m *movingButton) Name() string { return "moving-button" }
+func (m *movingButton) Frames() int  { return m.opts.Frames }
+
+func (m *movingButton) step() int {
+	step := m.opts.Width / 40
 	if step < 2 {
 		step = 2
 	}
-
-	var (
-		paths        []string
-		expectations []Expectation
-	)
-	for index := 1; index <= opts.Frames; index++ {
-		moved := button
-		moved.X = button.X + (index-1)*step
-		s := drawLayout(opts, layout, func(r Region) (Region, bool) {
-			if r.Label == "button" {
-				return moved, true
-			}
-			return r, false
-		})
-		p := path(outDir, index)
-		if err := s.save(p); err != nil {
-			return nil, nil, err
-		}
-		paths = append(paths, p)
-
-		if index > 1 {
-			previous := button
-			previous.X = button.X + (index-2)*step
-			expectations = append(expectations, Expectation{
-				From:        index - 1,
-				To:          index,
-				Changes:     translationStrips(previous, moved),
-				Description: "the panel translated, so the pixels that changed are where it left and where it arrived",
-			})
-		}
-	}
-	return paths, expectations, nil
+	return step
 }
 
-// translationStrips returns the two strips a horizontal translation changes: the part of
-// the old position the panel no longer covers, and the part of the new position it did not
-// cover before.
-func translationStrips(previous, current Region) []Region {
-	if current.X == previous.X {
-		return nil
+func (m *movingButton) button(index int) Region {
+	button := baseLayout(m.opts)[1]
+	button.X = button.X + index*m.step()
+	if button.X+button.W > m.opts.Width {
+		button.X = m.opts.Width - button.W
 	}
-	if current.X > previous.X {
-		width := current.X - previous.X
-		return []Region{
-			{Label: "vacated", X: previous.X, Y: previous.Y, W: width, H: previous.H},
-			{Label: "occupied", X: previous.X + previous.W, Y: previous.Y, W: width, H: previous.H},
-		}
-	}
-	width := previous.X - current.X
-	return []Region{
-		{Label: "vacated", X: current.X + current.W, Y: previous.Y, W: width, H: previous.H},
-		{Label: "occupied", X: current.X, Y: previous.Y, W: width, H: previous.H},
-	}
+	return button
 }
 
-func generateOccludedButton(outDir string, opts Options) ([]string, []Expectation, error) {
+func (m *movingButton) Frame(index int) *image.RGBA {
+	layout := baseLayout(m.opts)
+	button := m.button(index)
+	return drawBase(m.opts, layout, &button)
+}
+
+func (m *movingButton) Expectation(index int) Expectation {
+	expectation := Expectation{
+		From:        index + 1,
+		To:          index + 2,
+		Changes:     Oracle(m.Frame(index), m.Frame(index+1), m.opts.MinLumaDifference),
+		Description: "the panel translated, so the changed pixels are where it left and where it arrived",
+	}
+	// The first comparison of a stream has no baseline, so the engine reports changed. Later
+	// comparisons know the footprint moved.
+	if index == 0 {
+		expectation.Classes = repeatClass("changed", len(expectation.Changes))
+	} else {
+		expectation.Classes = repeatClass("moved", len(expectation.Changes))
+	}
+	return expectation
+}
+
+// occluded places a panel, covers it, and uncovers it. The transition where the button stays
+// covered is the case that caught a region being reported as removed for a frame pair that
+// did not change at all.
+type occluded struct {
+	opts   Options
+	frames []*image.RGBA
+	states []bool
+}
+
+func newOccluded(opts Options) *occluded {
 	layout := baseLayout(opts)
 	button := layout[1]
 	overlay := Region{Label: "overlay", X: button.X - 4, Y: button.Y - 4, W: button.W + 8, H: button.H + 8}
 
 	states := []struct {
-		drawButton  bool
-		drawOverlay bool
-		description string
-		noChange    bool
+		button  bool
+		overlay bool
 	}{
-		{drawButton: true, description: "button visible"},
-		{drawOverlay: true, description: "button covered, so the overlay's pixels changed"},
-		{drawOverlay: true, description: "still covered, so nothing changed", noChange: true},
-		{drawButton: true, description: "button visible again, so the overlay's pixels changed back"},
+		{button: true},
+		{overlay: true},
+		{overlay: true},
+		{button: true},
 	}
 
-	var (
-		paths        []string
-		expectations []Expectation
-	)
-	for index, state := range states {
-		s := newScreen(opts)
+	c := &occluded{opts: opts}
+	for _, state := range states {
+		img := blank(opts)
 		for _, r := range layout {
-			if r.Label == "button" {
-				if state.drawButton {
-					s.panel(button, panelFill)
-				} else {
-					s.panel(button, color.RGBA{R: 30, G: 34, B: 40, A: 255})
-				}
+			if r.Label == "button" && !state.button {
 				continue
 			}
-			s.panel(r, panelFill)
+			drawPanel(img, r, panelFill)
 		}
-		if state.drawOverlay {
-			s.panel(overlay, overlayFill)
+		if state.overlay {
+			drawPanel(img, overlay, overlayFill)
 		}
-		p := path(outDir, index+1)
-		if err := s.save(p); err != nil {
-			return nil, nil, err
-		}
-		paths = append(paths, p)
-
-		if index > 0 {
-			expectation := Expectation{
-				From:        index,
-				To:          index + 1,
-				Description: state.description,
-			}
-			if state.noChange {
-				expectation.NoChange = true
-			} else {
-				expectation.Changes = []Region{overlay}
-				if states[index-1].drawOverlay == state.drawOverlay {
-					expectation.Changes = nil
-					expectation.NoChange = true
-				}
-			}
-			expectations = append(expectations, expectation)
-		}
+		c.frames = append(c.frames, img)
+		c.states = append(c.states, state.overlay)
 	}
-	return paths, expectations, nil
+	return c
 }
 
-func copyPixels(s *screen) *image.RGBA {
-	clone := image.NewRGBA(s.img.Rect)
-	copy(clone.Pix, s.img.Pix)
-	return clone
+func (o *occluded) Name() string { return "occluded-button" }
+func (o *occluded) Frames() int  { return len(o.frames) }
+func (o *occluded) Frame(index int) *image.RGBA {
+	return o.frames[index]
+}
+
+func (o *occluded) Expectation(index int) Expectation {
+	if o.states[index] == o.states[index+1] && o.states[index] {
+		return Expectation{
+			From:        index + 1,
+			To:          index + 2,
+			NoChange:    true,
+			Description: "still covered, so nothing changed",
+		}
+	}
+	changes := Oracle(o.frames[index], o.frames[index+1], o.opts.MinLumaDifference)
+	return Expectation{
+		From:        index + 1,
+		To:          index + 2,
+		Changes:     changes,
+		Classes:     repeatClass("changed", len(changes)),
+		Description: "the overlay appeared or disappeared, so its pixels changed",
+	}
+}
+
+func repeatClass(class string, count int) []string {
+	if count == 0 {
+		return nil
+	}
+	classes := make([]string, count)
+	for index := range classes {
+		classes[index] = class
+	}
+	return classes
 }

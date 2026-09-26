@@ -72,8 +72,22 @@ type Pair struct {
 	Threshold float64
 }
 
-// Match scores one pair and returns the counts.
-func Match(pair Pair) Counts {
+// Matched records one expected rectangle and the region that answered for it, so a case can
+// also assert what the engine said the change was.
+type Matched struct {
+	Expected   int
+	Reported   int
+	Class      delta.RegionClass
+	ReportedOK bool
+}
+
+// Match scores one pair and returns the counts together with the matching itself.
+//
+// The matching maximises the number of expected rectangles that get an answer, using
+// augmenting paths rather than taking the first acceptable region in order. Greedy matching
+// would let the order of two overlapping regions decide the score, which would make the
+// measurement depend on something the requirement does not mention.
+func Match(pair Pair) (Counts, []Matched) {
 	threshold := pair.Threshold
 	if threshold <= 0 {
 		threshold = DefaultIOUThreshold
@@ -90,33 +104,71 @@ func Match(pair Pair) Counts {
 		}
 	}
 
-	usedReported := make([]bool, len(pair.Reported))
-	for _, expected := range pair.Expected {
-		expectedRect := rectOf(expected, pair.Width, pair.Height)
-		best, bestOverlap := -1, 0.0
-		for index, region := range pair.Reported {
-			if usedReported[index] {
-				continue
-			}
-			overlap := intersectionOverUnion(pixelRect(region.Bounds, pair.Width, pair.Height), expectedRect)
-			if overlap > bestOverlap {
-				bestOverlap = overlap
-				best = index
-			}
-		}
-		if best >= 0 && bestOverlap >= threshold {
-			usedReported[best] = true
-			counts.TruePositives++
-			continue
-		}
-		counts.FalseNegatives++
+	reportedRects := make([]image.Rectangle, len(pair.Reported))
+	for index, region := range pair.Reported {
+		reportedRects[index] = pixelRect(region.Bounds, pair.Width, pair.Height)
 	}
 
-	for index := range pair.Reported {
-		if !usedReported[index] {
-			counts.FalsePositives++
+	// Overlap above the threshold is the only edge allowed in the graph.
+	allowed := make([][]bool, len(pair.Expected))
+	for i, expected := range pair.Expected {
+		expectedRect := rectOf(expected, pair.Width, pair.Height)
+		allowed[i] = make([]bool, len(pair.Reported))
+		for j, reported := range reportedRects {
+			allowed[i][j] = intersectionOverUnion(reported, expectedRect) >= threshold
 		}
 	}
+
+	assignedExpected := make([]int, len(pair.Reported)) // region -> expected, or -1
+	for index := range assignedExpected {
+		assignedExpected[index] = -1
+	}
+	assignedReported := make([]int, len(pair.Expected)) // expected -> region, or -1
+	for index := range assignedReported {
+		assignedReported[index] = -1
+	}
+
+	var augment func(expected int, seen []bool) bool
+	augment = func(expected int, seen []bool) bool {
+		for region := range pair.Reported {
+			if !allowed[expected][region] || seen[region] {
+				continue
+			}
+			seen[region] = true
+			if assignedExpected[region] == -1 || augment(assignedExpected[region], seen) {
+				assignedExpected[region] = expected
+				assignedReported[expected] = region
+				return true
+			}
+		}
+		return false
+	}
+
+	for expected := range pair.Expected {
+		augment(expected, make([]bool, len(pair.Reported)))
+	}
+
+	matched := make([]Matched, 0, len(pair.Expected))
+	for expected, region := range assignedReported {
+		if region < 0 {
+			counts.FalseNegatives++
+			continue
+		}
+		counts.TruePositives++
+		matched = append(matched, Matched{
+			Expected:   expected,
+			Reported:   region,
+			Class:      pair.Reported[region].Class,
+			ReportedOK: true,
+		})
+	}
+	counts.FalsePositives = counts.Reported - counts.TruePositives
+	return counts, matched
+}
+
+// Score is Match for callers that only want the numbers.
+func Score(pair Pair) Counts {
+	counts, _ := Match(pair)
 	return counts
 }
 
@@ -147,9 +199,12 @@ func rectOf(r corpus.Region, width, height int) image.Rectangle {
 	return image.Rect(left, top, right, bottom)
 }
 
+// pixelRect converts normalized bounds back to pixels using the same rounding in both
+// directions, so a rectangle that the engine derived from whole pixels converts back to
+// exactly those pixels rather than one pixel short.
 func pixelRect(bounds delta.Bounds, width, height int) image.Rectangle {
-	left := int(bounds.X * float64(width))
-	top := int(bounds.Y * float64(height))
+	left := int(bounds.X*float64(width) + 0.5)
+	top := int(bounds.Y*float64(height) + 0.5)
 	return image.Rect(left, top,
 		left+int(bounds.W*float64(width)+0.5),
 		top+int(bounds.H*float64(height)+0.5))
