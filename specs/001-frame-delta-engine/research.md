@@ -201,6 +201,129 @@ Recorded so the plan does not silently assume them:
   the corpus.
 - Whether `moved` should be reported for large translations or split into removed
   and added. The corpus will decide.
-- Appearance-based re-identification after occlusion, which the specification
-  deliberately leaves out.
+- Appearance-based re-identification after occlusion. Deferred until R16, which
+  reverses this entry and says why: an identity layer that cannot tell a cover from a
+  content change cannot keep the promise FR-007 makes.
 - Any form of capture implementation beyond file and stdin adapters.
+
+## R15 One memory of where the elements are
+
+**Decision**: the identity map owns an element's footprint, and the classifier reads it.
+The differ stops keeping its own list of the previous frame's changed areas.
+
+**Rationale**: two layers were keeping geometry, and they disagreed. The classifier kept the changed
+areas of the last frame; the identity map kept the union of the areas that named each element. Both
+were called the element's position. A change confined to one part of a large element therefore
+rewrote the identity layer's footprint to that part, and a change to another part in the next frame
+looked like a new element. Falsified by the review of 2026-09-26 and recorded as AUD-020.
+
+The identity map is the layer that should own it, for three reasons: it already owns lifecycle, so it
+is the only layer that persists across frames; the changed areas are its input rather than a rival
+model of the screen; and it already needs them to tell an element that is still visible from one that
+has been covered.
+
+**Alternatives rejected**: keeping both memories and reconciling them each frame, which is the defect
+with extra steps.
+
+## R16 An element's footprint translates, and only absorbs new ground
+
+**Decision**: when a region names an element, its footprint becomes
+`translate(footprint, d) union (observed minus footprint)`, where `observed` is the union of the
+regions that named it this frame, and `d` is the translation among at most nine candidates that best
+explains the observation, clipped to the motion tolerance, with ties broken deterministically.
+
+**Rationale**: it is the only rule of the four considered that is correct for a moving element, a
+growing element and a still element at once.
+
+| Rule | Moving | Growing | Shrinking | Still |
+|---|---|---|---|---|
+| Keep the last full footprint | lost once the move exceeds the tolerance | lost once the change lands in the grown part | stale | correct |
+| Decaying envelope | follows but lags by the step every frame, without bound | correct | stale | correct |
+| Translation estimate alone | correct | missed unless zero is allowed, and then growth is not captured | cannot see it | correct |
+| Union only (what the code did) | lags one step and reports a union box rather than an element | correct | shrinks to the changed strip, which is AUD-020 | correct |
+| Translation plus new ground | exact, the vacated strip is dropped | the new territory is outside the old footprint, so it is absorbed | stale, deliberately | correct |
+
+Shrinkage is the honest failure: an element's extent is only ever revealed by change, so a footprint
+that nothing has contradicted is kept rather than guessed away. The division of labour this creates is
+written into the data model: `bounds` is the measured changed area and stays exact, while
+`previousBounds` is the engine's belief about the element and may be larger than it after a shrink.
+
+**Alternatives rejected**: appearance-based extent estimation, which is the next stage's job and not
+this one's; and a shrinking envelope, which invents an extent rather than admitting ignorance.
+
+## R17 A cover cannot be told from a content change in one frame pair
+
+**Decision**: say so, and give the engine one more piece of evidence rather than a guess. Each element
+keeps a 16 byte appearance signature: a four by four grid of luma means over its footprint, sampled
+with a stride capped so the cost is bounded for any rectangle, compared with a fixed tolerance above
+the noise two frames can differ by and below a typical repaint.
+
+With that evidence:
+
+- a changed area that contains at least nine tenths of a tracked element's interior and exceeds its
+  footprint by more than the growth margin is a cover or a replacement, so the tracked element is
+  reported as `removed` and the area as `added`, with different identifiers. Today the area is called
+  `changed` and inherits the covered element's identifier, which is a confident wrong answer;
+- a changed area that matches a tracked element geometrically, whose signature differs from that
+  element's, while a retired element matches both the geometry and the signature and is materially
+  closer in signature, is a return: the tracked element is retired and the area is reported as `added`
+  with a new identifier marked uncertain.
+
+**Rationale**: from a single frame pair the question is undecidable, and it is worth saying that
+plainly rather than shipping a heuristic that pretends otherwise. A changed area that contains an
+element is consistent with a cover, a replacement, a growth that repainted itself, and a full repaint;
+colour and size relationships are consistent with all four. What makes it decidable enough is one
+extra piece of state per element and the fields the contract already has for recording evidence
+instead of proof: `identityUncertain` and `identityConfidence`.
+
+**Residual ambiguity, recorded rather than papered over**: a cover whose footprint equals the
+element's leaves no margin to exceed, so it stays `changed`; and a growth that repaints its interior
+is reported as removed and added, which costs an identity on that frame. Both failure modes produce
+churn and a retired handle, never a confident wrong match, because a return is always uncertain and an
+identifier is never reused.
+
+**Alternatives rejected**: storing a pixel patch per element, which costs memory and buys no more
+discrimination than a coarse mean; comparing against the previous frame's changed areas, which is the
+behaviour that makes a cover inherit the covered element's identity; requiring the covering area to be
+larger, which is true of any growth and therefore discriminates nothing; and a new schema class or
+condition, when the schema is fixed and `identityUncertain` already carries the meaning.
+
+## R18 A disappearance stays a change
+
+**Decision**: an element whose area changed in place, leaving its footprint the same size, stays
+reported as `changed`. It is not reported as `removed`.
+
+**Rationale**: the evidence that would justify a removal is that the area no longer resembles the
+element and does resemble what surrounds it. The second half fails exactly where it matters: an
+element whose fill is close to its neighbourhood, a grey button on a grey dialog, would be called
+removed the moment its label changed. That is a false removal, and false removals are what NFR-005 and
+SC-001 forbid, on a corpus built to catch them. The engine therefore reports what it can see, and a
+consumer reads `magnitude` against the bounds: a value near one over the element's whole footprint is
+consistent with a disappearance, a small value with a subtle change. The reasoning is recorded in the
+data model and in the report's threats to validity.
+
+**Alternatives rejected**: reporting a removal whenever the area is flat and different, which is a
+guess that cannot be told from a repaint, and which would trade a truthful report for a wrong one in
+the case the corpus explicitly measures.
+
+## R19 The acceptance test for element identity, restated
+
+**Decision**: user story 2's second acceptance scenario is stated as the two events the engine can
+distinguish, rather than as one it cannot:
+
+1. **Cover**: given an element covered by a larger one, the covered element is reported as `removed`
+   naming its identifier, and the covering area as `added` with a different identifier, and the
+   covered identifier is never reused.
+2. **Return**: given the covering area later showing the covered element's content again, the covering
+   element is reported as `removed` and the returning content as `added` with a newly allocated
+   identifier whose `identityUncertain` is true and whose `identityConfidence` lies strictly between
+   zero and one.
+
+**Rationale**: the original wording asked for something a pixel-only stage cannot know, which is why
+the first implementation could not satisfy it and the review could falsify the claim. A scenario that
+names the two events separately is testable, and each part is falsifiable on its own. The identifier
+guarantees are unchanged and are the part of the scenario that carries the promise.
+
+**Alternatives rejected**: keeping the original wording and marking the scenario unsatisfied, which
+would leave a graded scenario permanently failing rather than a requirement met with a documented
+boundary.
