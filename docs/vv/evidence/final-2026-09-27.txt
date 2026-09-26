@@ -7,7 +7,7 @@ result: an earlier version of this file recorded a run that had failed.
 python3 scripts/check_traceability.py --require-specs
 traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
 python3 scripts/check_report.py
-repository state: {'requirements': 33, 'verified': 29, 'defects': 35, 'findings': 46, 'fixed': 34, 'commits': '100', 'tasks_done': 52, 'tasks_total': 53, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+repository state: {'requirements': 33, 'verified': 29, 'defects': 37, 'findings': 48, 'fixed': 36, 'commits': '108', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
 
 
 every claim in the report and the README holds against this commit
@@ -27,12 +27,12 @@ exit=0
     corpus_test.go:151: sweep: 5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
 === NAME  TestCorpus
     corpus_test.go:184: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
---- PASS: TestCorpus (13.26s)
+--- PASS: TestCorpus (13.08s)
     --- PASS: TestCorpus/changed-label (0.00s)
     --- PASS: TestCorpus/moving-button (0.03s)
-    --- PASS: TestCorpus/occluded-button (0.00s)
+    --- PASS: TestCorpus/occluded-button (0.01s)
     --- PASS: TestCorpus/noise (0.22s)
-    --- PASS: TestCorpus/sweep (13.00s)
+    --- PASS: TestCorpus/sweep (12.81s)
 PASS
 exit=0
 
@@ -40,26 +40,26 @@ exit=0
 SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 === RUN   TestLatencyPercentiles
     perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
-    perf_test.go:237: mean 8.40 ms, p50 8.37 ms, p90 9.07 ms, p95 9.59 ms, p99 10.31 ms, worst 14.66 ms, fastest 6.59 ms
+    perf_test.go:237: mean 8.46 ms, p50 8.38 ms, p90 9.14 ms, p95 9.41 ms, p99 12.26 ms, worst 14.36 ms, fastest 6.91 ms
     perf_test.go:239: 456 of 460 frames reported at least one region
---- PASS: TestLatencyPercentiles (5.59s)
+--- PASS: TestLatencyPercentiles (5.81s)
 === RUN   TestLatencyOnALargerChange
-    perf_test.go:291: 1920x1080, large change, one core: p50 38.53 ms, p95 42.15 ms, p99 43.45 ms
+    perf_test.go:291: 1920x1080, large change, one core: p50 37.47 ms, p95 39.70 ms, p99 41.00 ms
     perf_test.go:293: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
---- PASS: TestLatencyOnALargerChange (5.91s)
+--- PASS: TestLatencyOnALargerChange (5.81s)
 === RUN   TestThroughput
-    perf_test.go:316: sustained 77.7 frame pairs per second on one core (300 pairs in 3.859s)
---- PASS: TestThroughput (3.86s)
+    perf_test.go:316: sustained 74.1 frame pairs per second on one core (300 pairs in 4.051s)
+--- PASS: TestThroughput (4.05s)
 PASS
 exit=0
 
 == make memcheck ==
 go test ./internal/stream/... -run TestMemoryCeiling -count=1 -v
 === RUN   TestMemoryCeiling
-    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.477s
-    memory_test.go:202: peak heap 25200552 bytes, engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 23556096 bytes
-    memory_test.go:208: heap at frame 1000: 25195232 bytes, at frame 10000: 25200552 bytes
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.48s
+    memory_test.go:202: peak heap 25195232 bytes, engine buffers 16588800 bytes
+    memory_test.go:204: peak resident 23478272 bytes
+    memory_test.go:208: heap at frame 1000: 25195232 bytes, at frame 10000: 25195232 bytes
 --- PASS: TestMemoryCeiling (2.48s)
 PASS
 exit=0
@@ -75,8 +75,8 @@ exit=0
 capture: frames written: 8
 go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
 source corpus/real, 8 frames replayed 20 times, 160 frames processed
-capture 1280x720, elapsed 479ms
-frames per second 333.7, decisions 119, decisions per second 248.2
+capture 1280x720, elapsed 413ms
+frames per second 387.4, decisions 119, decisions per second 288.1
 exit=0
 
 == formatting and vet ==
