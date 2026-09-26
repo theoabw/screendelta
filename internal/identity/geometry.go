@@ -32,6 +32,10 @@ const (
 	// returnGeometryFraction is the overlap with a retired element's last position that makes it worth
 	// asking whether the returning content is that element.
 	returnGeometryFraction = 0.5
+	// returnAppearanceCeiling is the average per cell difference beyond which a retired element is not a
+	// candidate for a return at all. It is deliberately generous: the decision is made by comparing the
+	// candidate against the element that is on the screen, and this only refuses the hopeless.
+	returnAppearanceCeiling = 60
 )
 
 // rectangle is the pixel form of normalized bounds, kept local so the matching below reads in whole

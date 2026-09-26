@@ -947,19 +947,14 @@ func TestGrowthWithoutAnInteriorRepaintIsNotACover(t *testing.T) {
 	}
 }
 
-// TestAResizedReturnIsNotYetRecognised pins what the engine cannot do, so that improving it has to be
-// deliberate.
+// TestAResizedReturnIsRecognisedAsUncertain is the case that was AUD-022.
 //
-// A review found that a returning element whose size differs from the retired one is reported as a
-// confident change of the element that covered it, and the same is true here. The reason is that the
-// appearance the rules compare is the appearance of the whole changed area, and when the returning
-// content occupies only part of that area the signature is a mixture of the content and the background.
-// The fix is to measure the appearance of the element's own old footprint instead, which needs the frame's
-// luma plane next to the retired element's bounds rather than next to the changed area. Until then the
-// outcome is a missed reacquisition rather than a wrong handle: the covered element was already retired,
-// and the region carries the identity of the cover, which is what is still on the screen as far as the
-// pixels show.
-func TestAResizedReturnIsNotYetRecognised(t *testing.T) {
+// A returning element whose content occupies only part of the changed area used to be reported as a
+// confident change of the element that had covered it, because the appearance compared was the appearance
+// of the whole area, which is a mixture as soon as the returning content is smaller than the area. The
+// comparison is now relative: the engine asks whether the area looks more like the element that left than
+// like the one that is on the screen, which survives the mixture.
+func TestAResizedReturnIsRecognisedAsUncertain(t *testing.T) {
 	width, height := 320, 240
 	original := panel{x: 120, y: 100, w: 60, h: 40, value: panelValue}
 	cover := panel{x: 110, y: 90, w: 80, h: 60, value: 220}
@@ -973,26 +968,46 @@ func TestAResizedReturnIsNotYetRecognised(t *testing.T) {
 	}
 
 	differ := New()
-	if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+	regions, _, err := differ.Compare(frames[0], frames[1], defaults())
+	if err != nil {
 		t.Fatalf("Compare failed: %v", err)
 	}
+	if len(regions) == 0 {
+		t.Fatal("the element's own change produced no regions")
+	}
+	tracked := regions[0].Identity
+
 	if _, _, err := differ.Compare(frames[1], frames[2], defaults()); err != nil {
 		t.Fatalf("Compare failed: %v", err)
 	}
-	regions, _, err := differ.Compare(frames[2], frames[3], defaults())
+
+	regions, _, err = differ.Compare(frames[2], frames[3], defaults())
 	if err != nil {
 		t.Fatalf("Compare failed: %v", err)
 	}
 	if len(regions) == 0 {
 		t.Fatal("the return produced no regions")
 	}
+
+	var removed, added []delta.Region
 	for _, region := range regions {
-		if region.IdentityUncertain {
-			t.Fatalf("the engine now recognises a resized return, so this test and AUD-022 need updating: %+v", region)
-		}
-		if region.Class == delta.ClassRemoved {
-			t.Fatalf("the covering element was reported as removed, which is the other half of the fix: %+v", region)
+		switch region.Class {
+		case delta.ClassRemoved:
+			removed = append(removed, region)
+		case delta.ClassAdded:
+			added = append(added, region)
 		}
 	}
-	t.Log("a resized return is reported as a change of the covering element; recorded as AUD-022")
+	if len(removed) != 1 || len(added) != 1 {
+		t.Fatalf("a resized return produced %d removals and %d additions: %+v", len(removed), len(added), regions)
+	}
+	if !added[0].IdentityUncertain {
+		t.Fatalf("the returning content was matched with confidence rather than evidence: %+v", added[0])
+	}
+	if added[0].Identity == tracked || removed[0].Identity == tracked {
+		t.Fatalf("the covered element's identity %d was reused after it was retired", tracked)
+	}
+	if added[0].IdentityConfidence <= 0 || added[0].IdentityConfidence > 1 {
+		t.Fatalf("confidence %v is outside zero to one", added[0].IdentityConfidence)
+	}
 }

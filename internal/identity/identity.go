@@ -139,12 +139,18 @@ func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, fram
 		return ReturnDecision{}
 	}
 	live := &m.elements[liveIndex]
-	if !live.SignatureSet || signature.Close(live.Signature) {
-		// Nothing currently tracked is contradicted by how this area looks, so there is no return to
-		// report.
+	if !live.SignatureSet {
 		return ReturnDecision{}
 	}
+	// The comparison is relative rather than against an absolute allowance. A returning element whose
+	// content occupies only part of the changed area makes that area a mixture, so its summary is never
+	// close to the element's own; what can still be asked is whether the area looks more like the element
+	// that left than like the one that is there, which is the question a return turns on.
 	liveDistance := signature.Distance(live.Signature)
+	if signature.Close(live.Signature) {
+		// The area looks like what is on the screen, so there is no return to report.
+		return ReturnDecision{}
+	}
 
 	retiredIndex, retiredScore := m.bestRetired(rect, frameWidth, frameHeight, signature)
 	if retiredIndex < 0 || retiredScore < returnGeometryFraction {
@@ -155,9 +161,9 @@ func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, fram
 		return ReturnDecision{}
 	}
 	retiredDistance := signature.Distance(retired.Signature)
-	if retiredDistance >= liveDistance {
-		// The area looks at least as much like what is on the screen as like what left, so the engine
-		// has no reason to call it a return.
+	// Materially closer, not merely closer: a difference inside the noise between two candidates would let
+	// the engine call a return on evidence that does not distinguish the two.
+	if retiredDistance*4 >= liveDistance*3 {
 		return ReturnDecision{}
 	}
 
@@ -641,12 +647,17 @@ func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature
 		}
 
 		distance := 0
-		if signature != nil && element.SignatureSet {
-			if !signature.Close(element.Signature) {
-				// The content is not this element, whatever the geometry says.
+		if signature != nil {
+			if !element.SignatureSet {
 				continue
 			}
 			distance = signature.Distance(element.Signature)
+			if distance > returnAppearanceCeiling*SignatureCells {
+				// The content is not this element by any reading, whatever the geometry says. The ceiling is
+				// generous on purpose: it is there to refuse hopeless candidates rather than to decide the
+				// question, which the comparison against the live element does.
+				continue
+			}
 		}
 
 		better := best < 0 ||
