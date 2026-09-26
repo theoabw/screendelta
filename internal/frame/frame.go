@@ -7,6 +7,10 @@
 // long stream.
 package frame
 
+import (
+	"github.com/theoabw/screendelta/internal/fielderr"
+)
+
 // PixelFormat names the layout of a frame's pixel buffer.
 type PixelFormat string
 
@@ -18,6 +22,9 @@ const FormatRGBA8 PixelFormat = "rgba8"
 // header cannot ask the engine to allocate an absurd buffer, and it is far above
 // any real display resolution.
 const MaxDimension = 32768
+
+// operation names this package's operations in error messages.
+const operation = "frame.Validate"
 
 // Frame is one captured screen image.
 type Frame struct {
@@ -55,27 +62,42 @@ func NewRaw(sequence uint64, width, height int, format PixelFormat, scaleFactor 
 // Validate reports the first rule the frame breaks, naming the field.
 func (f Frame) Validate() error {
 	if f.Sequence == 0 {
-		return &FieldError{Op: "frame.Validate", Field: "sequence", Problem: "must be at least 1"}
+		// The subject is deliberately unnamed here: a frame with no sequence cannot
+		// be identified, and inventing one would make the message misleading.
+		return &FieldError{Op: operation, Field: "sequence", Problem: "must be at least 1"}
 	}
 	if f.Width < 1 || f.Width > MaxDimension {
-		return &FieldError{Op: "frame.Validate", Sequence: f.Sequence, Field: "width", Problem: problem("1", MaxDimension, f.Width)}
+		return fielderr.Range("width", 1, MaxDimension, f.Width).At(operation, "frame", f.Sequence)
 	}
 	if f.Height < 1 || f.Height > MaxDimension {
-		return &FieldError{Op: "frame.Validate", Sequence: f.Sequence, Field: "height", Problem: problem("1", MaxDimension, f.Height)}
+		return fielderr.Range("height", 1, MaxDimension, f.Height).At(operation, "frame", f.Sequence)
 	}
 	if f.Format != FormatRGBA8 {
-		return &FieldError{Op: "frame.Validate", Sequence: f.Sequence, Field: "format", Problem: "unsupported pixel format " + string(f.Format) + ", expected " + string(FormatRGBA8)}
+		return &FieldError{
+			Op:       operation,
+			Subject:  "frame",
+			Sequence: f.Sequence,
+			Field:    "format",
+			Problem:  "unsupported pixel format " + string(f.Format) + ", expected " + string(FormatRGBA8),
+		}
 	}
 	if f.ScaleFactor <= 0 {
-		return &FieldError{Op: "frame.Validate", Sequence: f.Sequence, Field: "scaleFactor", Problem: "must be greater than 0"}
+		return &FieldError{
+			Op:       operation,
+			Subject:  "frame",
+			Sequence: f.Sequence,
+			Field:    "scaleFactor",
+			Problem:  "must be greater than 0",
+		}
 	}
 	expected := f.Width * f.Height * 4
 	if len(f.Pixels) != expected {
 		return &FieldError{
-			Op:       "frame.Validate",
+			Op:       operation,
+			Subject:  "frame",
 			Sequence: f.Sequence,
 			Field:    "pixels",
-			Problem:  "length does not match " + itoa(f.Width) + "x" + itoa(f.Height) + " rgba8, expected " + itoa(expected) + " bytes",
+			Problem:  "length does not match the declared layout, expected " + itoa(expected) + " bytes",
 		}
 	}
 	return nil

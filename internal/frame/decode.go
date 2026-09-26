@@ -16,6 +16,7 @@ func DecodePNG(sequence uint64, scaleFactor float64, r io.Reader) (Frame, error)
 	if err != nil {
 		return Frame{}, &FieldError{
 			Op:       "frame.DecodePNG",
+			Subject:  "frame",
 			Sequence: sequence,
 			Field:    "png",
 			Problem:  "cannot decode: " + err.Error(),
@@ -26,6 +27,7 @@ func DecodePNG(sequence uint64, scaleFactor float64, r io.Reader) (Frame, error)
 	if bounds.Dx() <= 0 || bounds.Dy() <= 0 {
 		return Frame{}, &FieldError{
 			Op:       "frame.DecodePNG",
+			Subject:  "frame",
 			Sequence: sequence,
 			Field:    "png",
 			Problem:  "image has no pixels",
