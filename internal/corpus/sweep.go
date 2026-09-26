@@ -3,6 +3,7 @@ package corpus
 import (
 	"image"
 	"image/color"
+	"sort"
 )
 
 // sweep is the case the accuracy requirement is measured on: thousands of frame pairs in
@@ -78,8 +79,17 @@ func (s *sweep) render(rng *Rand) *image.RGBA {
 	for attempt := 0; attempt < wanted*8 && len(chosen) < wanted; attempt++ {
 		chosen[rng.Intn(s.cols*s.rows)] = true
 	}
-
+	// The cells are drawn in sorted order rather than in map order. Iterating the map directly made the
+	// case depend on Go's randomised map iteration order, because each drawn panel consumes a shade from
+	// the random source: the same seed produced different frames on every run, which made the accuracy
+	// measurement irreproducible.
+	cells := make([]int, 0, len(chosen))
 	for cell := range chosen {
+		cells = append(cells, cell)
+	}
+	sort.Ints(cells)
+
+	for _, cell := range cells {
 		column := cell % s.cols
 		row := cell / s.cols
 		panel := Region{
