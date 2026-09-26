@@ -1,0 +1,54 @@
+Functional verification, 2026-09-27.
+Command: go test ./... -count=1
+
+This file records the functional half of the verification: the requirement statements are checked by tests
+that assert the behaviour the requirement names, and the run below is the evidence that they pass together.
+Per-test output is reproducible with `go test -v ./...`; what is recorded here is the package level result
+plus the mapping from each requirement to the test that carries it.
+
+The run:
+
+```
+?   	github.com/theoabw/screendelta/internal/corpus	[no test files]
+ok  	github.com/theoabw/screendelta/internal/delta	0.006s
+ok  	github.com/theoabw/screendelta/internal/diff	0.164s
+ok  	github.com/theoabw/screendelta/internal/fielderr	0.005s
+ok  	github.com/theoabw/screendelta/internal/fingerprint	0.005s
+ok  	github.com/theoabw/screendelta/internal/frame	0.005s
+ok  	github.com/theoabw/screendelta/internal/identity	0.009s
+ok  	github.com/theoabw/screendelta/internal/perf	17.350s
+ok  	github.com/theoabw/screendelta/internal/score	15.099s
+ok  	github.com/theoabw/screendelta/internal/stream	6.564s
+ok  	github.com/theoabw/screendelta/tests/e2e	2.651s
+?   	github.com/theoabw/screendelta/tools/consumer	[no test files]
+?   	github.com/theoabw/screendelta/tools/corpusgen	[no test files]
+?   	github.com/theoabw/screendelta/tools/demo	[no test files]
+```
+
+The mapping. Each row names a requirement, the test that carries it, and what the test asserts that the
+requirement asks for. These are the requirements whose evidence is the test suite itself rather than a
+measurement, which is why they share this file.
+
+| Requirement | Test | What it asserts |
+|---|---|---|
+| FR-001 | `internal/frame/frame_test.go::TestNewRawAcceptsAValidFrame` | A frame is validated on construction: geometry, format and buffer length, so nothing downstream has to guess |
+| FR-002 | `internal/diff/diff_test.go::TestChangedPanelIsReportedOnceWithCoveringBounds` | A changed area is reported once, with bounds that cover it, a class, a magnitude and an area |
+| FR-003 | `internal/diff/diff_test.go::TestMovedElementIsReportedAsMoved`, `TestAReplacementIsReportedAsRemovedAndAdded`, `TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities` | All four classes occur and each is produced by the situation it names |
+| FR-004 | `internal/diff/diff_test.go::TestNoiseFloorSeparatesNoiseFromChange` | Magnitude is on a documented scale, and the floor below which nothing is reported is configurable |
+| FR-005 | `internal/diff/diff_test.go::TestNoiseBelowTheFloorReportsNothing`, `internal/score/corpus_test.go::TestNoiseCaseReportsNothingOnEveryPair` | No region is reported when two frames differ only below the floor, on twenty five generated pairs |
+| FR-010 | `internal/stream/stream_test.go::TestFirstFrameCarriesTheCondition`, `tests/e2e/quickstart_test.go::TestScenario9OutputIsDeterministicAcrossThreads` | One self-contained document per frame, in order, each carrying its frame number |
+| FR-011 | `internal/diff/diff_test.go::TestRegionsOfInterestRestrictAndSuppress` | Externally supplied regions restrict the output, and an empty list reports nothing |
+| FR-012 | `internal/config/config_test.go::TestParseAcceptsAndRejectsConfigurations` | A configuration document is applied, documented defaults hold, and an invalid one is rejected with the key named |
+| FR-014 | `internal/delta/delta_test.go::TestDecodeRejectsAnUnknownVersion` | Every emitted document declares its schema version, and a version this build does not know is rejected |
+| FR-015 | `tests/e2e/quickstart_test.go::TestScenario8UnusableInputFailsLoudly` | Unusable input fails with the documented exit code, one error line, and nothing on standard output |
+
+What this file does not cover, stated so the reader knows where to look instead:
+
+  FR-006, FR-007  identity behaviour, whose evidence is docs/vv/evidence/identity-2026-09-26.txt, and whose
+                  status is in progress because two boundaries are documented rather than fixed
+  NFR-004         output is byte identical across thread counts on this host, which
+                  tests/e2e/quickstart_test.go records; another host and another Go version are untested
+  NFR-007, SC-005 usability, which needs a person who is not the author and is what docs/vv/acceptance.md is
+                  for
+  NFR-008         the cross build for Linux and Windows is checked by make cross and by CI; running the suite
+                  on Windows is outstanding

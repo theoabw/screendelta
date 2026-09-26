@@ -47,7 +47,7 @@ this chapter exists to catch.
 | Line coverage, `internal/diff` | 91.8 percent | 2026-09-26 |
 | p95 latency per 1080p frame pair, one core | 9.72 ms against a 12 ms target, with appearance signatures and footprint evolution added | 2026-09-26 |
 | p99 latency per 1080p frame pair, one core | 10.63 ms against a 25 ms target | 2026-09-26 |
-| Sustained throughput, one core | 74.9 frame pairs per second against a 30 per second target | 2026-09-26 |
+| Sustained throughput, one core | 77.9 frame pairs per second against a 30 per second target | 2026-09-26 |
 | Line coverage, `internal/diff` and `internal/identity` | 80.8 and 86.3 percent against an 80 percent target | 2026-09-26 |
 
 ## Defects

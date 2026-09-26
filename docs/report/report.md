@@ -38,9 +38,9 @@ authoring session is logged in `docs/prompt-log/`, including what failed. Indepe
 rounds and 36 findings.
 
 Verification is measurement rather than assertion. The engine scores F1 1.0000 with zero false removals on
-27,211 generated frame pairs, holds p95 latency of 9.56 ms per frame pair on one CPU core against a 12 ms
-requirement, sustains 74.9 frame pairs per second against 30, and holds a 25.2 MiB peak heap over 10,000
-frames against a 128 MiB ceiling. Twelve of 32 requirements are verified with committed tests and
+27,201 generated frame pairs, holds p95 latency of 9.18 ms per frame pair on one CPU core against a 12 ms
+requirement, sustains 78.2 frame pairs per second against 30, and holds a 24.0 MiB peak heap over 10,000
+frames against a 128 MiB ceiling. 26 of 32 requirements are verified with committed tests and
 recorded output; the rest are in progress, and the report says which and why. Thirty-two defects were
 found and recorded, of which 30 are fixed, one is documented as inherent to a pixel-only stage, and one
 remains open.
@@ -111,7 +111,7 @@ design rather than the wording become ADRs; deviations that change a requirement
 
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: 70 commits, 5409 lines of Go and
+is graded on what the process produced rather than on how long it took: 80 commits, 5409 lines of Go and
 4755 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
@@ -166,15 +166,15 @@ result.
 
 | ID | Attribute | Target | How measured | State |
 |---|---|---|---|---|
-| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 9.56 ms, p99 10.74 ms |
-| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 74.9 per second |
+| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 9.18 ms, p99 10.22 ms |
+| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 78.2 per second |
 | NFR-003 | Memory | At most 128 MB over 10,000 frames, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 22.5 MiB peak resident |
 | NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Two runs encoded and compared; GOMAXPROCS 1 and 4 | met in part: identical across thread counts on this host; cross-host is untested |
 | NFR-005 | Reliability | Zero false removals on the noise corpus | `make accuracy`, noise case, every pair | met: zero |
-| NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs | `make accuracy`, corpus with generated ground truth | met: 27,211 pairs, F1 1.0000 |
+| NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs | `make accuracy`, corpus with generated ground truth | met: 27,201 pairs, F1 1.0000 |
 | NFR-007 | Usability | A new user produces a delta from their own screenshots within two minutes, from the README alone | Task timing with an external tester | not yet measured; the acceptance script exists and is not run |
 | NFR-008 | Portability | CPU only, no GPU, no network at runtime, Linux and Windows | Cross-build in CI, no-network test | partly met: cross-build done, no-network test outstanding |
-| NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 80.8, identity 86.3 |
+| NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 81.9, identity 85.2 |
 | NFR-010 | Compatibility | Schema changes versioned, and a consumer can reject a version it does not understand | Decode-time rejection test, exit code 3 from the command line | met |
 
 Two of the targets were met only after the first measurement failed, and the failures are recorded rather
@@ -301,7 +301,7 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 
 | Original prompt | Failure it caused | Corrected prompt | Result | Verified by |
 |---|---|---|---|---|
-| "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 27,211 pairs scored at F1 1.0000 with every asserted class correct; 22.5 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
+| "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 27,201 pairs scored at F1 1.0000 with every asserted class correct; 22.5 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
 attempt to pass it with a deliberately wrong implementation has failed. Three of the 32 recorded defects
@@ -404,7 +404,9 @@ most information for a reader are:
 - `0005-system-selection.md`: the selection round, including the four systems explored and rejected first;
 - `0006-implementation-rounds.md`: the first implementation round, including the missing review step;
 - `0007-measurement-review.md`: the round that falsified its own measurement, and the prompt change it
-  caused.
+  caused;
+- `0008-verification-tail.md`: the end to end tests, the independent consumer, the demonstration on real
+  rendered pixels, and the re-review that falsified five of the previous round's claims.
 
 ### 5.1 V&V Strategy
 
@@ -469,16 +471,16 @@ Current state, from the commands named:
 
 | Measurement | Command | Result | Requirement |
 |---|---|---|---|
-| Accuracy over generated frames | `make accuracy` | 27,211 pairs, precision 1.0000, recall 1.0000, F1 1.0000, zero false removals | NFR-005, NFR-006, SC-001 |
-| Latency, one core, 1080p | `make perf` | p50 8.27 ms, p95 9.56 ms, p99 10.74 ms | NFR-001, SC-002 |
-| Throughput, one core | `make perf` | 74.9 frame pairs per second | NFR-002 |
+| Accuracy over generated frames | `make accuracy` | 27,201 pairs, precision 1.0000, recall 1.0000, F1 1.0000, zero false removals | NFR-005, NFR-006, SC-001 |
+| Latency, one core, 1080p | `make perf` | p50 8.26 ms, p95 9.18 ms, p99 10.22 ms | NFR-001, SC-002 |
+| Throughput, one core | `make perf` | 77 frame pairs per second | NFR-002 |
 | Memory over 10,000 frames | `make memcheck` | peak heap 24.0 MiB, peak resident 22.5 MiB, no growth between frame 1,000 and frame 10,000 | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | 8,220 and 8,226 bytes per frame in two consecutive windows | NFR-003 |
-| Coverage | `go test -cover` | diff 80.8, identity 86.3, fingerprint 87.2, stream 96.4 percent | NFR-009 |
+| Coverage | `go test -cover` | diff 81.9, identity 85.2, fingerprint 87.2, stream 96.4 percent | NFR-009 |
 | Determinism | two runs encoded and compared | Byte-identical over 10,000 frames at GOMAXPROCS 1 and 4 | NFR-004 in part |
-| Requirement traceability | `make check-strict` | 32 requirements, 32 matrix rows, 12 verified, 0 errors | the process gate |
+| Requirement traceability | `make check-strict` | 32 requirements, 32 matrix rows, 26 verified, 0 errors | the process gate |
 
-Twelve of 32 requirements are verified, meaning a test passes and its output is committed. The rest are
+26 of 32 requirements are verified, meaning a test passes and its output is committed. The rest are
 in progress and the matrix says which, and the honest summary of the gap is this:
 
 - **Four requirements are one step from verified and are held back deliberately**: FR-006 and FR-007,
@@ -507,12 +509,12 @@ The numbers, all reproducible from the repository:
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Commits | 70 | `git rev-list --count HEAD` |
-| By type | 21 feat, 22 docs, 13 fix, 6 plan, 2 spec, 2 refactor, 1 test, 1 perf, 1 chore (sums to 70) | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
-| Commits carrying a `Spec:` trailer | 57 | `git log --grep='^Spec:' --oneline | wc -l` |
-| Carrying a `Req:` trailer | 55 | the same with `^Req:` |
-| Carrying a `Task:` trailer | 38 | the same with `^Task:` |
-| Carrying a `Prompt:` trailer | 63 | the same with `^Prompt:` |
+| Commits | 80 | `git rev-list --count HEAD` |
+| By type | 27 docs, 23 feat, 15 fix, 6 plan, 3 test, 2 spec, 2 refactor, 1 perf, 1 chore (sums to 80) | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
+| Commits carrying a `Spec:` trailer | 70 | `git log --grep='^Spec:' --oneline | wc -l` |
+| Carrying a `Req:` trailer | 68 | the same with `^Req:` |
+| Carrying a `Task:` trailer | 45 | the same with `^Task:` |
+| Carrying a `Prompt:` trailer | 76 | the same with `^Prompt:` |
 | Days of work | 2 (2026-09-26, 2026-09-27) | `git log --format='%ad' --date=short | sort | uniq -c` |
 
 The trailers are the link between a code change, the requirement it serves, the task that planned it and
@@ -541,8 +543,8 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 70 commits in two days, 5409 lines of Go against 4755 lines
-of test and 4230 lines of specification, plan and process documents, 53 planned tasks of which 15 are
+Leverage, quantified rather than asserted: 80 commits in two days, 5409 lines of Go against 4755 lines
+of test and 4230 lines of specification, plan and process documents, 53 planned tasks of which 21 are
 complete, 32 requirements of which 12 are verified, and 37 recorded defects of which 35 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
@@ -581,7 +583,7 @@ What worked, with the measurement or the artifact that shows it:
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
 - **Documentation kept pace with the code.** 2,025 lines of specification, research notes, plan and
-  decision records against 5,409 lines of Go, because every non-obvious rule had to be written down to be
+  decision records against 6000 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
