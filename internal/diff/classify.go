@@ -45,7 +45,7 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 		for _, c := range candidates {
 			regions = append(regions, d.regionFor(delta.ClassChanged, c, nil, current))
 		}
-		d.remember(regions, current)
+		d.remember(regions, nil, current)
 		sortRegions(regions)
 		return regions
 	}
@@ -147,7 +147,14 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	// removed. An element whose pixels did not change is still on the screen; it is simply
 	// absent from the delta, and calling it removed would invent a disappearance out of a
 	// frame pair that only differs by noise.
-	d.remember(regions, current)
+	// Elements whose pixels did not change are still on the screen, so they carry over.
+	unchanged := make([]regionState, 0, len(d.previous))
+	for index, state := range d.previous {
+		if !usedPrevious[index] {
+			unchanged = append(unchanged, state)
+		}
+	}
+	d.remember(regions, unchanged, current)
 	sortRegions(regions)
 	return regions
 }
@@ -172,11 +179,17 @@ func (d *Differ) regionFor(class delta.RegionClass, c candidate, previousBounds 
 	}
 }
 
-// remember stores the geometry of the screen as it now stands, so the next comparison
-// can tell what changed, moved and disappeared. Removed regions are not part of it: they
-// are absent from the screen.
-func (d *Differ) remember(regions []delta.Region, current frame.Frame) {
+// remember stores the geometry of the screen as it now stands, so the next comparison can
+// tell what changed, moved and disappeared. It is the unchanged elements from the previous
+// frame plus the areas reported now; removed regions are absent from the screen and are not
+// part of it.
+//
+// Rewriting this list from the reported regions alone was a defect: after a frame pair that
+// changed nothing, the list became empty, so the next comparison had no baseline and reported
+// a returning element as added rather than changed.
+func (d *Differ) remember(regions []delta.Region, unchanged []regionState, current frame.Frame) {
 	d.previous = d.previous[:0]
+	d.previous = append(d.previous, unchanged...)
 	for _, region := range regions {
 		if region.Class == delta.ClassRemoved {
 			continue
@@ -189,7 +202,6 @@ func (d *Differ) remember(regions []delta.Region, current frame.Frame) {
 		})
 	}
 	d.hasPrevious = true
-	d.previousWidth, d.previousHeight = current.Width, current.Height
 }
 
 // filter grows, discards and clips the changed areas according to the configuration.

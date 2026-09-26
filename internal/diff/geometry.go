@@ -2,7 +2,6 @@ package diff
 
 import (
 	"image"
-	"math"
 
 	"github.com/theoabw/screendelta/internal/delta"
 	"github.com/theoabw/screendelta/internal/frame"
@@ -115,55 +114,4 @@ func regionMagnitude(previous, current frame.Frame, r image.Rectangle) float64 {
 		return 0
 	}
 	return float64(sum) / float64(count) / 255
-}
-
-// refine narrows a tile bounding box to the pixels that actually differ, and returns the
-// mean absolute luma difference over that narrower box.
-//
-// A tile grid is cheap to scan and cheap to merge, but a tile is coarse: a 30 pixel tall
-// element straddles two tile rows, so its tile box can be almost twice its height. The
-// refinement pass costs one scan over the tiles that changed, which is a small fraction of
-// the frame, and it is what lets the reported bounds describe the element rather than the
-// grid.
-//
-// If no single pixel passes the threshold, the tile box is returned: the tiles changed
-// because their mean did, and discarding that would lose a real change.
-func refine(previous, current frame.Frame, group component, threshold float64) (image.Rectangle, float64) {
-	left, top := group.left, group.top
-	right, bottom := group.right, group.bottom
-
-	// Constructed rather than built with image.Rect, which normalises its corners: an
-	// inverted rectangle meant as "nothing seen yet" would come back as the whole frame.
-	refined := image.Rectangle{Min: image.Point{X: math.MaxInt32, Y: math.MaxInt32}}
-	sum, count := 0, 0
-
-	for y := top; y < min(bottom, current.Height); y++ {
-		rowOffset := y * current.Width * 4
-		for x := left; x < min(right, current.Width); x++ {
-			offset := rowOffset + x*4
-			difference := absInt(luma(current.Pixels[offset:]) - luma(previous.Pixels[offset:]))
-			if float64(difference) <= threshold {
-				continue
-			}
-			if x < refined.Min.X {
-				refined.Min.X = x
-			}
-			if y < refined.Min.Y {
-				refined.Min.Y = y
-			}
-			if x+1 > refined.Max.X {
-				refined.Max.X = x + 1
-			}
-			if y+1 > refined.Max.Y {
-				refined.Max.Y = y + 1
-			}
-			sum += difference
-			count++
-		}
-	}
-
-	if count == 0 {
-		return rect(left, top, right, bottom), group.magnitude
-	}
-	return refined, float64(sum) / float64(count) / 255
 }

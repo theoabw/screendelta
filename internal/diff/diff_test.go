@@ -389,3 +389,39 @@ func TestCompareRejectsMismatchedDimensions(t *testing.T) {
 		t.Fatal("Compare accepted frames of different dimensions")
 	}
 }
+
+// TestNoiseFloorSeparatesNoiseFromChange states the rule FR-005 actually makes: a difference at
+// or below the floor is not a change and must not be reported, and a difference above it is one
+// and must be. The corpus noise case covers the first half with generated noise; this covers
+// both halves with a controlled difference, because a case that only ever contains noise cannot
+// show that the floor still admits a real change.
+func TestNoiseFloorSeparatesNoiseFromChange(t *testing.T) {
+	panelValue := uint8(120)
+
+	for _, tc := range []struct {
+		name       string
+		shade      uint8
+		wantRegion bool
+	}{
+		{name: "below the floor", shade: panelValue + 3, wantRegion: false},
+		{name: "at the floor", shade: panelValue + 5, wantRegion: false},
+		{name: "above the floor", shade: panelValue + 12, wantRegion: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			first := buildFrame(1, 320, 240, []panel{{x: 100, y: 80, w: 80, h: 40, value: panelValue}})
+			second := buildFrame(2, 320, 240, []panel{{x: 100, y: 80, w: 80, h: 40, value: tc.shade}})
+
+			regions, _, err := New().Compare(first, second, defaults())
+			if err != nil {
+				t.Fatalf("Compare failed: %v", err)
+			}
+			if tc.wantRegion && len(regions) == 0 {
+				t.Fatalf("a difference of %d levels was not reported", int(tc.shade)-int(panelValue))
+			}
+			if !tc.wantRegion && len(regions) != 0 {
+				t.Fatalf("a difference of %d levels was reported as %d regions",
+					int(tc.shade)-int(panelValue), len(regions))
+			}
+		})
+	}
+}

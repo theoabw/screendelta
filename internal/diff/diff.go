@@ -20,16 +20,16 @@ import (
 	"github.com/theoabw/screendelta/internal/frame"
 )
 
-// TileSize is the edge of one comparison tile in pixels. Sixteen keeps a glyph from
-// spanning many tiles while staying cache friendly.
-const TileSize = 16
-
-// growthMargin is how far a reported region is expanded beyond the tiles that changed,
-// so the bounds cover the element that produced the change rather than the inside of it.
+// growthMargin is how far a reported region is expanded beyond the pixels that changed, so
+// the bounds cover the element that produced the change rather than its inside. It is the one
+// place where the engine reports more than it measured, and the accuracy measurement scores
+// against the changed pixels themselves, so the margin has to stay small enough that a padded
+// region still overlaps its own change by more than half. Measured: a sixteen pixel element
+// keeps an intersection over union of 0.64, a sixty pixel one 0.86.
 const growthMargin = 2
 
-// luma weights are the integer BT.601 coefficients, used instead of floating point so
-// the same input produces the same numbers everywhere.
+// luma weights are the integer BT.601 coefficients, used instead of floating point so the
+// same input produces the same numbers everywhere.
 const (
 	lumaRed   = 299
 	lumaGreen = 587
@@ -39,23 +39,13 @@ const (
 
 // Differ compares consecutive frames of one stream.
 type Differ struct {
-	tiles    []tile
-	parent   []int
 	previous []regionState
+	mask     []byte
+	stack    []int
 	grid     []uint8
 
-	previousWidth  int
-	previousHeight int
-	hasPrevious    bool
-	nextIdentity   uint64
-}
-
-// tile is one cell of the comparison grid.
-type tile struct {
-	tilesX int
-	tilesY int
-	mean   float64
-	change bool
+	hasPrevious  bool
+	nextIdentity uint64
 }
 
 // regionState is what the differ needs to remember about the previous frame: where the
@@ -82,17 +72,14 @@ func (d *Differ) Compare(previous, current frame.Frame, cfg config.Config) ([]de
 		}
 	}
 
-	// A configuration that asks for nothing at all is honoured before any work is done,
-	// and the remembered geometry is cleared so a later change of configuration cannot
-	// produce removals for regions the caller asked never to hear about.
+	// A configuration that asks for nothing at all is honoured before any work is done, and
+	// the remembered geometry is cleared so a later change of configuration cannot produce
+	// removals for regions the caller asked never to hear about.
 	if cfg.SuppressesAllRegions() {
 		d.previous = d.previous[:0]
 		d.hasPrevious = true
-		d.previousWidth, d.previousHeight = current.Width, current.Height
 		return []delta.Region{}, nil, nil
 	}
-
-	d.measure(previous, current, cfg)
 
 	components := d.components(previous, current, cfg)
 	candidates := d.filter(components, current, cfg)
@@ -101,182 +88,117 @@ func (d *Differ) Compare(previous, current frame.Frame, cfg config.Config) ([]de
 	return regions, nil, nil
 }
 
-// measure fills the tile grid with the mean absolute luma difference per tile.
-func (d *Differ) measure(previous, current frame.Frame, cfg config.Config) {
-	tilesX := (current.Width + TileSize - 1) / TileSize
-	tilesY := (current.Height + TileSize - 1) / TileSize
-	needed := tilesX * tilesY
-
-	if len(d.tiles) != needed {
-		d.tiles = make([]tile, needed)
-		d.parent = make([]int, needed)
-	} else {
-		for index := range d.tiles {
-			d.tiles[index] = tile{}
-		}
-	}
-
-	threshold := cfg.NoiseFloor * 255
-
-	for tileY := 0; tileY < tilesY; tileY++ {
-		for tileX := 0; tileX < tilesX; tileX++ {
-			index := tileY*tilesX + tileX
-			sum, count := 0, 0
-
-			for y := tileY * TileSize; y < min((tileY+1)*TileSize, current.Height); y++ {
-				rowOffset := y * current.Width * 4
-				for x := tileX * TileSize; x < min((tileX+1)*TileSize, current.Width); x++ {
-					offset := rowOffset + x*4
-					difference := absInt(luma(current.Pixels[offset:]) - luma(previous.Pixels[offset:]))
-					sum += difference
-					count++
-				}
-			}
-
-			mean := 0.0
-			if count > 0 {
-				mean = float64(sum) / float64(count)
-			}
-			d.tiles[index] = tile{
-				tilesX: tilesX,
-				tilesY: tilesY,
-				mean:   mean,
-				change: mean > threshold,
-			}
-			d.parent[index] = index
-		}
-	}
-}
-
-// component is a connected group of changed tiles, refined to the pixels that actually
-// differ and expressed in pixels.
-//
-// The refinement matters: a tile is sixteen pixels wide, so a tile bounding box inflates
-// a small element by up to one tile on each side, which would both overstate the region
-// and blur the motion detection that compares footprints between frames.
+// component is a connected group of changed pixels.
 type component struct {
 	left, top, right, bottom int
 	magnitude                float64
 }
 
-// components merges neighbouring changed tiles into rectangles.
+// components finds the changed pixels and groups them into connected areas.
 //
-// Eight-way connectivity is used because a one pixel diagonal join between two areas
-// that a person would call one region is common in rendered text and icons.
+// A pixel counts as changed when its luma differs by more than the configured noise floor, and
+// areas are eight-connected, because a one pixel diagonal join between two parts of the same
+// glyph or icon is common. The whole frame is scanned once; an earlier version gated the scan
+// on a sixteen pixel tile grid, which was cheaper to merge but cut a genuine change at a tile
+// boundary whenever a tile's mean fell under the floor, reporting one change as two overlapping
+// regions.
 func (d *Differ) components(previous, current frame.Frame, cfg config.Config) []component {
-	tilesX := (current.Width + TileSize - 1) / TileSize
-	tilesY := (current.Height + TileSize - 1) / TileSize
+	width, height := current.Width, current.Height
+	needed := width * height
+	if needed <= 0 {
+		return nil
+	}
+	if cap(d.mask) < needed {
+		d.mask = make([]byte, needed)
+	}
+	mask := d.mask[:needed]
 
-	anyChanged := false
-	for tileY := 0; tileY < tilesY; tileY++ {
-		for tileX := 0; tileX < tilesX; tileX++ {
-			if !d.tiles[tileY*tilesX+tileX].change {
+	threshold := cfg.NoiseFloor * 255
+	any := false
+	for y := 0; y < height; y++ {
+		rowOffset := y * width * 4
+		for x := 0; x < width; x++ {
+			offset := rowOffset + x*4
+			difference := absInt(luma(current.Pixels[offset:]) - luma(previous.Pixels[offset:]))
+			if float64(difference) <= threshold {
+				mask[y*width+x] = 0
 				continue
 			}
-			anyChanged = true
+			mask[y*width+x] = 1
+			any = true
+		}
+	}
+	if !any {
+		return nil
+	}
+
+	var components []component
+	for start := 0; start < needed; start++ {
+		if mask[start] != 1 {
+			continue
+		}
+		d.stack = append(d.stack[:0], start)
+		mask[start] = 2
+
+		boxLeft, boxTop := width, height
+		boxRight, boxBottom := 0, 0
+		sum, count := 0, 0
+
+		for len(d.stack) > 0 {
+			index := d.stack[len(d.stack)-1]
+			d.stack = d.stack[:len(d.stack)-1]
+			x, y := index%width, index/width
+
+			if x < boxLeft {
+				boxLeft = x
+			}
+			if y < boxTop {
+				boxTop = y
+			}
+			if x+1 > boxRight {
+				boxRight = x + 1
+			}
+			if y+1 > boxBottom {
+				boxBottom = y + 1
+			}
+			offset := y*width*4 + x*4
+			sum += absInt(luma(current.Pixels[offset:]) - luma(previous.Pixels[offset:]))
+			count++
+
 			for dy := -1; dy <= 1; dy++ {
 				for dx := -1; dx <= 1; dx++ {
 					if dx == 0 && dy == 0 {
 						continue
 					}
-					neighbourX, neighbourY := tileX+dx, tileY+dy
-					if neighbourX < 0 || neighbourY < 0 || neighbourX >= tilesX || neighbourY >= tilesY {
+					neighbourX, neighbourY := x+dx, y+dy
+					if neighbourX < 0 || neighbourY < 0 || neighbourX >= width || neighbourY >= height {
 						continue
 					}
-					neighbour := neighbourY*tilesX + neighbourX
-					if !d.tiles[neighbour].change {
+					neighbour := neighbourY*width + neighbourX
+					if mask[neighbour] != 1 {
 						continue
 					}
-					d.union(tileY*tilesX+tileX, neighbour)
+					mask[neighbour] = 2
+					d.stack = append(d.stack, neighbour)
 				}
 			}
 		}
-	}
-	if !anyChanged {
-		return nil
-	}
 
-	// Groups are collected in scan order and then keyed by root, which keeps the result
-	// independent of map iteration order.
-	groups := make(map[int]*component, 8)
-	order := make([]int, 0, 8)
-	for tileY := 0; tileY < tilesY; tileY++ {
-		for tileX := 0; tileX < tilesX; tileX++ {
-			index := tileY*tilesX + tileX
-			if !d.tiles[index].change {
-				continue
-			}
-			root := d.find(index)
-			group, seen := groups[root]
-			if !seen {
-				group = &component{
-					left:   tileX * TileSize,
-					top:    tileY * TileSize,
-					right:  min((tileX+1)*TileSize, current.Width),
-					bottom: min((tileY+1)*TileSize, current.Height),
-				}
-				groups[root] = group
-				order = append(order, root)
-				continue
-			}
-			group.left = min(group.left, tileX*TileSize)
-			group.top = min(group.top, tileY*TileSize)
-			group.right = max(group.right, min((tileX+1)*TileSize, current.Width))
-			group.bottom = max(group.bottom, min((tileY+1)*TileSize, current.Height))
+		if count == 0 {
+			continue
 		}
-	}
-
-	// Magnitude is the mean difference over the tiles in the group, before any growth.
-	components := make([]component, 0, len(order))
-	for _, root := range order {
-		group := groups[root]
-		sum, count := 0.0, 0
-		for tileY := 0; tileY < tilesY; tileY++ {
-			for tileX := 0; tileX < tilesX; tileX++ {
-				index := tileY*tilesX + tileX
-				if !d.tiles[index].change || d.find(index) != root {
-					continue
-				}
-				sum += d.tiles[index].mean
-				count++
-			}
-		}
-		if count > 0 {
-			group.magnitude = sum / float64(count) / 255
-		}
-		refined, magnitude := refine(previous, current, *group, cfg.NoiseFloor*255)
 		components = append(components, component{
-			left:      refined.Min.X,
-			top:       refined.Min.Y,
-			right:     refined.Max.X,
-			bottom:    refined.Max.Y,
-			magnitude: magnitude,
+			left:      boxLeft,
+			top:       boxTop,
+			right:     boxRight,
+			bottom:    boxBottom,
+			magnitude: float64(sum) / float64(count) / 255,
 		})
 	}
 
 	// Deterministic order before any matching: top edge, then left edge.
 	sortComponents(components)
 	return components
-}
-
-func (d *Differ) find(index int) int {
-	for d.parent[index] != index {
-		d.parent[index] = d.parent[d.parent[index]]
-		index = d.parent[index]
-	}
-	return index
-}
-
-func (d *Differ) union(a, b int) {
-	rootA, rootB := d.find(a), d.find(b)
-	if rootA == rootB {
-		return
-	}
-	if rootA < rootB {
-		d.parent[rootB] = rootA
-		return
-	}
-	d.parent[rootA] = rootB
 }
 
 // Fingerprint summarises a frame as a grid of quantised luma cells.
