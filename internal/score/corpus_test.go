@@ -141,11 +141,16 @@ func TestCorpus(t *testing.T) {
 	}
 
 	overall := make([]score.Counts, 0, len(cases))
+	// Pairs and regions are counted separately, because they are different numbers and the requirement is
+	// stated in pairs. Adding expected regions to no-change pairs and calling the sum pairs overstated the
+	// sample size by a factor of five.
+	totalPairs := 0
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := runCase(t, tc.name, tc.opts)
 			t.Logf("%s: %d pairs, %d regions reported, %s", tc.name, result.Pairs, result.Regions, result.Counts)
 			overall = append(overall, result.Counts)
+			totalPairs += result.Pairs
 
 			if result.Pairs < tc.minPairs {
 				t.Fatalf("%s scored %d pairs, fewer than the %d required", tc.name, result.Pairs, tc.minPairs)
@@ -176,9 +181,10 @@ func TestCorpus(t *testing.T) {
 	}
 
 	total := score.Sum(overall...)
-	t.Logf("every case together: %d pairs scored, %s", total.NoChangePairs+total.Expected, total)
-	if total.NoChangePairs+total.Expected < 5000 {
-		t.Fatalf("the suite scored fewer than the 5,000 pairs SC-001 requires")
+	t.Logf("every case together: %d frame pairs scored, %d regions matched, %s",
+		totalPairs, total.TruePositives+total.FalsePositives+total.FalseNegatives, total)
+	if totalPairs < 5000 {
+		t.Fatalf("the suite scored %d pairs, fewer than the 5,000 SC-001 requires", totalPairs)
 	}
 }
 
