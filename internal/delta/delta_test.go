@@ -378,6 +378,29 @@ func TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder(t *testing.T) {
 	if !reflect.DeepEqual(forward, backward) {
 		t.Fatalf("the order depends on how the regions were discovered:\n%+v\n%+v", forward, backward)
 	}
+
+	// The published five keys do not settle a pair that agrees on all of them, which two regions of one element
+	// can: the same place, the same identity, the same size, different classes. Mutation testing found that
+	// nothing exercised that tie, so the tie-breakers that settle it were undefended.
+	tied := func(reverse bool) []Region {
+		regions := []Region{
+			{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 200, IdentityConfidence: 1},
+			{Identity: 3, Class: ClassAdded, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.6, AreaPixels: 100, IdentityConfidence: 1},
+		}
+		if reverse {
+			regions[0], regions[1] = regions[1], regions[0]
+		}
+		return regions
+	}
+	tiedForward, tiedBackward := tied(false), tied(true)
+	SortRegions(tiedForward)
+	SortRegions(tiedBackward)
+	if !reflect.DeepEqual(tiedForward, tiedBackward) {
+		t.Fatalf("two regions agreeing on every published key were left to discovery order:\n%+v\n%+v", tiedForward, tiedBackward)
+	}
+	if !Ordered(tiedForward) {
+		t.Fatalf("the tie-broken regions are not in the contract's order: %+v", tiedForward)
+	}
 	if !Ordered(forward) {
 		t.Fatalf("the sorted regions are not in the contract's order: %+v", forward)
 	}
