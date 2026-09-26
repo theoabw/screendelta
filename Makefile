@@ -4,7 +4,7 @@ GO ?= go
 BIN := bin/screendelta
 BENCH_ENV := GOMAXPROCS=1
 
-.PHONY: help all check check-report report-pdf check-strict trace trace-strict build cross test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
+.PHONY: help all check check-report report-pdf verify mutants check-strict trace trace-strict build cross test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
 
 help: ## List available targets
 	@echo "Available targets:"
@@ -27,6 +27,12 @@ check-report: ## Check every claim in the report and the README against the repo
 
 report-pdf: ## Export the report to the PDF the course submission is made in
 	./scripts/export_report.sh
+
+verify: ## Run the whole verification and record it, failing when any command fails
+	./scripts/final_verify.sh
+
+mutants: ## Apply the mutation list and report which rules no test defends
+	./scripts/mutation_check.sh
 
 build: ## Build the CLI into bin/
 	$(GO) build -o $(BIN) ./cmd/screendelta

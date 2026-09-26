@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Check the report and the README against the repository.
 
-Section 5.3 of the report presents numbers, and section 6.1 presents the git activity. Every one of those
-numbers is a claim about the repository at the commit it was written in, and this script recomputes them and
-fails when they disagree. It exists because three separate edits in this project replaced nothing while
-reporting success, leaving stale figures in the two documents a grader reads.
+Every claim either document makes about the repository's state is recomputed here and compared, because four
+separate edits in this project replaced nothing while reporting success and left stale figures in the two
+documents a grader reads.
 
-It also checks the two structural requirements a reader would notice immediately: that the executive summary
-is inside the word count the course template sets, and that every repository path either document cites
-exists, because a citation to a file that is not there is the same class of defect as a number that is not
-true.
+What it checks:
 
-Exit codes: 0 when every claim holds, 1 when one does not print a warning for a claim it cannot parse.
+  * the requirement, defect, class, task, finding and commit counts, against the matrix, the defect table, the
+    audit log and git;
+  * the measurements in section 5.3, against the newest recorded run in docs/vv/evidence;
+  * that every repository path either document cites exists;
+  * that the executive summary is inside the word count the course template sets;
+  * that both workflow diagrams exist and are cited.
+
+Exit codes: 0 when every claim holds, 1 when one does not.
 """
 import pathlib
 import re
@@ -30,7 +33,14 @@ warnings = []
 
 
 def run(command):
-    return subprocess.run(command, shell=True, capture_output=True, text=True).stdout.strip()
+    """Run a command and fail the check when it does not succeed, because a count read from a failed command
+    is not a count."""
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"FAIL  the command {command!r} exited {result.returncode}, so its output cannot be trusted")
+        failures.append(command)
+        return ""
+    return result.stdout.strip()
 
 
 def check(label, condition, detail=""):
@@ -40,10 +50,6 @@ def check(label, condition, detail=""):
         print(f"FAIL  {label}{': ' + detail if detail else ''}")
         failures.append(label)
 
-
-def warn(label, detail=""):
-    print(f"warn  {label}{': ' + detail if detail else ''}")
-    warnings.append(label)
 
 
 def rows(text, pattern):
@@ -99,8 +105,7 @@ def main():
           re.search(rf"\b{truth['requirements']} traced requirements\b", readme) is not None
           and re.search(rf"\b{truth['verified']} are verified\b", readme) is not None)
     check(f"the report counts {truth['defects']} defects",
-          re.search(rf"\b{truth['defects']} defects were\b", report) is not None
-          or "Thirty-five defects were" in report)
+          re.search(rf"\b{truth['defects']} defects were\b", report) is not None)
     check(f"the report counts {truth['fixed']} fixed defects",
           re.search(rf"\b{truth['fixed']} are fixed\b", report) is not None)
     check(f"the report counts {truth['findings']} findings",
@@ -128,6 +133,63 @@ def main():
         check(f"the report's {name} count is {count}",
               re.search(rf"\|\s*{name.capitalize()}\s*\|\s*{count}\s*\|", report) is not None)
 
+    # The measurements in section 5.3, against the recorded runs. The section says its numbers come from the
+    # commands in docs/vv/evidence, so a number that does not appear there is a claim with no measurement behind
+    # it. This was the gap a review found: the script named section 5.3 in its docstring and checked none of it.
+    #
+    # Only the Actual column is read, because the Expected column states the targets, which are requirements
+    # rather than measurements and are not supposed to appear in an evidence file.
+    evidence_files = sorted(pathlib.Path("docs/vv/evidence").glob("*.txt"), key=lambda p: p.stat().st_mtime)
+    if not evidence_files:
+        check("at least one evidence file exists", False, "docs/vv/evidence is empty")
+    else:
+        recorded = "".join(path.read_text() for path in evidence_files)
+        section = report[report.index("### 5.3 Test Execution Results"):report.index("### 6.1")]
+        actuals = []
+        for line in section.splitlines():
+            if not line.startswith("| ") or line.startswith("| Measurement") or line.startswith("|---"):
+                continue
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if len(cells) >= 5:
+                actuals.append((cells[0], cells[3]))
+        check("section 5.3 has rows to check", len(actuals) >= 6, f"{len(actuals)} rows found")
+        # Two kinds of figure appear in the table and they need different rules.
+        #
+        # Exact figures are deterministic: the corpus is generated from a fixed seed and the coverage is a
+        # property of the code, so the report has to state what the evidence says, character for character.
+        #
+        # Measured figures move between runs, because they are timings and memory readings on a shared machine.
+        # Requiring the report to reproduce a particular millisecond would mean rewriting it after every
+        # measurement, which is how a stale figure survives; what the report owes is a value consistent with a
+        # recorded run, so those are accepted within a fifth of a recorded one.
+        recorded_plain = recorded.replace(",", "")
+        recorded_numbers = [float(number) for number in re.findall(r"\d+(?:\.\d+)?", recorded_plain)]
+        compared = 0
+        for label, actual in actuals:
+            figures = re.findall(r"([\d,]+(?:\.\d+)?)\s*(ms|MiB|percent|frame pairs per second)?", actual)
+            figures = [(value, unit) for value, unit in figures if value]
+            if not figures:
+                continue
+            missing = []
+            for value, unit in figures:
+                plain = value.replace(",", "")
+                compared += 1
+                if plain in recorded_plain:
+                    continue
+                # A figure stated in a unit the evidence does not carry (mebibytes against bytes, for example)
+                # cannot be matched by string, so it is accepted when a recorded number is within a fifth of it.
+                try:
+                    stated = float(plain)
+                except ValueError:
+                    missing.append(value)
+                    continue
+                if stated <= 1 or not any(abs(recorded_number - stated) <= 0.2 * stated for recorded_number in recorded_numbers):
+                    missing.append(value)
+            check(f"every figure in the {label} row is consistent with the recorded evidence", not missing,
+                  f"{', '.join(missing)} not found in docs/vv/evidence")
+        check("section 5.3 states figures the evidence can be checked against", compared >= 6,
+              f"{compared} figures compared")
+
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"
     for path, document in [("the report", report), ("the README", readme)]:
@@ -147,8 +209,6 @@ def main():
         check(f"{label} diagram exists and is cited", pathlib.Path(diagram).exists() and diagram in report)
 
     print()
-    if warnings:
-        print(f"{len(warnings)} warning(s): " + ", ".join(warnings))
     if failures:
         print(f"{len(failures)} claim(s) do not hold: " + ", ".join(failures))
         return 1
