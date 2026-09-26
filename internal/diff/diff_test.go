@@ -9,6 +9,7 @@ import (
 	"github.com/theoabw/screendelta/internal/config"
 	"github.com/theoabw/screendelta/internal/delta"
 	"github.com/theoabw/screendelta/internal/frame"
+	"github.com/theoabw/screendelta/internal/identity"
 )
 
 const (
@@ -262,10 +263,14 @@ func TestReplacedElementIsReportedAsRemovedAndAdded(t *testing.T) {
 	current := buildFrame(2, width, height, nil)
 	previous := buildFrame(1, width, height, nil)
 
+	// The classifier now reads the identity map, so the previous element is placed there rather than in
+	// a second memory of the same thing.
 	differ := New()
 	previousRect := image.Rect(40, 60, 70, 80)
 	differ.hasPrevious = true
-	differ.previous = []regionState{{bounds: boundsOf(previousRect, current), width: previousRect.Dx(), height: previousRect.Dy()}}
+	differ.identities = identity.New(2, 8)
+	differ.identities.Appear(boundsOf(previousRect, current), width, height, 1, nil)
+	differ.identities.EndFrame(1, nil, width, height)
 
 	// A larger area covers the old element's footprint, so the old element is gone and
 	// something else occupies the place.
@@ -538,6 +543,123 @@ func TestResetEndsEveryComparisonAndEveryIdentity(t *testing.T) {
 	for _, region := range regions {
 		if region.Identity == before {
 			t.Fatalf("identity %d survived Reset", before)
+		}
+	}
+}
+
+// TestSignatureSamplerIsBoundedAndSeparatesContent covers the appearance measurement the identity
+// layer relies on: it must cost the same for a large area as for a small one, be deterministic, and
+// still tell different content apart.
+func TestSignatureSamplerIsBoundedAndSeparatesContent(t *testing.T) {
+	width, height := 320, 240
+	plane := make([]byte, width*height)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			// A left half that is dark and a right half that is bright, so two rectangles drawn on
+			// either side look nothing alike.
+			value := byte(20)
+			if x >= width/2 {
+				value = 220
+			}
+			plane[y*width+x] = value
+		}
+	}
+
+	if _, ok := signatureOf(plane, rect(10, 10, 20, 20), width, height); !ok {
+		t.Fatal("a small rectangle produced no signature")
+	}
+	large, ok := signatureOf(plane, rect(0, 0, width, height), width, height)
+	if !ok {
+		t.Fatal("a full frame rectangle produced no signature")
+	}
+	again, _ := signatureOf(plane, rect(0, 0, width, height), width, height)
+	if large != again {
+		t.Fatalf("two measurements of the same rectangle differ: %v against %v", large, again)
+	}
+
+	dark, _ := signatureOf(plane, rect(5, 5, 60, 60), width, height)
+	bright, _ := signatureOf(plane, rect(width-60, 5, width-5, 60), width, height)
+	if dark.Close(bright) {
+		t.Fatalf("a dark area and a bright area have the same signature: %v", dark)
+	}
+
+	// A rectangle at the edge is ordinary and must not produce a signature of nothing.
+	edge, ok := signatureOf(plane, rect(width-4, height-4, width+40, height+40), width, height)
+	if !ok {
+		t.Fatal("a rectangle past the frame edge produced no signature")
+	}
+	if edge.Distance(bright) > 4*identity.SignatureTolerance {
+		t.Fatalf("an edge rectangle does not look like the area it covers: %v against %v", edge, bright)
+	}
+
+	// Degenerate sizes still produce something, because a one pixel element is legal.
+	tiny, ok := signatureOf(plane, rect(3, 3, 4, 4), width, height)
+	if !ok {
+		t.Fatal("a one pixel rectangle produced no signature")
+	}
+	if tiny.Distance(dark) > 4*identity.SignatureTolerance {
+		t.Fatalf("a one pixel rectangle in the dark half does not look dark: %v", tiny)
+	}
+}
+
+// TestAPartialChangeKeepsOneIdentity is the AUD-020 regression at the engine level.
+//
+// The engine only learns about an element from what changes, so the sequence has to show it the whole
+// panel first. After that, a change in one corner and then a change in the opposite corner are two
+// changes within one element, and the second must not look like a new one. Before the footprint started
+// translating and absorbing only new ground, the first patch shrank the element to that patch, and the
+// second patch fell outside it and was reported as something new.
+func TestAPartialChangeKeepsOneIdentity(t *testing.T) {
+	width, height := 320, 240
+	panelRect := panel{x: 60, y: 40, w: 200, h: 160, value: panelValue}
+	leftPatch := panel{x: 70, y: 50, w: 20, h: 20, value: 240}
+
+	frames := []frame.Frame{
+		// Nothing, then the whole panel, so the engine learns how big the element is.
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{panelRect, leftPatch}),
+		// A change in one corner.
+		buildFrame(3, width, height, []panel{panelRect, panel{x: 70, y: 50, w: 20, h: 20, value: 100}}),
+		// A change in the opposite corner.
+		buildFrame(4, width, height, []panel{panelRect, panel{x: 230, y: 170, w: 20, h: 20, value: 100}}),
+	}
+
+	differ := New()
+	regions, _, err := differ.Compare(frames[0], frames[1], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the panel appearing produced no regions")
+	}
+	whole := regions[0].Identity
+	if reported := pixelRect(regions[0].Bounds, frames[1]); reported.Dx() < 150 {
+		t.Fatalf("the engine did not see the whole panel: %v", reported)
+	}
+
+	regions, _, err = differ.Compare(frames[1], frames[2], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	for _, region := range regions {
+		if region.Identity != whole {
+			t.Fatalf("a change in one corner became identity %d instead of %d", region.Identity, whole)
+		}
+	}
+
+	regions, _, err = differ.Compare(frames[2], frames[3], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the second patch change produced no regions")
+	}
+	for _, region := range regions {
+		if region.Identity != whole {
+			t.Fatalf("a change in the opposite corner became identity %d instead of %d", region.Identity, whole)
+		}
+		if region.IdentityUncertain {
+			t.Fatalf("a change inside a tracked element was marked uncertain: %+v", region)
 		}
 	}
 }

@@ -13,6 +13,21 @@ import (
 type candidate struct {
 	left, top, right, bottom int
 	magnitude                float64
+
+	// signature is how the area looks, measured once from the frame's luma plane. The identity layer
+	// needs it to tell a cover from a content change, which geometry alone cannot do.
+	appearance    identity.Signature
+	hasAppearance bool
+}
+
+// signature returns the area's appearance, or nil when it could not be measured, in which case the
+// identity layer falls back to geometry alone.
+func (c candidate) signature() *identity.Signature {
+	if !c.hasAppearance {
+		return nil
+	}
+	copied := c.appearance
+	return &copied
 }
 
 func (c candidate) width() int  { return c.right - c.left }
@@ -52,7 +67,6 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			regions = append(regions, d.regionFor(delta.ClassChanged, c, nil, current))
 		}
 		d.identities.EndFrame(current.Sequence, changedBoundsFirst, current.Width, current.Height)
-		d.remember(regions, nil, current)
 		sortRegions(regions)
 		return regions
 	}
@@ -65,18 +79,20 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 		changedBounds = append(changedBounds, boundsOf(rect(c.left, c.top, c.right, c.bottom), current))
 	}
 
-	usedPrevious := make([]bool, len(d.previous))
-	regions := make([]delta.Region, 0, len(candidates)+len(d.previous))
+	// The elements the engine is tracking, read from the layer that owns them.
+	d.liveElements = d.identities.LiveElements()
+	usedPrevious := make([]bool, len(d.liveElements))
+	regions := make([]delta.Region, 0, len(candidates)+len(d.liveElements))
 
 	// Pass one: unchanged footprints that changed content.
 	matchedCandidate := make([]bool, len(candidates))
 	for index, c := range candidates {
 		best, bestOverlap := -1, 0.0
-		for previousIndex, state := range d.previous {
+		for previousIndex, state := range d.liveElements {
 			if usedPrevious[previousIndex] {
 				continue
 			}
-			overlap := intersectionOverUnion(rect(c.left, c.top, c.right, c.bottom), pixelRectOf(state.bounds, current))
+			overlap := intersectionOverUnion(rect(c.left, c.top, c.right, c.bottom), pixelRectOf(state.Bounds, current))
 			if overlap > bestOverlap {
 				bestOverlap = overlap
 				best = previousIndex
@@ -95,11 +111,11 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	// classified as moved with the element's earlier position as their origin. Reporting one
 	// box around the whole movement instead would describe pixels that did not change and
 	// miss the two areas that did.
-	for previousIndex, state := range d.previous {
+	for previousIndex, state := range d.liveElements {
 		if usedPrevious[previousIndex] {
 			continue
 		}
-		previousRect := pixelRectOf(state.bounds, current)
+		previousRect := pixelRectOf(state.Bounds, current)
 		expanded := expand(previousRect, cfg.MotionTolerancePixels)
 
 		absorbed := make([]int, 0, 2)
@@ -130,11 +146,11 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			continue
 		}
 		replaced := -1
-		for previousIndex, state := range d.previous {
+		for previousIndex, state := range d.liveElements {
 			if usedPrevious[previousIndex] {
 				continue
 			}
-			previousRect := pixelRectOf(state.bounds, current)
+			previousRect := pixelRectOf(state.Bounds, current)
 			// How much of the previous element the new area covers, not the other way
 			// round: the question is whether the element that was there is gone.
 			if coveredFraction(rect(c.left, c.top, c.right, c.bottom), previousRect) >= 0.5 {
@@ -143,15 +159,15 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			}
 		}
 		if replaced >= 0 {
-			state := d.previous[replaced]
+			state := d.liveElements[replaced]
 			usedPrevious[replaced] = true
-			previousBounds := boundsOf(pixelRectOf(state.bounds, current), current)
+			previousBounds := boundsOf(pixelRectOf(state.Bounds, current), current)
 			removedCandidate := candidate{
-				left:      pixelRectOf(state.bounds, current).Min.X,
-				top:       pixelRectOf(state.bounds, current).Min.Y,
-				right:     pixelRectOf(state.bounds, current).Max.X,
-				bottom:    pixelRectOf(state.bounds, current).Max.Y,
-				magnitude: regionMagnitude(previous, current, pixelRectOf(state.bounds, current)),
+				left:      pixelRectOf(state.Bounds, current).Min.X,
+				top:       pixelRectOf(state.Bounds, current).Min.Y,
+				right:     pixelRectOf(state.Bounds, current).Max.X,
+				bottom:    pixelRectOf(state.Bounds, current).Max.Y,
+				magnitude: regionMagnitude(previous, current, pixelRectOf(state.Bounds, current)),
 			}
 			regions = append(regions, d.regionFor(delta.ClassRemoved, removedCandidate, &previousBounds, current))
 		}
@@ -167,13 +183,12 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	d.identities.EndFrame(current.Sequence, changedBounds, current.Width, current.Height)
 
 	// Elements whose pixels did not change are still on the screen, so they carry over.
-	unchanged := make([]regionState, 0, len(d.previous))
-	for index, state := range d.previous {
+	unchanged := make([]identity.LiveElement, 0, len(d.liveElements))
+	for index, state := range d.liveElements {
 		if !usedPrevious[index] {
 			unchanged = append(unchanged, state)
 		}
 	}
-	d.remember(regions, unchanged, current)
 	sortRegions(regions)
 	return regions
 }
@@ -197,12 +212,12 @@ func (d *Differ) regionFor(class delta.RegionClass, c candidate, previousBounds 
 	case class == delta.ClassRemoved:
 		assignment = d.identities.Vanish(bounds, current.Width, current.Height, current.Sequence)
 	case class == delta.ClassAdded:
-		assignment = d.identities.Appear(bounds, current.Width, current.Height, current.Sequence)
+		assignment = d.identities.Appear(bounds, current.Width, current.Height, current.Sequence, c.signature())
 	case previousBounds != nil:
 		// A moved region is one of the areas a translation changed, so the element is looked up
 		// where it was rather than where this area is. Looking it up by the area would give each
 		// half of a movement its own identity, which is what happened before this was fixed.
-		assignment = d.identities.Carry(*previousBounds, bounds, current.Width, current.Height, current.Sequence)
+		assignment = d.identities.Carry(*previousBounds, bounds, current.Width, current.Height, current.Sequence, c.signature())
 		if assignment.Carried {
 			// The element's own footprint is a better answer than the area that changed, and the
 			// identity map is the only layer that knows it.
@@ -210,7 +225,7 @@ func (d *Differ) regionFor(class delta.RegionClass, c candidate, previousBounds 
 			previousBounds = &carried
 		}
 	default:
-		assignment = d.identities.Carry(bounds, bounds, current.Width, current.Height, current.Sequence)
+		assignment = d.identities.Carry(bounds, bounds, current.Width, current.Height, current.Sequence, c.signature())
 	}
 
 	return delta.Region{
@@ -223,32 +238,6 @@ func (d *Differ) regionFor(class delta.RegionClass, c candidate, previousBounds 
 		IdentityConfidence: assignment.Confidence,
 		IdentityUncertain:  assignment.Uncertain,
 	}
-}
-
-// remember stores the geometry of the screen as it now stands, so the next comparison can
-// tell what changed, moved and disappeared. It is the unchanged elements from the previous
-// frame plus the areas reported now; removed regions are absent from the screen and are not
-// part of it.
-//
-// Rewriting this list from the reported regions alone was a defect: after a frame pair that
-// changed nothing, the list became empty, so the next comparison had no baseline and reported
-// a returning element as added rather than changed.
-func (d *Differ) remember(regions []delta.Region, unchanged []regionState, current frame.Frame) {
-	d.previous = d.previous[:0]
-	d.previous = append(d.previous, unchanged...)
-	for _, region := range regions {
-		if region.Class == delta.ClassRemoved {
-			continue
-		}
-		pixel := pixelRectOf(region.Bounds, current)
-		d.previous = append(d.previous, regionState{
-			bounds: region.Bounds,
-			width:  pixel.Max.X - pixel.Min.X,
-			height: pixel.Max.Y - pixel.Min.Y,
-		})
-	}
-	d.hasPrevious = true
-	d.previousWidth, d.previousHeight = current.Width, current.Height
 }
 
 // filter grows, discards and clips the changed areas according to the configuration.
@@ -268,6 +257,11 @@ func (d *Differ) filter(components []component, current frame.Frame, cfg config.
 		}
 
 		c := candidate{left: left, top: top, right: right, bottom: bottom, magnitude: group.magnitude}
+		if plane := d.plane(current, cfg.Fingerprint.GridSize); plane != nil {
+			if appearance, ok := signatureOf(plane, rect(left, top, right, bottom), current.Width, current.Height); ok {
+				c.appearance, c.hasAppearance = appearance, true
+			}
+		}
 
 		if cfg.Unrestricted() {
 			candidates = append(candidates, c)
@@ -282,11 +276,13 @@ func (d *Differ) filter(components []component, current frame.Frame, cfg config.
 				continue
 			}
 			candidates = append(candidates, candidate{
-				left:      clipped.Min.X,
-				top:       clipped.Min.Y,
-				right:     clipped.Max.X,
-				bottom:    clipped.Max.Y,
-				magnitude: c.magnitude,
+				left:          clipped.Min.X,
+				top:           clipped.Min.Y,
+				right:         clipped.Max.X,
+				bottom:        clipped.Max.Y,
+				magnitude:     c.magnitude,
+				appearance:    c.appearance,
+				hasAppearance: c.hasAppearance,
 			})
 			break
 		}

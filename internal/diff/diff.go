@@ -72,10 +72,12 @@ func init() {
 // A frame is identified by its sequence, which the engine requires to increase, so a cached
 // plane cannot be confused with a different frame.
 type Differ struct {
-	previous []regionState
-	mask     []byte
-	stack    []int
-	grid     []uint8
+	// liveElements is the snapshot of the tracked elements the classifier works from, refreshed at the
+	// start of every comparison. It is scratch rather than state: the identity map holds the truth.
+	liveElements []identity.LiveElement
+	mask         []byte
+	stack        []int
+	grid         []uint8
 
 	newest    []byte
 	newestSeq uint64
@@ -116,8 +118,8 @@ func New() *Differ {
 // identity. It is what the engine calls when it reports a viewport change, because bounds are
 // normalised and a rectangle tracked at one frame size says nothing at another.
 func (d *Differ) Reset() {
-	d.previous = d.previous[:0]
 	d.hasPrevious = false
+	d.liveElements = d.liveElements[:0]
 	d.identities.RetireAll()
 }
 
@@ -184,7 +186,6 @@ func (d *Differ) Compare(previous, current frame.Frame, cfg config.Config) ([]de
 	// the remembered geometry is cleared so a later change of configuration cannot produce
 	// removals for regions the caller asked never to hear about.
 	if cfg.SuppressesAllRegions() {
-		d.previous = d.previous[:0]
 		d.hasPrevious = true
 		// Nothing is reported, and nothing changed as far as the engine is concerned, so the tracked
 		// elements are refreshed rather than aged. Leaving the map untouched instead would freeze it:
@@ -198,7 +199,6 @@ func (d *Differ) Compare(previous, current frame.Frame, cfg config.Config) ([]de
 	// element tracked at one frame size means nothing at another. The engine reports a viewport
 	// change and starts the stream again; the differ clears its state so it cannot match across it.
 	if d.hasPrevious && (d.previousWidth != current.Width || d.previousHeight != current.Height) {
-		d.previous = d.previous[:0]
 		// Every tracked element ends at a viewport change, and the identifier counter keeps rising:
 		// rebuilding the table would restart the sequence and hand a consumer a number that used to
 		// mean something else.
@@ -214,6 +214,11 @@ func (d *Differ) Compare(previous, current frame.Frame, cfg config.Config) ([]de
 	components := d.components(previous, current, cfg)
 	candidates := d.filter(components, current, cfg)
 	regions := d.classify(candidates, previous, current, cfg)
+
+	// This frame becomes the baseline for the next one. It used to be recorded by the second memory of
+	// geometry that the identity map replaced, which is why the differ has to say it here.
+	d.hasPrevious = true
+	d.previousWidth, d.previousHeight = current.Width, current.Height
 
 	return regions, nil, nil
 }
