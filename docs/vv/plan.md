@@ -35,14 +35,67 @@ its users.
 
 ## Code audit log
 
-One entry per flaw found in generated output, added when it is found.
+One entry per flaw found in generated output or in the evidence for it, added when it is found. Classes
+are `security`, `compliance`, `logical` and `maintainability`.
 
-| ID | Class | Found in | Issue | How it was resolved | Verified by |
+**No security defects were found**, and that is a result rather than an omission. The engine reads local
+files and standard input, writes only to a path it is given, and never opens a socket; there are no
+credentials, no untrusted input beyond frame files, and no privilege boundary in scope. The nearest item
+is AUD-021, a decoder that accepts a document missing required identity fields, and it is classified as
+compliance rather than security because the schema is the contract being broken, not a trust boundary. Had
+this been a networked service, AUD-021 would have been the finding worth escalating first.
+
+### Round 1: independent code review of the first implementation
+
+Eleven findings, none security. Grouped by class, with the commits that fixed them.
+
+| Class | Findings | Resolution | Commits |
+|---|---|---|---|
+| Logical | Returned documents aliased storage the differ could reuse; error wrapping named the wrong operation, mutated a shared error and lost the cause; non-finite values passed validation; a typed nil error crashed the stream | Deep copy on the boundary, non-mutating error attribution, finiteness checks, a typed-nil guard, each with a regression test reproducing the counterexample | `e2a1c47`, `9c91d66` |
+| Compliance | Validation permitted output the published schema rejects (algorithm pattern, hash length, a width slightly over one); a duplicate configuration member bypassed the exact-key check; region ordering was not total for tied regions | The documented contract is now enforced by the validator, duplicate members are rejected at the token level before map conversion, and the sort key is total | `be71563`, `296386f` |
+| Maintainability | Two CI jobs could not pass as written (a coverage path that does not exist, a whole-tree build writing one output file); `make memcheck` and `make accuracy` reported success while measuring nothing; unknown-key diagnostics varied between runs | The commands were corrected and verified locally, the measurement targets now fail loudly when their test is absent, and diagnostics are sorted | `b4780c6`, `296386f` |
+
+### Rounds 2 to 5: independent reviews of the slices
+
+Each round is a separate context briefed to falsify rather than to read, and each is recorded with its
+findings in `docs/vv/results.md`.
+
+| ID | Class | Found in | Issue | Resolution | Verified by |
 |---|---|---|---|---|---|
-| AUD-001 | | | | | |
+| AUD-001 | logical | Measurement, round 1 | A translated element scored F1 0.3333: one region spanning the movement covered pixels that did not change and missed the two areas that did | A translation reports the area left and the area arrived in, both as `moved` | Corpus accuracy, `make accuracy` |
+| AUD-002 | logical | Measurement, round 1 | A frame pair differing only by noise reported a region as removed | The pass that called every unmatched element gone was deleted; an element whose pixels did not change is still on screen | `TestNoiseCaseReportsNothingOnEveryPair` |
+| AUD-003 | compliance | Measurement, round 1 | `make memcheck` and `make accuracy` reported success while measuring nothing, because `go test` treats a missing test name as success | Both targets ask `go test -list` whether the test exists and fail with the task number that will add it | The leak check and the absent-test check, both verified by introducing the condition |
+| AUD-004 | logical | Measurement, round 2 | A 16 pixel tile grid cut a genuine change at a tile boundary and reported it twice, precision 0.9995 | The tile grid was removed; changed pixels are found per pixel and grouped by connectivity | Corpus sweep at F1 1.0000 |
+| AUD-005 | logical | Measurement, round 2 | Remembered geometry was rewritten from the current frame's changed areas, so a frame pair that changed nothing erased the baseline and a return looked new | Unchanged elements carry over in the map, which owns them | `TestAnOccludedElementReturnsWithANewUncertainIdentity` |
+| AUD-006 | logical | Measurement, round 2 | Two elements a tile apart were merged into one region, recall 0.9947 | Grouping is by pixel connectivity | Corpus sweep |
+| AUD-007 | compliance | Review, round 3 | The first accuracy and memory measurement could be passed with an engine that classified everything as `changed`, and a deliberate 512 byte per frame leak survived both memory tests | Ground truth comes from the rendered pixels, every adjacent pair is scored, the sample size is enforced, classes are asserted, and the memory bound is one megabyte of resident growth | Mutation: the leak now fails both tests, and a mis-classifying engine now fails classification |
+| AUD-008 | compliance | Measurement, round 2 | p95 latency 25.26 ms against a 12 ms requirement | The luma conversion runs once per frame instead of six times per pair, the fingerprint grid is sampled, and the comparison skips unchanged rows | `make perf`: p95 9.56 ms |
+| AUD-009 | compliance | Measurement, round 2 | A latency run inside `go test ./...` reported p95 18.35 ms with a p50 of 8.73 ms, a tail belonging to the machine | The measurement detects contention and skips with the numbers; `make perf` runs with `-p 1` | `make perf` alone against the whole suite |
+| AUD-010 | logical | Review, round 4 | Rebuilding the identity table at a viewport change reissued identifier numbers mid-session | A viewport change retires every element and keeps the counter rising | `TestAViewportChangeEndsEveryIdentity` |
+| AUD-011 | logical | Review, round 4 | A translated element lost its identity at the second movement: the areas of a movement were looked up by the changed area rather than by the element | A moved region is looked up by the element's earlier position, and the element's footprint is the union of the regions that named it | `TestATrackedElementKeepsOneIdentityAcrossFrames` |
+| AUD-012 | logical | Review, round 4 | A large element could take a small element's identity, and the answer depended on allocation order | Matches are ranked: overlap beats containment, ties go to the smallest element then the lowest identifier | `TestASmallElementInsideALargeOneKeepsItsOwnIdentity` |
+| AUD-013 | logical | Review, round 4 | An element that sat still past the occlusion window was retired, and the next change to it looked like a reacquisition | An element ages only when the area it occupies changed and it was not matched | `TestAnElementThatSitsStillIsNotRetired` |
+| AUD-014 | maintainability | Review, round 4 | Retired identities were kept forever, so the table grew with the session | Retired entries are dropped once too old to reacquire; the counter still never reuses | `TestRetiredEntriesAreBoundedByTheRetentionWindow` |
+| AUD-015 | logical | Review, round 4 | A removal could name a newly allocated live identity | The fallback identity is retired at once | `TestVanishWithNothingToRetireAllocatesAName` |
+| AUD-016 | logical | Review, round 4 | A viewport change could leave identities live, including a scale change and a size round trip | The differ interface has `Reset`, which the engine calls on a viewport change | `TestTheDifferIsToldAboutAViewportChange`, `TestAViewportRoundTripStillResets` |
+| AUD-017 | logical | Review, round 4 | A contained rectangle of three tenths the area lost its identity while one of 0.29 kept it | The containment path no longer applies a size ratio | `TestAnElementAtTheAreaRatioBoundaryIsMatched` |
+| AUD-018 | logical | Review, round 4 | A cover was reported as a change of the covered element and inherited its identity, so the uncertainty marker was unreachable | A cover is reported as a removal of the covered element with a different identity for what arrived; a return is reported as an addition marked uncertain | `TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities`, `TestAReturnAfterACoverIsAddedUncertain` |
+| AUD-019 | logical | Review, round 4 | A disappearance leaving the same footprint looks identical to a content change | Decided against fixing, in R18: the evidence that would justify a removal also fires on a subtle repaint of an element whose fill resembles its surroundings, and a false removal is what the noise corpus exists to catch. Recorded as inherent | `TestASameFootprintDisappearanceIsReportedAsChanged` |
+| AUD-020 | logical | Review, round 4 | A partial change replaced an element's tracked footprint, so a later change in another part of it got a new identity | The footprint belongs to the identity map and evolves by translation plus new ground | `TestAPartialChangeLeavesTheFootprintIntact`, `TestAPartialChangeKeepsOneIdentity` |
+| AUD-021 | compliance | Review, round 4 | `delta.Decode` accepts a document missing the identity fields, because a missing JSON field becomes a valid zero value | Open. The engine always emits them; a library consumer reading a foreign document is not protected, and the decoder strictness question is recorded for the endgame | Not fixed |
+| AUD-022 | logical | Review, round 5 | A returning element whose content occupies only part of the changed area is not recognised, and the area is reported as a confident change of the element that covered it | Open, with the fix identified: measure the appearance of the retired element's own footprint rather than of the whole changed area. A missed reacquisition, not a wrong handle | `TestAResizedReturnIsNotYetRecognised` pins it |
+| AUD-023 | logical | Review, round 5 | One covering area retired only the element it contained most completely, so other covered handles stayed live | Every element an area contains and exceeds is examined | `TestOneCoveringAreaRetiresEveryElementItCovers` |
+| AUD-024 | logical | Review, round 5 | An element that grew outward without its interior changing was reported as covered | The decision asks whether the element's own pixels changed, from the comparison's pixel mask | `TestGrowthWithoutAnInteriorRepaintIsNotACover` |
+| AUD-025 | logical | Review, round 5 | A retired element with better overlap but incompatible appearance blocked the one that matched | Appearance filters retired candidates, then overlap ranks them | `TestReturnNeedsEvidenceInBothDirections` |
+| AUD-026 | logical | Review, round 5 | An element retired by the cover rule stayed in the classifier's snapshot, so a later pass reported a new element as having moved from its position | The retired element is marked used in the snapshot | `TestOneCoveringAreaRetiresEveryElementItCovers` |
 
-Classes: `security`, `compliance`, `logical`, `maintainability`. Fill this table
-as work proceeds; each entry gets the commit that fixes it.
+### Reading the log
+
+Of 26 recorded findings plus the 11 from round 1: 23 are fixed, one is documented as inherent with the
+reason, and two are open with the fix identified. The classes are 30 logical, 5 compliance and 3
+maintainability, and none security. The compliance entries are the ones worth reading, because they are
+all cases where the evidence said something the code did not do, which is the failure mode this project
+spent the most effort on.
 
 ## Traceability
 

@@ -408,106 +408,282 @@ most information for a reader are:
 
 ### 5.1 V&V Strategy
 
-The strategy, the threats to validity, and who verified what: the full plan is
-`docs/vv/plan.md`. Name the levels used (unit, integration, functional,
-requirement verification, user acceptance, compliance), or state which were
-omitted and why.
+The strategy has five levels, and the reason for each is that the level below it cannot see the defect it
+catches.
+
+| Level | What it establishes | Mechanism | Where the result is recorded |
+|---|---|---|---|
+| Unit and package tests | That each rule behaves as its comment says, including the boundary cases | `go test ./...`, one test per decision named for the behaviour | Test names in `docs/traceability.md` |
+| Integration and functional tests | That the parts agree: the engine, the differ, the identity map and the document validator | The corpus harness runs the real engine over generated frames and scores the documents | `docs/vv/results.md` |
+| Measurement | That the non-functional targets hold, and that the harness that says so is not lying | `make accuracy`, `make perf`, `make memcheck`, each defeated deliberately before it is believed | `docs/vv/evidence/` |
+| Requirement verification | That every requirement has a task, a test and recorded output, and that nothing is claimed on a file that does not exist | `make check-strict`, which runs the traceability script over the matrix and the specification | `docs/traceability.md` |
+| User acceptance | That a person who has not read the code can use the engine from the README alone | The script in `docs/vv/acceptance.md`, run by external testers | Not yet run; the criterion is unverified and marked so |
+
+**Threats to validity**, stated because the numbers are only as good as their scope:
+
+1. **The corpus is synthesised.** Ground truth is exact because the generator drew the frames, and the
+   frames are flat panels with crisp edges, not screenshots of real applications. Real screens have
+   antialiasing, subpixel text rendering and gradients, which the noise floor and the appearance signature
+   were not tuned against. The corpus proves the rules, not the robustness.
+2. **The accuracy metric is intersection over union at 0.5 against changed pixels.** An engine that reports
+   slightly inflated boxes still scores, and one that reports very small regions does not. The score
+   measures localisation rather than usefulness to a planner.
+3. **Latency was measured on one machine**, an Intel i7-8700T virtual machine, one core, with the harness
+   running alone. The tail on a loaded machine or a different microarchitecture is unknown, and
+   `make perf` refuses to report a contended run rather than reporting it as the engine's.
+4. **The requirement is one number for a cost that follows the size of the change.** The asserted profile
+   changes two elements per frame; a change covering half the screen costs about 40 ms and is reported
+   separately. No single figure describes both.
+5. **Determinism is demonstrated across thread counts on one host**, not across hosts or Go versions.
+6. **The independent review is an agent, not a person.** It is a different context, a different model and a
+   brief that requires counterexamples, which is a real substitute for a second pair of eyes and not the
+   same thing. Section 6.1 says what the single-author history cannot show.
+7. **The measurement can be gamed, and was.** Three defects were found in the harness rather than in the
+   engine, all of the same kind: a green result that measured less than it claimed. Every measurement in
+   this report has since been defeated deliberately at least once.
 
 ### 5.2 Code Audit Log
 
-Each flaw caught in review of generated code, classified as security,
-compliance or logical, with the resolution technique. Record entries as they
-happen in `docs/vv/plan.md` under the audit log heading, because they are hard to
-reconstruct later.
+The classified log is `docs/vv/plan.md`, with one entry per finding, the class, the resolution and the test
+or measurement that verifies it. What it shows in summary:
+
+| Class | Count | What the class contained |
+|---|---|---|
+| Logical | 30 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
+| Compliance | 5 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, and three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation |
+| Maintainability | 3 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
+| Security | 0 | Stated as a result rather than an omission. The engine reads local files, writes only to a path it is given and never opens a socket; the nearest item is a decoder that accepts documents missing required fields, classified as compliance because the schema is the contract being broken |
+
+The pattern worth naming is that the compliance class is the one the process had to grow a defence for. The
+defence is now a rule: a measurement is not finished until an attempt to pass it with a deliberately wrong
+implementation has failed. Three of the 26 recorded defects were found that way, and none of them by
+reading the code.
 
 ### 5.3 Test Execution Results
 
-The executed cases with expected result, actual result and pass or fail status,
-plus coverage and any defect that remains open. The running record is
-`docs/vv/results.md`; raw output is kept under `docs/vv/evidence/`.
+The running record is `docs/vv/results.md`, with raw output under `docs/vv/evidence/`. Fourteen rows are
+recorded, five of them withdrawn and rewritten in place after a review showed the first version was not
+trustworthy, with the defect that caused each withdrawal in the same table.
 
-## 6. Project Management and AI Toolchain Workflows (3 points)
+Current state, from the commands named:
+
+| Measurement | Command | Result | Requirement |
+|---|---|---|---|
+| Accuracy over generated frames | `make accuracy` | 27,211 pairs, precision 1.0000, recall 1.0000, F1 1.0000, zero false removals | NFR-005, NFR-006, SC-001 |
+| Latency, one core, 1080p | `make perf` | p50 8.27 ms, p95 9.56 ms, p99 10.74 ms | NFR-001, SC-002 |
+| Throughput, one core | `make perf` | 74.9 frame pairs per second | NFR-002 |
+| Memory over 10,000 frames | `make memcheck` | peak heap 24.0 MiB, peak resident 22.5 MiB, no growth between frame 1,000 and frame 10,000 | NFR-003, SC-003 |
+| Allocation steady state | the allocation guard | 8,220 and 8,226 bytes per frame in two consecutive windows | NFR-003 |
+| Coverage | `go test -cover` | diff 80.8, identity 86.3, fingerprint 87.2, stream 96.4 percent | NFR-009 |
+| Determinism | two runs encoded and compared | Byte-identical over 10,000 frames at GOMAXPROCS 1 and 4 | NFR-004 in part |
+| Requirement traceability | `make check-strict` | 32 requirements, 32 matrix rows, 12 verified, 0 errors | the process gate |
+
+Twelve of 32 requirements are verified, meaning a test passes and its output is committed. The rest are
+in progress and the matrix says which, and the honest summary of the gap is this:
+
+- **Four requirements are one step from verified and are held back deliberately**: FR-006 and FR-007,
+  because an open defect (AUD-022) is a counterexample to the identity claim, and NFR-004 and SC-003,
+  because cross-host determinism is untested. Passing scores do not resolve a counterexample, which is
+  the judgement the reviews forced.
+- **Two requirements need testing that exists but has not been written**: FR-016 (no network, no stray
+  writes) and NFR-008 (the Windows cross-build is in CI, the platform smoke test is not).
+- **Two need a human who is not the author**: NFR-007 and SC-005 (usability), which is what the acceptance
+  script is for, and SC-006 (an independent consumer), which needs a second implementation written against
+  the schema alone.
+- **One is a demonstration rather than a measurement**: SC-004 (sustained decision rate), which the demo
+  pipeline is intended to produce.
+
+Two defects remain open. AUD-022 is described above. AUD-021 is a decoder that accepts a document missing
+the required identity fields, because a missing JSON field becomes a valid zero value in Go; the engine
+always emits them, so the exposure is a library consumer reading a document from somewhere else.
 
 ### 6.1 Version Control and Prompt Integration
 
-How commit messages link code changes to specification changes and prompt
-iterations, and how the workspace was configured. The convention and its
-rationale are in `CONTRIBUTING.md`, and the agent-facing version is in
-`AGENTS.md`.
+Git activity carries 15 of the 50 course points, so the history is a deliverable rather than a by-product,
+and it is kept to one logical change per commit by design, as `CONTRIBUTING.md` states in its granularity
+section.
 
-Git activity carries 15 of the 50 course points, and the course asks for
-modifications, issues and discussions to be visible in git, so report the process
-evidence rather than only the convention:
+The numbers, all reproducible from the repository:
 
-- Commit counts by phase and by type, and the fact that the history was kept to
-  one logical change per commit by design (`CONTRIBUTING.md`, commit granularity).
-- Counts of commits carrying each trailer, which is what links code to
-  specification changes and prompt iterations. These are reproducible:
-  `git log --oneline --grep='Req:'`, `git log --format='%s' | cut -d'(' -f1 | sort | uniq -c`.
-- Issues raised and closed, with the commit that closed each one, and the merge
-  requests where review happened, including the independent agent review findings
-  and their resolutions.
-- The workspace configuration itself: the Spec Kit version pin, the three agent
-  command surfaces, the constitution, the gates in `CONTRIBUTING.md`, and the
-  traceability check that runs in CI.
-- One honest note about what the single-author history cannot show, which is a
-  second human reviewer, and what was put in its place.
+| Measure | Value | How to reproduce |
+|---|---|---|
+| Commits | 68 | `git rev-list --count HEAD` |
+| By type | 21 feat, 20 docs, 13 fix, 6 plan, 2 spec, 2 refactor, 1 test, 1 perf, 1 chore | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
+| Commits carrying a `Spec:` trailer | 57 | `git log --grep='^Spec:' --oneline | wc -l` |
+| Carrying a `Req:` trailer | 55 | the same with `^Req:` |
+| Carrying a `Task:` trailer | 38 | the same with `^Task:` |
+| Carrying a `Prompt:` trailer | 63 | the same with `^Prompt:` |
+| Days of work | 2 (2026-09-26, 2026-09-27) | `git log --format='%ad' --date=short | sort | uniq -c` |
 
-State where the evidence lives and how to reproduce it, so a reader can verify the
-counts instead of taking them on trust.
+The trailers are the link between a code change, the requirement it serves, the task that planned it and
+the session that prompted it, and they are the reason the traceability matrix can be checked by a script
+rather than by trust. `python3 scripts/check_traceability.py --require-specs` fails the build when a
+requirement has no row, a row names a task that does not exist, or a row claims verification without a
+test file and an evidence file that exist in the repository.
+
+Issues and merge requests: the course asks for these to be visible, and this repository does not have them,
+because the work was done on one branch by one author with no remote until the owner pushes. That is a
+real gap against the course's expectation and it is stated rather than papered over with retrospective
+issues. What stands in its place is the review record: five independent review rounds, each with its
+findings, the fix and the test that proves the fix, recorded in `docs/vv/plan.md` (audit log) and
+`docs/prompt-log/`. The commit history is local and ready to push to `gitlab.abo.fi`, and the owner pushes
+it; the repository is not the agent's to publish.
 
 ### 6.2 Team Contribution Breakdown
 
-How human work shifted from coding to specifying, prompting, auditing and
-orchestrating. For each member, name the contribution and the git evidence for it.
-Working solo, this section instead shows how the four roles were separated in
-time, why each phase was finished before the next started, and how the missing
-second and third reviewers were replaced: independent agent review in a fresh
-context, self-review against `CONTRIBUTING.md`, and external testers for user
-acceptance. Cite the review records in `docs/prompt-log/` and the audit log in
-`docs/vv/plan.md`.
+The project is solo, so this section shows how the four roles were separated in time rather than between
+people, and what replaced the missing second and third reviewers.
 
-Quantify the leverage rather than asserting it: tasks closed per agent session,
-commits per phase, requirements specified per hour of human work, and lines of the
-specification written per line of code changed. Say where the human was the
-bottleneck, which is where the honest part of this section lives. One person
-directing agents can produce the output of a much larger team, but the specification
-gates, the review passes and the acceptance testing stay serial and human, and
-saying so is worth more than a claim about team size.
+| Role | Who played it | How it was kept separate | Evidence |
+|---|---|---|---|
+| Specifier | Human, with an agent drafting | Wrote the constitution, the user stories and the success criteria before any code; corrected three requirements the agent had phrased as design | `specs/001-frame-delta-engine/spec.md`, commits `beae933` and `17900ed` |
+| Prompt engineer | Human | Owned the briefs, changed them after each failure; the rule that a measurement must be defeated before it is believed came from a failure, not from a principle | `docs/prompt-log/0007-measurement-review.md` |
+| Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
+| Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-## 7. Reflections on Specification-Driven Development (5 points)
+Leverage, quantified rather than asserted: 68 commits in two days, 5,409 lines of Go against 4,755 lines
+of test and 2,025 lines of specification, plan and process documents, 53 planned tasks of which 15 are
+complete, 32 requirements of which 12 are verified, and 37 recorded defects of which 35 are fixed. The
+human wrote no implementation line by hand and read every one that was committed.
+
+Where the human was the bottleneck is the honest part of this section, and there are three places:
+
+1. **Deciding what the system should be.** Four candidate systems were explored in detail before the fifth
+   was chosen, and two were rejected for reasons a single question about the course grading would have
+   surfaced. No amount of agent throughput helps with a decision that has not been made.
+2. **Accepting a measurement.** Every failing target and every falsified claim needed a human judgement
+   about whether to fix the engine or change the claim, and the wrong answer is always available. The
+   reviews found the defects; the human decided what to do about them.
+3. **Specification changes and the acceptance gate.** The two specification changes (the identity fields
+   FR-007 requires, and the restated acceptance scenario) and the review gate itself are serial: one
+   decision at a time, each blocking the work that depends on it.
+
+The claim this section could make, that one person directing agents produces the output of a much larger
+team, is supported by the commit and line counts. The claim it should not make is that the process was
+therefore fast: the specification gates, the review rounds and the acceptance testing stay serial and
+human, and they were the majority of the elapsed time.
 
 ### 7.1 Benefits of AI-Assisted SDD
 
-What worked, with evidence, and how much time the construction phase gained.
+What worked, with the measurement or the artifact that shows it:
+
+- **The specification became the interface between the human and the agents.** 53 tasks, each with a file
+  list, a constraint list and a verification method, meant an implementation session could be handed over
+  and reviewed afterwards rather than dictated. Commits per session rose from a handful in the scaffold
+  session to five to eight in the implementation rounds.
+- **Tests written from the requirement rather than from the code.** Because the requirement text was the
+  input, the corpus harness and the boundary tests exist at the level the requirement is stated: for
+  example the noise floor has a test for a difference exactly at the floor and one level past it, which is
+  a test nobody writes from reading the implementation.
+- **Review in a separate context is cheap and effective.** Five rounds, 36 findings, no authoring context
+  shared. The cost is minutes of wall clock per round, and the value is measured by what the findings
+  would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
+  in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
+  until the corpus reached 5,000 pairs.
+- **Documentation kept pace with the code.** 2,025 lines of specification, research notes, plan and
+  decision records against 5,409 lines of Go, because every non-obvious rule had to be written down to be
+  implemented, and the writing was cheap once the decision was made.
+
+How much time construction gained is hard to state honestly, so the report gives the count that can be
+verified instead: 5,409 lines of implementation and 4,755 lines of test in two working days, with a
+specification and a review trail that a reader can audit. The comparison that matters is not lines per
+hour but defects per requirement: 37 recorded findings across 32 requirements, of which 35 are fixed, is a
+rate that only holds because the review was as cheap as it was.
 
 ### 7.2 Core Bottlenecks and Challenges
 
-Where the paradigm struggled: context limits, drift from the specification,
-hallucinated dependencies, inconsistency across the codebase. For each, how it
-was overcome.
+| Challenge | How it showed up | How it was overcome |
+|---|---|---|
+| Context limits | A review of the whole repository at once produced shallow findings; an implementation session that tried to hold the specification, the plan and the code drifted | Work sliced by task, reviews bounded to a commit range with numbered claims, and the durable state kept in the repository rather than in a conversation |
+| Drift from the specification | Two requirements were phrased as design ("use a tile grid"), which would have made a later optimisation a requirement change | Requirements were rewritten as observable behaviour, and the traceability check keeps a requirement from existing without a task and a test |
+| The evidence claiming more than the code did | Three defects in the measurement itself, each of the same kind: a green result that measured less than it claimed | Every measurement is now defeated deliberately before it is believed, and the rule is written into the prompt for each measurement round |
+| A second memory of the same thing | The classifier kept its own copy of where the elements were, and the two copies disagreed | The identity map owns the geometry and the classifier reads it; the duplication was removed rather than reconciled |
+| An undecidable question treated as decidable | A cover and a content change are the same rectangle, and the first implementation answered as if it knew | The question is now stated as undecidable in one frame pair (R17), answered with evidence rather than proof, and the residual boundaries are in the contract |
+| Solo review blindness | The first eleven code commits went in with no independent review, and an author reviewing their own diff approves it | The review gate became a rule, and the authoring and review passes run in different contexts on different surfaces |
+
+The most expensive challenge was the third, not because it was the hardest technically but because it was
+the one that would have made the report wrong rather than the code wrong: a measurement that reports
+success while measuring nothing is worse than a failing one, because it is believed.
 
 ### 7.3 Lessons Learned and Best Practices
 
-Critically evaluate the process, support each claim with a concrete example from
-this project, and compare vibe coding with SDD using evidence rather than
-preference. End with actionable practices for the next team.
+Each claim is attached to something in this project rather than to a general principle.
+
+1. **Write the requirement so a test can fail it.** The success criteria that were rewritten from "fast" to
+   "p95 at or below 12 ms per 1080p frame pair on one core" are the ones that eventually failed and were
+   fixed; the vague ones would have passed by definition.
+2. **State what the system cannot know.** The distinction between an observation (a region changed) and an
+   inference (this is the same element) produced the identity confidence and the uncertainty flag, which is
+   the most defensible part of the contract. It also produced the honest no: a cover and a content change
+   are the same rectangle, and the engine says so.
+3. **Try to defeat your own measurement before believing it.** Three of the 26 recorded defects were found
+   this way, and none by reading code. The version of this rule that generalises: for every green result,
+   construct the wrong implementation that would also produce it, and check that it fails.
+4. **One memory of one fact.** The classifier and the identity map both kept the element geometry, and the
+   defect that survived longest came from the disagreement. Duplication in state costs more than
+   duplication in code.
+5. **Review in a different context, with a brief that demands a counterexample.** A review prompt that asks
+   for correctness returns style; one that numbers the claims and requires a demonstrating case per finding
+   returns defects. Five rounds, 36 findings, and the two most valuable were about the evidence rather than
+   the code.
+6. **Keep the specification in the repository, and let it be wrong sometimes.** Both specification changes
+   in this project were corrections, made in their own commits with the reason, and the history of being
+   wrong is more useful to a reader than a document that was always right because it was written last.
+7. **Vibe coding and SDD are not a spectrum with a middle.** The unstructured phase was useful for exactly
+   three bounded things and useless for the code. Where a deliverable is graded on process and verified
+   against a contract, the specification is not overhead: it is the only thing that made the leverage
+   legible, and the review rounds are what made it trustworthy.
 
 ### 7.4 Proposed Specification-Driven Development Workflow
 
-A reusable workflow, not a description of this project. For each phase state the
-objective, activities, inputs, outputs and deliverables, mark where AI assistance
-belongs and where human judgement is required, and justify the design from the
-evidence above. Include the process diagram required by the template.
+A reusable workflow, derived from what worked here and from what did not. The diagram is
+`docs/process/sdd-workflow.svg`.
+
+| Phase | Objective | Activities | Inputs | Outputs | AI assistance | Human judgement |
+|---|---|---|---|---|---|---|
+| 0. Frame the decision | Choose what to build, under the real constraints | Explore candidates against the constraints the owner actually has; write the decision record | The constraint list, the grading or the business rule | An ADR and a rejected-alternatives list | Drafting candidates and tradeoffs | The choice, and naming the constraint before exploring |
+| 1. Constitution | Fix the rules every later session reads | Write the principles, the identifiers, the gate conditions | The ADR from phase 0 | `.specify/memory/constitution.md` | Drafting, and checking the rules are testable | Which rules are non-negotiable |
+| 2. Specify | State what the system must do, measurably | User stories in priority order, functional requirements as observable behaviour, non-functional requirements with a target and a method | The constitution | `spec.md` | Drafting, and generating the boundary cases | Rewriting requirements that name a design; making every criterion measurable |
+| 3. Clarify | Answer the questions the specification left open | Run the clarification command; for each open question either decide or record it as research | `spec.md` | Requirements notes, research items | Asking the questions | Every answer: this is where the design is really decided |
+| 4. Contract | Fix the interfaces before the code | Data model, interface contract, schema, exit codes | `spec.md` and the answers | `contracts/`, `data-model.md` | Drafting the schema and the validator | The rules a consumer depends on, and the boundaries stated explicitly |
+| 5. Plan and analyse | Derive the work and check it for inconsistencies | Plan, then the analyzer; resolve or record every finding | The contract | `plan.md`, `tasks.md`, an analyze report | Generating the task list; the analyzer's cross-checks | Judging which findings matter; refusing to write code without a task |
+| 6. Implement in slices | Build one slice at a time, verified | Task by task, tests from the requirement, one logical commit per change with the requirement and task trailers | `tasks.md` | Code, tests, commits | Writing the implementation and the tests | Reviewing every diff; deciding when a task is done |
+| 7. Verify by measurement | Turn every target into a number and every claim into evidence | Build the harness, run it, record raw output, defeat it deliberately | The non-functional requirements and `docs/vv/plan.md` | Evidence files, the results table | Building the harness | Fixing the engine rather than the target; setting the sample size |
+| 8. Review in a separate context | Falsify the slice before it is called done | Numbered claims, a read-only brief, a demonstrating case required per finding | The commit range and the specification | Findings with severity, and fixes with tests | The review pass itself, in a context that never saw the authoring | Deciding what to fix, and what to record as inherent |
+| 9. Accept | Check the system works for someone who did not build it | An acceptance script run by external testers, and a second consumer written against the schema alone | The README and the contract | Acceptance results, a consumer's issues | Drafting the script | Running it with a real user and believing the result |
+| 10. Converge | Close the gap between the specification and what was built | Compare, list the gaps, decide for each whether to build it, change the requirement or record it | Everything above | The final report and the traceability matrix | The comparison | The final honest accounting |
+
+Two design choices in the workflow are deliberate and were paid for here. The review phase sits *between*
+implementation and done rather than at the end, because a defect found in a slice costs one round and the
+same defect found in the report costs a rewrite of the claim; and the measurement phase sits before the
+review, because the review's most valuable output in this project was about the measurement rather than
+the code.
 
 ## Appendix: Evidence Index
 
-| Evidence | Location |
-|---|---|
-| Specification, plan, tasks | `specs/001-<slug>/` |
-| Prompt records | `docs/prompt-log/` |
-| Analyze reports | `docs/analysis/` |
-| V&V plan, results, raw output | `docs/vv/` |
-| Requirement traceability | `docs/traceability.md` |
-| Decisions and deviations | `docs/adr/` |
-| Process definition | `.specify/memory/constitution.md`, `CONTRIBUTING.md`, `AGENTS.md` |
+| Evidence | Location | What a reader can do with it |
+|---|---|---|
+| Specification, plan, research, data model, contracts, tasks | `specs/001-frame-delta-engine/` | Read the source of truth the agents were given, including the decisions and their reasons (R1 to R19 in `research.md`) |
+| Requirement traceability matrix | `docs/traceability.md` | Check every requirement against its task, its test and its evidence; the three limits of the check are stated at the top of the file |
+| Prompt records, per session | `docs/prompt-log/` | Read the verbatim prompts, what was expected, what happened, and what was corrected; `iteration-log.md` is the failure table |
+| Analyzer reports | `docs/analysis/` | See the five inconsistencies the analyzer found and what happened to each |
+| V&V plan, audit log, results, raw output | `docs/vv/` | Read the plan written before implementation, the classified audit log, the running results table, and the raw output of every measurement under `evidence/` |
+| Decisions and deviations | `docs/adr/` | Read why Spec Kit, why a frame delta engine, and why Go |
+| Process definition | `.specify/memory/constitution.md`, `CONTRIBUTING.md`, `AGENTS.md` | Read the rules the process ran under, including the commit granularity rule and the review policy |
+| Workflow diagram | `docs/process/sdd-workflow.svg` | The feature workflow this repository committed to, referenced by section 7.4 |
+| Acceptance script | `docs/vv/acceptance.md` | The script for the external tester, which is written and not yet run |
+
+Reproducing every number in this report, in one block:
+
+```bash
+make check          # requirement traceability, and the process gate
+make accuracy       # corpus scoring: precision, recall, F1, false removals
+make perf           # latency percentiles and throughput on one core
+make memcheck       # 10,000 frames at 1080p, resident and heap, allocation steady state
+go test -cover ./internal/diff/... ./internal/identity/... ./internal/fingerprint/... ./internal/stream/...
+git log --oneline --grep='Req:'   # the code-to-requirement links
+```
+
+Every command in that block was run to produce the numbers above, and each of the measurements was also
+run against a deliberately wrong implementation to confirm it fails.
+
