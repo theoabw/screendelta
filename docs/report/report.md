@@ -42,8 +42,8 @@ Verification is measurement rather than assertion. The engine scores F1 1.0000 w
 requirement, sustains 79.2 frame pairs per second against 30, and holds a 24.0 MiB peak heap over 10,000
 frames against a 128 MiB ceiling. 26 of 32 requirements are verified with committed tests and
 recorded output; the rest are in progress, and the report says which and why. Thirty-five defects were
-found and recorded, of which 33 are fixed, one is documented as inherent to a pixel-only stage, and one
-remains open.
+found and recorded, of which 34 are fixed, and one is documented as inherent to a pixel-only stage with
+its reason.
 
 ## 1. Introduction and Paradigm Shift (3 points)
 
@@ -111,8 +111,8 @@ design rather than the wording become ADRs; deviations that change a requirement
 
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: 80 commits, 5409 lines of Go and
-4755 lines of test, with the specification, plan and task list written before the code they describe.
+is graded on what the process produced rather than on how long it took: 90 commits, 6,153 lines of Go and
+5,813 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
 
@@ -501,9 +501,12 @@ in progress and the matrix says which, and the honest summary of the gap is this
 - **One is a demonstration rather than a measurement**: SC-004 (sustained decision rate), which the demo
   pipeline is intended to produce.
 
-Two defects remain open. AUD-022 is described above. AUD-021 is a decoder that accepts a document missing
-the required identity fields, because a missing JSON field becomes a valid zero value in Go; the engine
-always emits them, so the exposure is a library consumer reading a document from somewhere else.
+One defect is documented as inherent rather than fixed: an element that disappears from exactly the
+footprint it occupied looks identical to a content change, and the engine reports a change, because the
+evidence that would justify a removal also fires on a subtle repaint whose fill resembles its surroundings
+and a false removal is what the noise corpus exists to catch. Every other defect found in this project is
+fixed, including the decoder that accepted a document missing the required identity fields: presence is now
+checked against the raw JSON before the struct is built.
 
 ### 6.1 Version Control and Prompt Integration
 
@@ -549,9 +552,9 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 80 commits in two days, 5409 lines of Go against 4755 lines
-of test and 4230 lines of specification, plan and process documents, 53 planned tasks of which 21 are
-complete, 32 requirements of which 12 are verified, and 37 recorded defects of which 35 are fixed. The
+Leverage, quantified rather than asserted: 90 commits in two days, 6,153 lines of Go against 5,813 lines
+of test and 4,436 lines of specification, plan and process documents, 53 planned tasks of which 21 are
+complete, 32 requirements of which 26 are verified, and 46 recorded findings of which 45 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
 Where the human was the bottleneck is the honest part of this section, and there are three places:
@@ -588,14 +591,14 @@ What worked, with the measurement or the artifact that shows it:
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 2,025 lines of specification, research notes, plan and
-  decision records against 6000 lines of Go, because every non-obvious rule had to be written down to be
+- **Documentation kept pace with the code.** 4,436 lines of specification, research notes, plan and
+  decision records against 6,153 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
-verified instead: 5409 lines of implementation and 4755 lines of test in two working days, with a
+verified instead: 6,153 lines of implementation and 5,813 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
-hour but defects per requirement: 46 recorded findings across 32 requirements, of which 44 are fixed, is a
+hour but defects per requirement: 46 recorded findings across 32 requirements, of which 45 are fixed, is a
 rate that only holds because the review was as cheap as it was.
 
 ### 7.2 Core Bottlenecks and Challenges
