@@ -100,8 +100,12 @@ func Parse(r io.Reader) (Config, error) {
 		}
 	}
 
-	// Exact key checking happens before decoding, because the decoder matches keys
-	// case-insensitively and would accept "gridsize" for "gridSize".
+	// The token walk runs first: it catches duplicate members and null values, which a
+	// map based check cannot see. Then the exact key check, because the decoder matches
+	// keys case-insensitively and would accept "gridsize" for "gridSize".
+	if err := checkMembers(raw); err != nil {
+		return Config{}, err
+	}
 	if err := checkKeys(raw); err != nil {
 		return Config{}, err
 	}

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
+	"sort"
 	"strings"
 )
 
@@ -17,6 +19,82 @@ var (
 	boundsKeys      = []string{"x", "y", "w", "h"}
 	roiKeys         = []string{"label", "bounds"}
 )
+
+// checkMembers walks the raw token stream and rejects two things a map cannot see:
+// a member repeated in the same object, because the last one silently wins, and a null
+// value, because a typed field has no meaning for null and a reader would rather be
+// told than have it treated as absent.
+//
+// This runs before the map based key check because converting an object to a map
+// destroys the evidence of a duplicate.
+func checkMembers(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := walkMembers(decoder, "config"); err != nil {
+		return err
+	}
+	// A second document in the same input is a caller mistake, not a configuration.
+	if _, err := decoder.Token(); err == nil {
+		return &FieldError{
+			Op:      "config.Parse",
+			Subject: "config",
+			Field:   "document",
+			Problem: "must contain exactly one configuration object",
+		}
+	}
+	return nil
+}
+
+func walkMembers(decoder *json.Decoder, path string) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return &FieldError{Op: "config.Parse", Subject: "config", Field: path, Problem: "cannot parse: " + err.Error()}
+	}
+
+	delimiter, isDelimiter := token.(json.Delim)
+	if !isDelimiter {
+		if token == nil {
+			return &FieldError{Op: "config.Parse", Subject: "config", Field: path, Problem: "must not be null"}
+		}
+		return nil
+	}
+
+	switch delimiter {
+	case '{':
+		seen := make(map[string]bool)
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return &FieldError{Op: "config.Parse", Subject: "config", Field: path, Problem: "cannot parse: " + err.Error()}
+			}
+			key, _ := keyToken.(string)
+			if seen[key] {
+				return &FieldError{
+					Op:      "config.Parse",
+					Subject: "config",
+					Field:   path,
+					Problem: "duplicate key " + quote(key) + ", the earlier value would be ignored",
+				}
+			}
+			seen[key] = true
+			if err := walkMembers(decoder, path+"."+key); err != nil {
+				return err
+			}
+		}
+		_, err := decoder.Token()
+		return err
+	case '[':
+		index := 0
+		for decoder.More() {
+			if err := walkMembers(decoder, path+"["+itoa(index)+"]"); err != nil {
+				return err
+			}
+			index++
+		}
+		_, err := decoder.Token()
+		return err
+	}
+	return nil
+}
 
 // checkKeys walks the raw document and rejects any key that is not in the schema.
 func checkKeys(raw []byte) error {
@@ -105,18 +183,24 @@ func checkRegionsOfInterest(root map[string]json.RawMessage) error {
 }
 
 func checkObject(where string, object map[string]json.RawMessage, allowed []string) error {
+	// Sorted so that a document with several unknown keys always reports the same one,
+	// rather than whichever the map happened to yield first.
+	unknown := make([]string, 0, len(object))
 	for key := range object {
-		if contains(allowed, key) {
-			continue
-		}
-		return &FieldError{
-			Op:      "config.Parse",
-			Subject: "config",
-			Field:   where,
-			Problem: unknownKeyProblem(key, allowed),
+		if !contains(allowed, key) {
+			unknown = append(unknown, key)
 		}
 	}
-	return nil
+	if len(unknown) == 0 {
+		return nil
+	}
+	sort.Strings(unknown)
+	return &FieldError{
+		Op:      "config.Parse",
+		Subject: "config",
+		Field:   where,
+		Problem: unknownKeyProblem(unknown[0], allowed),
+	}
 }
 
 func unknownKeyProblem(key string, allowed []string) string {

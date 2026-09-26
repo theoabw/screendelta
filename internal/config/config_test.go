@@ -172,3 +172,68 @@ func TestParseRejectsUnknownKeysInsideArrays(t *testing.T) {
 		}
 	}
 }
+
+func TestParseRejectsDuplicateMembers(t *testing.T) {
+	// The review case: the second object would have replaced the first in the map, and
+	// the struct decoder then accepts the miscased key inside the discarded one.
+	cases := []string{
+		`{"noiseFloor":0.1,"noiseFloor":0.5}`,
+		`{"fingerprint":{"gridsize":8},"fingerprint":{}}`,
+		`{"output":{"prety":true},"output":{}}`,
+		`{"regionsOfInterest":[{"label":"a","label":"b","bounds":{"x":0,"y":0,"w":0.1,"h":0.1}}]}`,
+	}
+	for _, body := range cases {
+		_, err := Parse(strings.NewReader(body))
+		if err == nil {
+			t.Fatalf("Parse accepted a duplicate member: %s", body)
+		}
+		if !strings.Contains(err.Error(), "duplicate key") {
+			t.Fatalf("error does not explain the duplicate: %q", err.Error())
+		}
+	}
+}
+
+func TestParseRejectsNullValues(t *testing.T) {
+	cases := []string{
+		`null`,
+		`{"output":null}`,
+		`{"noiseFloor":null}`,
+		`{"regionsOfInterest":null}`,
+	}
+	for _, body := range cases {
+		_, err := Parse(strings.NewReader(body))
+		if err == nil {
+			t.Fatalf("Parse accepted null in %s", body)
+		}
+		if !strings.Contains(err.Error(), "null") {
+			t.Fatalf("error does not mention null: %q", err.Error())
+		}
+	}
+}
+
+func TestUnknownKeyDiagnosticsAreDeterministic(t *testing.T) {
+	body := `{"aaa":1,"bbb":2,"ccc":3}`
+	first := ""
+	for attempt := 0; attempt < 200; attempt++ {
+		_, err := Parse(strings.NewReader(body))
+		if err == nil {
+			t.Fatal("Parse accepted unknown keys")
+		}
+		if first == "" {
+			first = err.Error()
+			continue
+		}
+		if err.Error() != first {
+			t.Fatalf("diagnostic changed between runs:\n%s\n%s", first, err.Error())
+		}
+	}
+	if !strings.Contains(first, "aaa") {
+		t.Fatalf("diagnostic should report the first unknown key in order: %q", first)
+	}
+}
+
+func TestParseRejectsTrailingDocuments(t *testing.T) {
+	if _, err := Parse(strings.NewReader(`{"noiseFloor":0.1}{"noiseFloor":0.2}`)); err == nil {
+		t.Fatal("Parse accepted two configuration documents in one input")
+	}
+}
