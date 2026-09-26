@@ -1,5 +1,6 @@
 stages:
   - verify
+  - test
 
 spec-traceability:
   stage: verify
@@ -13,5 +14,32 @@ spec-traceability:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH
 
-# The test job is added once the technology stack is selected, so that this file
-# never reports a green pipeline for a suite that does not exist yet.
+# The Go jobs run against ./... rather than a named package, so that they are green
+# on an empty tree and become meaningful the moment code lands. The language level
+# in go.mod is 1.24, and this image pins that level deliberately: a build that only
+# works on a newer toolchain than the module claims is a defect.
+
+go-test:
+  stage: test
+  image: golang:1.24
+  script:
+    - go build ./...
+    - go vet ./...
+    - go test ./...
+    - go test -coverprofile=coverage.txt ./internal/diff/... ./internal/identity/... ./internal/fingerprint/...
+    - go tool cover -func=coverage.txt | tail -1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# NFR-008 requires the engine to run on Linux and Windows, and the target users are
+# on Windows desktops, so the cross-build is a gate rather than a release step.
+go-cross-build:
+  stage: test
+  image: golang:1.24
+  script:
+    - GOOS=linux GOARCH=amd64 go build -o /tmp/screendelta-linux-amd64 ./...
+    - GOOS=windows GOARCH=amd64 go build -o /tmp/screendelta-windows-amd64.exe ./...
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
