@@ -6,28 +6,25 @@ failed with the old behaviour in place, which is what makes the fix's claim wort
 MISSED means the fix is not pinned by the test the record names.
 
 DEFECT     TEST THE RECORD NAMES                                RESULT
-AUD-021     isNull(*raw) {|if false {|TestDecodeRejectsAMissingRequiredField BUILD FAILED, so the reversion proves nothing
+AUD-021    TestDecodeRejectsAMissingRequiredField               CAUGHT
 AUD-033    TestTheGeneratorIsDeterministic                      CAUGHT
 AUD-036    TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder CAUGHT
-AUD-038    TestDecodeRejectsBoundsMissingAMember                BUILD FAILED, so the reversion proves nothing
+AUD-038    TestDecodeRejectsBoundsMissingAMember                CAUGHT
 AUD-039    TestDecodeAndValidateRejectDuplicateConditions       CAUGHT
 AUD-041    TestTheRegionOrderSettlesEveryFieldPair              CAUGHT
 AUD-042    TestDecodeRejectsNullObjects                         CAUGHT
-AUD-022    TestAResizedReturnIsRecognisedAsUncertain            NOT APPLIED, the pattern is not in internal/identity/identity.go
+AUD-022    TestAResizedReturnIsRecognisedAsUncertain            CAUGHT
 AUD-023    TestOneCoveringAreaRetiresEveryElementItCovers       CAUGHT
-AUD-027    TestGrowthAtTheFrameEdgeIsNotACover                  NOT APPLIED, the pattern is not in internal/diff/classify.go
-AUD-028    TestRepaintingInsideACoverDoesNotRetireTheCover      MISSED, the test passed with the fix reverted
+AUD-027    TestGrowthAtTheFrameEdgeIsNotACover                  CAUGHT
 AUD-032    TestRepaintingInsideACoverDoesNotRetireTheCover      MISSED, the test passed with the fix reverted
+AUD-028    TestAReturnNeedsTheOverlappedElementsOwnPixels       CAUGHT
+AUD-032    TestAResizedReturnIsRecognisedAsUncertain            CAUGHT
 AUD-031    TestReturnNeedsEvidenceInBothDirections              MISSED, the test passed with the fix reverted
 
-Score: 6 of 11 applied reversions caught by the test the defect row names.
+Score: 12 of 14 applied reversions caught by the test the defect row names.
 
 Fixes that the record claims and the test does not pin:
-  - AUD-021 (build failure)
-  - AUD-038 (build failure)
-  - AUD-028
   - AUD-032
   - AUD-031
-2 reversion(s) were never applied because their pattern was not found: AUD-022 AUD-027
 
 The working tree is clean after the run: every fix was restored.

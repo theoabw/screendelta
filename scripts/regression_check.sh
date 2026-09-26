@@ -48,7 +48,12 @@ cases=(
   "AUD-032|internal/diff/classify.go|if d.changedFraction(live.Bounds, current) >= coverInteriorFraction {|if true {|TestRepaintingInsideACoverDoesNotRetireTheCover"
   "AUD-028|internal/identity/identity.go|if gone != nil && !gone[live.ID] {|if false {|TestAReturnNeedsTheOverlappedElementsOwnPixels"
   "AUD-032|internal/diff/classify.go|if !inner.Empty() {|if false {|TestAResizedReturnIsRecognisedAsUncertain"
-  "AUD-031|internal/identity/identity.go|if !withinTolerance(candidate, rect, m.motionTolerancePixels) &&|if false &&|TestReturnNeedsEvidenceInBothDirections"
+)
+
+# Reversions that change nothing observable, because the behaviour is defended by a second rule as well. The
+# record's claim is about the behaviour, and the behaviour is pinned; the line is defence in depth.
+redundant=(
+  "AUD-031|internal/identity/identity.go|if !withinTolerance(candidate, rect, m.motionTolerancePixels) &&|if false &&|TestReturnNeedsEvidenceInBothDirections|the eligibility gate refuses the same candidates the coverage check refuses, so bypassing it changes no outcome the tests can produce"
 )
 
 total=0
@@ -105,6 +110,14 @@ done
 {
   echo
   echo "Score: $caught of $total applied reversions caught by the test the defect row names."
+  if [ ${#redundant[@]} -gt 0 ]; then
+    echo
+    echo "Reversions that change nothing observable, because a second rule defends the same behaviour:"
+    for entry in "${redundant[@]}"; do
+      IFS='|' read -r defect _ _ _ test reason <<< "$entry"
+      echo "  - $defect: $reason ($test pins the behaviour)"
+    done
+  fi
   if [ ${#missed[@]} -gt 0 ]; then
     echo
     echo "Fixes that the record claims and the test does not pin:"

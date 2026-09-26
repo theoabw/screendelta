@@ -1174,3 +1174,38 @@ func TestTheDefaultAreaFloorFiltersASmallChange(t *testing.T) {
 		t.Fatal("the change is invisible even with the area floor lowered, so this test does not test the floor")
 	}
 }
+
+// TestThePixelEvidenceIgnoresTheGrowthRing pins the measurement that decides whether an element's own pixels
+// changed.
+//
+// A reported region is grown by a margin, and an element is remembered with that grown rectangle, so the ring
+// around the element belongs to the background and never changes. Measuring the whole footprint therefore makes an
+// element that changed entirely look as though a fifth of it had stayed still, which is what let a resized return
+// go unrecognised. The regression check found that the return test no longer pinned this, because the scenario it
+// uses no longer has a ring wide enough to matter, so the measurement is asserted directly.
+func TestThePixelEvidenceIgnoresTheGrowthRing(t *testing.T) {
+	width, height := 320, 240
+	// A ten by ten change, and the element remembered with the fourteen by fourteen rectangle the margin produces
+	// around it.
+	changed := panel{x: 100, y: 100, w: 10, h: 10, value: 200}
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{changed}),
+	}
+
+	differ := New()
+	if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+
+	fw, fh := float64(width), float64(height)
+	inner := delta.Bounds{X: 100 / fw, Y: 100 / fh, W: 10 / fw, H: 10 / fh}
+	whole := delta.Bounds{X: 98 / fw, Y: 98 / fh, W: 14 / fw, H: 14 / fh}
+
+	if got := differ.changedFraction(inner, frames[1]); got != 1 {
+		t.Fatalf("the changed interior measured %v, want 1", got)
+	}
+	if got := differ.changedFraction(whole, frames[1]); got != 1 {
+		t.Fatalf("the footprint with its growth ring measured %v, want 1: the ring belongs to the background, and counting it says an element that changed entirely did not", got)
+	}
+}
