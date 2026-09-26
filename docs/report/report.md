@@ -112,8 +112,8 @@ project did not write implementation code that way. The specification-driven wor
 
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: 96 commits, 6,153 lines of Go and
-5,813 lines of test, with the specification, plan and task list written before the code they describe.
+is graded on what the process produced rather than on how long it took: 99 commits, 6,153 lines of Go and
+5,899 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
 
@@ -388,13 +388,13 @@ The workflow as actually followed, with the gate that ends each step:
 | 8 | `/speckit.implement`, task by task | Code, tests, evidence | `make check` (traceability, format, vet, tests) before any commit; an independent review before a slice is called done |
 | 9 | `/speckit.converge` (not yet used) | A gap list | Planned for the endgame, once the acceptance testing has run |
 
-Two deviations from the comfortable path are worth recording. First, the implementation started before the
+Three deviations from the comfortable path are worth recording. First, the implementation started before the
 whole task list was written: the frame, error and document types existed while tasks 20 onwards were still
 being refined, because the interfaces they define had to be real before the plan could say anything true
 about them. The task list was updated in the same round. Second, the review gate was added after the fact:
 eleven code commits went in without an independent review, which the audit log records as a process
 failure, and the standing rule since is that a slice is not finished until a review in a separate context
-has tried to break it. That rule has since found 36 findings across five rounds.
+has tried to break it. That rule has since found 46 findings across six rounds.
 
 ### 4.5 Prompts
 
@@ -559,8 +559,8 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 96 commits in two days, 6,153 lines of Go against 5,813 lines
-of test and 4,436 lines of specification, plan and process documents, 53 planned tasks of which 21 are
+Leverage, quantified rather than asserted: 99 commits in two days, 6,153 lines of Go against 5,813 lines
+of test and 4,661 lines of specification, plan and process documents, 53 planned tasks of which 52 are
 complete, 33 requirements of which 29 are verified, and 46 recorded findings of which 45 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
@@ -598,12 +598,12 @@ What worked, with the measurement or the artifact that shows it:
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 4,436 lines of specification, research notes, plan and
+- **Documentation kept pace with the code.** 4,661 lines of specification, research notes, plan and
   decision records against 6,153 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
-verified instead: 6,153 lines of implementation and 5,813 lines of test in two working days, with a
+verified instead: 6,153 lines of implementation and 5,899 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
 hour but defects per requirement: 46 recorded findings across 33 requirements, of which 45 are fixed, is a
 rate that only holds because the review was as cheap as it was.
