@@ -382,9 +382,11 @@ func TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder(t *testing.T) {
 	// The published five keys do not settle a pair that agrees on all of them, which two regions of one element
 	// can: the same place, the same identity, the same size, different classes. Mutation testing found that
 	// nothing exercised that tie, so the tie-breakers that settle it were undefended.
-	// Neither tie-breaker settles such a pair on its own: a pair differing only in class leaves area undecided,
-	// and a pair differing only in area leaves class undecided. Mutation testing found both, one at a time, each
-	// masked by the other, so the cases are separate here.
+	// Each case differs in exactly one field. That is not decoration: a pair differing in two fields is decided
+	// by the one that comes later in the comparison, so a mutation to the earlier key is invisible. Mutation
+	// testing found this twice, once when the class case also differed in area and once when it also differed in
+	// magnitude, and both times the surviving mutation was the sign that the test proved one thing and looked
+	// like it proved two.
 	tied := []struct {
 		name  string
 		pairs [2]Region
@@ -392,7 +394,7 @@ func TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder(t *testing.T) {
 		{name: "differing in class at the same size",
 			pairs: [2]Region{
 				{Identity: 3, Class: ClassChanged, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 100, IdentityConfidence: 1},
-				{Identity: 3, Class: ClassAdded, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.6, AreaPixels: 100, IdentityConfidence: 1},
+				{Identity: 3, Class: ClassAdded, Bounds: Bounds{X: 0.5, Y: 0.5, W: 0.1, H: 0.1}, Magnitude: 0.4, AreaPixels: 100, IdentityConfidence: 1},
 			}},
 		{name: "differing in area in the same class",
 			pairs: [2]Region{
