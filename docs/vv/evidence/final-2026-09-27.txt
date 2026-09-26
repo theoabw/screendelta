@@ -23,12 +23,12 @@ go test ./internal/score/... -run TestCorpus -count=1 -v
     corpus_test.go:147: sweep: 5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
 === NAME  TestCorpus
     corpus_test.go:180: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
---- PASS: TestCorpus (13.44s)
+--- PASS: TestCorpus (13.52s)
     --- PASS: TestCorpus/changed-label (0.00s)
     --- PASS: TestCorpus/moving-button (0.03s)
-    --- PASS: TestCorpus/occluded-button (0.00s)
-    --- PASS: TestCorpus/noise (0.22s)
-    --- PASS: TestCorpus/sweep (13.18s)
+    --- PASS: TestCorpus/occluded-button (0.01s)
+    --- PASS: TestCorpus/noise (0.24s)
+    --- PASS: TestCorpus/sweep (13.23s)
 PASS
 exit=0
 
@@ -36,30 +36,30 @@ exit=0
 SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 === RUN   TestLatencyPercentiles
     perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
-    perf_test.go:237: mean 8.45 ms, p50 8.41 ms, p90 9.03 ms, p95 9.42 ms, p99 12.31 ms, worst 14.81 ms, fastest 6.66 ms
+    perf_test.go:237: mean 8.50 ms, p50 8.53 ms, p90 9.09 ms, p95 9.42 ms, p99 9.98 ms, worst 12.79 ms, fastest 6.72 ms
     perf_test.go:239: 456 of 460 frames reported at least one region
---- PASS: TestLatencyPercentiles (5.60s)
+--- PASS: TestLatencyPercentiles (5.63s)
 === RUN   TestLatencyOnALargerChange
-    perf_test.go:291: 1920x1080, large change, one core: p50 38.20 ms, p95 41.04 ms, p99 41.31 ms
+    perf_test.go:291: 1920x1080, large change, one core: p50 37.97 ms, p95 40.44 ms, p99 40.76 ms
     perf_test.go:293: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
---- PASS: TestLatencyOnALargerChange (5.90s)
+--- PASS: TestLatencyOnALargerChange (5.85s)
 === RUN   TestThroughput
-    perf_test.go:316: sustained 77.8 frame pairs per second on one core (300 pairs in 3.857s)
---- PASS: TestThroughput (3.86s)
+    perf_test.go:316: sustained 78.1 frame pairs per second on one core (300 pairs in 3.841s)
+--- PASS: TestThroughput (3.84s)
 PASS
 exit=0
 
 == make memcheck ==
 go test ./internal/stream/... -run 'TestMemoryCeiling|TestAllocationsDoNotGrowWithStreamLength' -count=1 -v
 === RUN   TestAllocationsDoNotGrowWithStreamLength
-    memory_test.go:130: bytes allocated per frame: first window 8225, second window 8220
+    memory_test.go:130: bytes allocated per frame: first window 8220, second window 8222
 --- PASS: TestAllocationsDoNotGrowWithStreamLength (0.04s)
 === RUN   TestMemoryCeiling
-    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.458s
-    memory_test.go:202: peak heap 25201784 bytes (24.0 MiB), engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 26386432 bytes (25.2 MiB)
-    memory_test.go:208: heap at frame 1000: 25201672 bytes, at frame 10000: 25201784 bytes
---- PASS: TestMemoryCeiling (2.46s)
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.723s
+    memory_test.go:202: peak heap 25201096 bytes (24.0 MiB), engine buffers 16588800 bytes
+    memory_test.go:204: peak resident 26587136 bytes (25.4 MiB)
+    memory_test.go:208: heap at frame 1000: 25201080 bytes, at frame 10000: 25201096 bytes
+--- PASS: TestMemoryCeiling (2.72s)
 PASS
 exit=0
 
@@ -75,8 +75,8 @@ exit=0
 capture: frames written: 8
 go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
 source corpus/real, 8 frames replayed 20 times, 160 frames processed
-capture 1280x720, elapsed 418ms
-frames per second 382.8, decisions 119, decisions per second 284.7
+capture 1280x720, elapsed 420ms
+frames per second 381.2, decisions 119, decisions per second 283.5
 exit=0
 
 == coverage of the measured modules ==
@@ -90,7 +90,7 @@ vet diagnostics: 0
 python3 scripts/check_traceability.py --require-specs
 traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
 python3 scripts/check_report.py
-repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '131', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '132', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
 
 
 every claim in the report and the README holds against this commit
@@ -98,4 +98,5 @@ exit=0
 
 == verdict ==
 9 checks run, 0 failed, including the process gate above.
-the working tree is not clean, so the record describes a tree that is not this commit
+the working tree is not clean, so the record describes a tree that is not this commit:
+ M scripts/final_verify.sh

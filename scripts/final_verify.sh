@@ -80,8 +80,12 @@ mv "$temporary" "$output"
   run "make check-strict" make check-strict
   echo "== verdict =="
   echo "$ran checks run, $failed failed, including the process gate above."
-  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-    echo "the working tree is not clean, so the record describes a tree that is not this commit"
+  # The record file itself is excluded: this script writes it, and counting its own output as a modification
+  # would make the sentence false every time it was true.
+  dirty=$(git status --porcelain 2>/dev/null | grep -vF -- "$output")
+  if [ -n "$dirty" ]; then
+    echo "the working tree is not clean, so the record describes a tree that is not this commit:"
+    printf '%s\n' "$dirty" | head -5
   else
     echo "the working tree was clean when the record was written"
   fi
