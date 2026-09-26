@@ -40,7 +40,7 @@ Verification is measurement rather than assertion, and every measurement was fir
 1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.65 ms per 1080p frame pair on
 one CPU core against a 12 ms target, 79.2 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
 against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
-requirements verified with a committed test and recorded output. 40 defects were found and recorded;
+requirements verified with a committed test and recorded output. 44 defects were found and recorded;
 34 are fixed and one is documented as inherent to a pixel-only stage.
 
 ## 1. Introduction and Paradigm Shift (3 points)
@@ -219,8 +219,11 @@ The engine has three interfaces, each with a contract artefact in
 The document is the important one, because it is what a later pipeline stage reads. It declares a schema
 version, carries no timing fields (so two runs are byte-identical, which is NFR-004), and states its
 ordering as part of the contract rather than as an implementation detail: regions sorted by top edge,
-then left edge, then identifier, then size, so a total order exists even for two regions that share a
-position and an identity.
+then left edge, then identifier, then size, and then every remaining field of a region, so the order is total
+rather than nearly total: two regions that agree on the published keys are separated by their class, their area,
+their magnitude, their confidence, their uncertainty flag and their optional previous bounds. Two reviews found
+this claim false before it was true, once with three keys and once with seven, which is why the comparison now
+covers the whole structure and the test has a case for each field.
 
 ### 2.6 How These Requirements and Specifications Were Created
 
@@ -309,7 +312,7 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 | "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 5,134 frame pairs scored at F1 1.0000 with every asserted class correct; 22.5 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
-attempt to pass it with a deliberately wrong implementation has failed. Three of the 40 recorded defects
+attempt to pass it with a deliberately wrong implementation has failed. Three of the 44 recorded defects
 were found by exactly that, and none of them by reading the code.
 
 ### 4.1 SDD Tool Kit
@@ -459,14 +462,14 @@ or measurement that verifies it. What it shows in summary:
 
 | Class | Count | What the class contained |
 |---|---|---|
-| Logical | 30 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
-| Compliance | 9 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation, a corpus generator that made every accuracy number irreproducible, a sample size overstated five times over, and a suite that failed while being read as a pass |
+| Logical | 32 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
+| Compliance | 11 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation, a corpus generator that made every accuracy number irreproducible, a sample size overstated five times over, and a suite that failed while being read as a pass |
 | Maintainability | 1 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
 | Security | 0 | Stated as a result rather than an omission. The engine reads local files, writes only to a path it is given and never opens a socket; the nearest item is a decoder that accepts documents missing required fields, classified as compliance because the schema is the contract being broken |
 
 The pattern worth naming is that the compliance class is the one the process had to grow a defence for, and
 the defence is not one rule but three. A measurement is not finished until an attempt to pass it with a
-deliberately wrong implementation has failed, which is how four of the 40 defects were found. The number a
+deliberately wrong implementation has failed, which is how four of the 44 defects were found. The number a
 measurement prints is not evidence until the code that prints it has been read, which is how the sample size
 turned out to be five times too large. And the exit code is the result, not the output, which is how a failing
 suite was read as a pass in the last round of this project.
@@ -569,7 +572,7 @@ people, and what replaced the missing second and third reviewers.
 
 Leverage, quantified rather than asserted: more than 100 commits in two days, 6,153 lines of Go against 5,813 lines
 of test and 4,661 lines of specification, plan and process documents, 54 planned tasks of which 53 are
-complete, 33 requirements of which 29 are verified, and 51 recorded findings of which 39 are fixed. The
+complete, 33 requirements of which 29 are verified, and 55 recorded findings of which 43 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
 Where the human was the bottleneck is the honest part of this section, and there are three places:
@@ -613,7 +616,7 @@ What worked, with the measurement or the artifact that shows it:
 How much time construction gained is hard to state honestly, so the report gives the count that can be
 verified instead: 6,153 lines of implementation and 5,899 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
-hour but defects per requirement: 51 recorded findings across 33 requirements, of which 39 are fixed, is a
+hour but defects per requirement: 55 recorded findings across 33 requirements, of which 43 are fixed, is a
 rate that only holds because the review was as cheap as it was.
 
 ### 7.2 Core Bottlenecks and Challenges
@@ -642,7 +645,7 @@ Each claim is attached to something in this project rather than to a general pri
    inference (this is the same element) produced the identity confidence and the uncertainty flag, which is
    the most defensible part of the contract. It also produced the honest no: a cover and a content change
    are the same rectangle, and the engine says so.
-3. **Try to defeat your own measurement before believing it.** Three of the 40 recorded defects were found
+3. **Try to defeat your own measurement before believing it.** Three of the 44 recorded defects were found
    this way, and none by reading code. The version of this rule that generalises: for every green result,
    construct the wrong implementation that would also produce it, and check that it fails.
 4. **One memory of one fact.** The classifier and the identity map both kept the element geometry, and the
