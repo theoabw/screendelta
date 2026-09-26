@@ -82,6 +82,12 @@ findings in `docs/vv/results.md`.
 | AUD-018 | logical | Review, round 4 | A cover was reported as a change of the covered element and inherited its identity, so the uncertainty marker was unreachable | A cover is reported as a removal of the covered element with a different identity for what arrived; a return is reported as an addition marked uncertain | `TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities`, `TestAReturnAfterACoverIsAddedUncertain` |
 | AUD-019 | logical | Review, round 4 | A disappearance leaving the same footprint looks identical to a content change | Decided against fixing, in R18: the evidence that would justify a removal also fires on a subtle repaint of an element whose fill resembles its surroundings, and a false removal is what the noise corpus exists to catch. Recorded as inherent | `TestASameFootprintDisappearanceIsReportedAsChanged` |
 | AUD-020 | logical | Review, round 4 | A partial change replaced an element's tracked footprint, so a later change in another part of it got a new identity | The footprint belongs to the identity map and evolves by translation plus new ground | `TestAPartialChangeLeavesTheFootprintIntact`, `TestAPartialChangeKeepsOneIdentity` |
+| AUD-027 | logical | Review, round 6 | An element that grew outward was retired as though something had taken its place, through the replace branch rather than the cover branch | The replace branch asks whether the element's own pixels changed, measured once per frame | `TestGrowthAtTheFrameEdgeIsNotACover` |
+| AUD-028 | logical | Review, round 6 | Repainting inside a small part of a cover was read as evidence that the whole cover had gone | A return requires the overlapped element's own pixels to have changed, which the caller measures | `TestRepaintingInsideACoverDoesNotRetireTheCover` |
+| AUD-029 | logical | Review, round 6 | A return neither named the element it displaced nor marked it used, so an unrelated change inherited its identity | The return names the displaced element as removed and marks it used | `TestAReturnDoesNotAssignItsIdentityToAnotherChange` |
+| AUD-030 | logical | Review, round 6 | A return bypassed the retirement of the other elements the same area had covered | The retirement loop runs for every candidate; the return decision only picks the area's identity | `TestOneCoveringAreaRetiresEveryElementItCovers` |
+| AUD-031 | logical | Review, round 6 | An ineligible retired candidate could win the ranking and block a valid one | Eligibility is checked before ranking | `TestReturnNeedsEvidenceInBothDirections` |
+| AUD-032 | logical | Review, round 6 | The pixel evidence included the growth margin, whose ring never changes, so a fully changed element measured as partly unchanged | The measurement runs inside the margin | the return and cover regression tests |
 | AUD-021 | compliance | Review, round 4 | `delta.Decode` accepts a document missing the identity fields, because a missing JSON field becomes a valid zero value | Open. The engine always emits them; a library consumer reading a foreign document is not protected, and the decoder strictness question is recorded for the endgame | Not fixed |
 | AUD-022 | logical | Review, round 5 | A returning element whose content occupies only part of the changed area is not recognised, and the area is reported as a confident change of the element that covered it | Open, with the fix identified: measure the appearance of the retired element's own footprint rather than of the whole changed area. A missed reacquisition, not a wrong handle | `TestAResizedReturnIsNotYetRecognised` pins it |
 | AUD-023 | logical | Review, round 5 | One covering area retired only the element it contained most completely, so other covered handles stayed live | Every element an area contains and exceeds is examined | `TestOneCoveringAreaRetiresEveryElementItCovers` |
@@ -91,8 +97,8 @@ findings in `docs/vv/results.md`.
 
 ### Reading the log
 
-Of 26 recorded findings plus the 11 from round 1: 23 are fixed, one is documented as inherent with the
-reason, and two are open with the fix identified. The classes are 30 logical, 5 compliance and 3
+Of 32 recorded findings plus the 11 from round 1: 30 are fixed, one is documented as inherent with the
+reason, and one is open with its fix identified. The classes are 30 logical, 5 compliance and 3
 maintainability, and none security. The compliance entries are the ones worth reading, because they are
 all cases where the evidence said something the code did not do, which is the failure mode this project
 spent the most effort on.

@@ -41,9 +41,9 @@ Verification is measurement rather than assertion. The engine scores F1 1.0000 w
 27,211 generated frame pairs, holds p95 latency of 9.56 ms per frame pair on one CPU core against a 12 ms
 requirement, sustains 74.9 frame pairs per second against 30, and holds a 25.2 MiB peak heap over 10,000
 frames against a 128 MiB ceiling. Twelve of 32 requirements are verified with committed tests and
-recorded output; the rest are in progress, and the report says which and why. Twenty-six defects were
-found and recorded, of which 23 are fixed, one is documented as inherent to a pixel-only stage, and two
-remain open.
+recorded output; the rest are in progress, and the report says which and why. Thirty-two defects were
+found and recorded, of which 30 are fixed, one is documented as inherent to a pixel-only stage, and one
+remains open.
 
 ## 1. Introduction and Paradigm Shift (3 points)
 
@@ -304,7 +304,7 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 | "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 27,211 pairs scored at F1 1.0000 with every asserted class correct; 22.5 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
-attempt to pass it with a deliberately wrong implementation has failed. Three of the 26 recorded defects
+attempt to pass it with a deliberately wrong implementation has failed. Three of the 32 recorded defects
 were found by exactly that, and none of them by reading the code.
 
 ### 4.1 SDD Tool Kit
@@ -449,14 +449,14 @@ or measurement that verifies it. What it shows in summary:
 
 | Class | Count | What the class contained |
 |---|---|---|
-| Logical | 30 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
+| Logical | 26 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
 | Compliance | 5 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, and three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation |
-| Maintainability | 3 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
+| Maintainability | 1 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
 | Security | 0 | Stated as a result rather than an omission. The engine reads local files, writes only to a path it is given and never opens a socket; the nearest item is a decoder that accepts documents missing required fields, classified as compliance because the schema is the contract being broken |
 
 The pattern worth naming is that the compliance class is the one the process had to grow a defence for. The
 defence is now a rule: a measurement is not finished until an attempt to pass it with a deliberately wrong
-implementation has failed. Three of the 26 recorded defects were found that way, and none of them by
+implementation has failed. Three of the 32 recorded defects were found that way, and none of them by
 reading the code.
 
 ### 5.3 Test Execution Results
@@ -587,7 +587,7 @@ What worked, with the measurement or the artifact that shows it:
 How much time construction gained is hard to state honestly, so the report gives the count that can be
 verified instead: 5409 lines of implementation and 4755 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
-hour but defects per requirement: 37 recorded findings across 32 requirements, of which 35 are fixed, is a
+hour but defects per requirement: 43 recorded findings across 32 requirements, of which 41 are fixed, is a
 rate that only holds because the review was as cheap as it was.
 
 ### 7.2 Core Bottlenecks and Challenges
@@ -616,7 +616,7 @@ Each claim is attached to something in this project rather than to a general pri
    inference (this is the same element) produced the identity confidence and the uncertainty flag, which is
    the most defensible part of the contract. It also produced the honest no: a cover and a content change
    are the same rectangle, and the engine says so.
-3. **Try to defeat your own measurement before believing it.** Three of the 26 recorded defects were found
+3. **Try to defeat your own measurement before believing it.** Three of the 32 recorded defects were found
    this way, and none by reading code. The version of this rule that generalises: for every green result,
    construct the wrong implementation that would also produce it, and check that it fails.
 4. **One memory of one fact.** The classifier and the identity map both kept the element geometry, and the
