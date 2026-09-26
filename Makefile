@@ -48,7 +48,7 @@ lint: ## Run golangci-lint when installed, otherwise go vet
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint not installed, running go vet"; $(GO) vet ./...; fi
 
 perf: ## Measure latency percentiles and throughput on one core (T039, T041)
-	$(BENCH_ENV) $(GO) test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
+	SCREENDELTA_LATENCY_ASSERT=1 $(BENCH_ENV) $(GO) test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 
 bench: ## Report per-operation cost for the parts of the comparison (T040)
 	$(BENCH_ENV) $(GO) test -p 1 -run '^$$' -bench . -benchmem -count 3 ./internal/diff/... ./internal/perf/... | tee bench.txt
