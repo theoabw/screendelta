@@ -108,17 +108,17 @@ been removed now that the first specification defines real requirements.
 | FR-016 | Operate without network access and write only to the declared output path | specs/001-frame-delta-engine/spec.md | US1 | T044 |  |  | planned |
 | NFR-001 | p95 delta latency at or below 12 ms per 1080p frame pair on one CPU core | specs/001-frame-delta-engine/spec.md | US1 | T040 |  |  | planned |
 | NFR-002 | At least 30 frames per second sustained at 1080p on one CPU core | specs/001-frame-delta-engine/spec.md | US2 | T033 |  |  | planned |
-| NFR-003 | At most 128 MB resident memory streaming 10,000 frames, no growth with length | specs/001-frame-delta-engine/spec.md | US2 | T020 | `internal/stream/stream_test.go::TestStreamOfConstantGeometryDoesNotKeepAllocating` | | in-progress |
+| NFR-003 | At most 128 MB resident memory streaming 10,000 frames, no growth with length | specs/001-frame-delta-engine/spec.md | US2 | T042 | `internal/stream/memory_test.go::TestMemoryCeiling` | `docs/vv/evidence/memory-2026-09-26.txt` | verified |
 | NFR-004 | Byte-identical output for identical input, independent of thread count | specs/001-frame-delta-engine/spec.md | US2 | T013 | `internal/delta/delta_test.go::TestEncodeIsByteIdenticalRegardlessOfInputOrder` | | in-progress |
-| NFR-005 | Zero false removals on the noise corpus | specs/001-frame-delta-engine/spec.md | US1 | T019 | `internal/diff/diff_test.go::TestNoiseBelowTheFloorReportsNothing` | | in-progress |
-| NFR-006 | Region detection F1 at or above 0.98 on the generated corpus | specs/001-frame-delta-engine/spec.md | US1 | T022 |  |  | planned |
+| NFR-005 | Zero false removals on the noise corpus | specs/001-frame-delta-engine/spec.md | US1 | T019 | `internal/score/corpus_test.go::TestNoiseCaseReportsNothingOnEveryPair` | `docs/vv/evidence/accuracy-2026-09-26.txt` | verified |
+| NFR-006 | Region detection F1 at or above 0.98 on the generated corpus | specs/001-frame-delta-engine/spec.md | US1 | T022 | `internal/score/corpus_test.go::TestCorpus` | `docs/vv/evidence/accuracy-2026-09-26.txt` | verified |
 | NFR-007 | A new user produces a delta document from the README within two minutes | specs/001-frame-delta-engine/spec.md | US1 | T049 |  |  | planned |
 | NFR-008 | CPU only, no GPU, no network, runs on Linux and Windows | specs/001-frame-delta-engine/spec.md | US1 | T004 |  |  | planned |
 | NFR-009 | At least 80 percent line coverage on the geometry and identity modules | specs/001-frame-delta-engine/spec.md | US2 | T046 | `internal/diff/diff_test.go::TestCompareIsDeterministic` | | in-progress |
 | NFR-010 | Versioned schema, and consumers can reject unknown versions | specs/001-frame-delta-engine/spec.md | US3 | T039 | | | planned |
-| SC-001 | Detection F1 at or above 0.98 and zero false removals on 5,000 generated frame pairs | specs/001-frame-delta-engine/spec.md | US1 | T023 |  |  | planned |
+| SC-001 | Detection F1 at or above 0.98 and zero false removals on 5,000 generated frame pairs | specs/001-frame-delta-engine/spec.md | US1 | T023 | `internal/score/corpus_test.go::TestCorpus` | `docs/vv/evidence/accuracy-2026-09-26.txt` | verified |
 | SC-002 | Benchmark reports p95 at or below 12 ms and p99 at or below 25 ms | specs/001-frame-delta-engine/spec.md | US1 | T041 |  |  | planned |
-| SC-003 | 10,000 frame stream within the memory ceiling with no identifier reuse | specs/001-frame-delta-engine/spec.md | US2 | T042 |  |  | planned |
+| SC-003 | 10,000 frame stream within the memory ceiling with no identifier reuse | specs/001-frame-delta-engine/spec.md | US2 | T042 | `internal/stream/memory_test.go::TestMemoryCeiling` | `docs/vv/evidence/memory-2026-09-26.txt` | verified |
 | SC-004 | Capture, engine and stub detector sustain at least 20 decisions per second | specs/001-frame-delta-engine/spec.md | US2 | T047 |  |  | planned |
 | SC-005 | An unfamiliar user reproduces a delta document from the README in under five minutes | specs/001-frame-delta-engine/spec.md | US1 | T049 |  |  | planned |
 | SC-006 | A second consumer written independently against the schema works unchanged | specs/001-frame-delta-engine/spec.md | US3 | T048 |  |  | planned |
