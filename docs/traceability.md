@@ -99,7 +99,7 @@ been removed now that the first specification defines real requirements.
 | FR-007 | Report identity confidence and mark uncertain identity instead of guessing | specs/001-frame-delta-engine/spec.md | US2 | T028 |  |  | planned |
 | FR-008 | Compute a per-frame fingerprint stable under sub-threshold noise | specs/001-frame-delta-engine/spec.md | US3 | T035 |  |  | planned |
 | FR-009 | Compare a frame against a stored fingerprint and report equal or different | specs/001-frame-delta-engine/spec.md | US3 | T037 |  |  | planned |
-| FR-010 | Emit one self-contained document per frame when streaming | specs/001-frame-delta-engine/spec.md | US2 | T011 | | | planned |
+| FR-010 | Emit one self-contained document per frame when streaming | specs/001-frame-delta-engine/spec.md | US2 | T011 | `internal/stream/stream_test.go::TestFirstFrameCarriesTheConditionAndNoRegions` | | in-progress |
 | FR-011 | Accept externally supplied regions of interest and restrict output to them | specs/001-frame-delta-engine/spec.md | US2 | T031 |  |  | planned |
 | FR-012 | Accept a validated configuration document with documented defaults | specs/001-frame-delta-engine/spec.md | US1 | T009 | `internal/config/config_test.go::TestParseRejectsAMiscasedKeyWithASuggestion` |  | in-progress |
 | FR-013 | Expose the same capabilities through CLI and library interfaces | specs/001-frame-delta-engine/spec.md | US1 | T010 |  |  | planned |
@@ -108,7 +108,7 @@ been removed now that the first specification defines real requirements.
 | FR-016 | Operate without network access and write only to the declared output path | specs/001-frame-delta-engine/spec.md | US1 | T044 |  |  | planned |
 | NFR-001 | p95 delta latency at or below 12 ms per 1080p frame pair on one CPU core | specs/001-frame-delta-engine/spec.md | US1 | T040 |  |  | planned |
 | NFR-002 | At least 30 frames per second sustained at 1080p on one CPU core | specs/001-frame-delta-engine/spec.md | US2 | T033 |  |  | planned |
-| NFR-003 | At most 128 MB resident memory streaming 10,000 frames, no growth with length | specs/001-frame-delta-engine/spec.md | US2 | T020 |  |  | planned |
+| NFR-003 | At most 128 MB resident memory streaming 10,000 frames, no growth with length | specs/001-frame-delta-engine/spec.md | US2 | T020 | `internal/stream/stream_test.go::TestStreamOfConstantGeometryDoesNotKeepAllocating` | | in-progress |
 | NFR-004 | Byte-identical output for identical input, independent of thread count | specs/001-frame-delta-engine/spec.md | US2 | T013 | `internal/delta/delta_test.go::TestEncodeIsByteIdenticalRegardlessOfInputOrder` | | in-progress |
 | NFR-005 | Zero false removals on the noise corpus | specs/001-frame-delta-engine/spec.md | US1 | T019 |  |  | planned |
 | NFR-006 | Region detection F1 at or above 0.98 on the generated corpus | specs/001-frame-delta-engine/spec.md | US1 | T022 |  |  | planned |
