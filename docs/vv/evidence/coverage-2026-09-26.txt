@@ -1,8 +1,9 @@
 Coverage, 2026-09-26.
 Command: go test -cover ./internal/diff/... ./internal/identity/...
 
-  internal/diff      80.2% of statements
-  internal/identity  80.6% of statements
+  internal/diff      81.0% of statements
+  internal/identity  82.3% of statements
+  internal/fingerprint 87.2% of statements
 
 Requirement this measures:
   NFR-009  at least 80 percent line coverage on the geometry and identity modules, reported by the
@@ -15,3 +16,8 @@ change that ends every element, a rule change applied to a live table, retiremen
 retire, the size boundary of a match, and the sorted view of the table. Each is now covered by a
 test named for the behaviour rather than for the function, which is why the numbers rose by
 covering decisions rather than lines.
+
+Revised after the identity work of 2026-09-26, which added appearance signatures, footprint evolution
+and the ownership change that made the classifier read the identity map. The figures above are from
+after those changes; the constraint that matters is that both modules named by NFR-009 stay above the
+target while the behaviour grows, which they did.

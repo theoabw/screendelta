@@ -73,3 +73,44 @@ What is not fixed, and is therefore not claimed.
 - delta.Decode accepts a document missing the identity fields, because a missing JSON field becomes a
   valid zero value in Go. The engine always emits them; a library consumer reading a document from
   elsewhere is not protected.
+
+Second revision, same day: the design decisions of R15 to R19, implemented in part.
+
+What is now demonstrated, in addition to the scenarios above:
+
+- An element's footprint translates with it and absorbs only new ground, so a change in one corner of a
+  panel no longer shrinks the panel and a change in the opposite corner no longer looks like a new
+  element.
+  internal/identity:  TestAPartialChangeLeavesTheFootprintIntact (the two corner changes)
+                      TestAMovingFootprintFollowsWithoutLag (thirty steps, footprint stays element sized)
+                      TestAGrowingElementExtendsAndAShrinkingOneKeepsItsFootprint (growth extends, and
+                      shrinkage keeping a stale footprint is asserted as the documented behaviour)
+                      TestFootprintEvolutionIsDeterministic
+  internal/diff:      TestAPartialChangeKeepsOneIdentity (the same sequence through the engine, which is
+                      the form the defect was reported in)
+- The classifier no longer keeps a second memory of the elements. It reads them from the identity map,
+  which is the layer that owns them, so the two can no longer disagree.
+- Reacquisition is gated on appearance as well as geometry.
+  internal/identity:  TestReacquisitionRequiresMoreThanGeometry (an area that looks nothing like the
+                      element that left is not marked uncertain)
+                      TestReacquisitionWithAMatchingAppearanceIsUncertain
+                      TestClosestSignatureDecidesBetweenTwoCandidates
+                      TestSignatureDistanceAndTolerance
+  internal/diff:      TestSignatureSamplerIsBoundedAndSeparatesContent (the sampler costs the same for a
+                      large area as for a small one, is deterministic, and tells different content apart)
+
+Defect status after this revision:
+
+  AUD-020  fixed, with a regression test at each level.
+  AUD-018  partly fixed. The evidence that distinguishes a cover from a content change now exists and
+           gates reacquisition. The classification rules that make the uncertainty marker reachable
+           through the engine are the next step, and until they land the marker remains unreachable
+           there, which is why FR-007 stays in progress.
+  AUD-019  inherent, by decision R18.
+
+Everything measured after these changes, because behaviour that grows must not cost the requirements
+that were already met:
+
+  make accuracy   27,223 pairs, precision 1.0000, recall 1.0000, F1 1.0000, zero false removals
+  make perf       p95 9.72 ms against 12, p99 10.63 ms against 25, 74.9 pairs per second against 30
+  coverage        internal/diff 81.0 percent, internal/identity 82.3 percent against 80
