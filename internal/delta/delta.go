@@ -80,6 +80,14 @@ type Region struct {
 	PreviousBounds *Bounds `json:"previousBounds,omitempty"`
 	Magnitude      float64 `json:"magnitude"`
 	AreaPixels     int     `json:"areaPixels"`
+	// IdentityConfidence is the strength of the evidence that this region is the element
+	// its identity refers to. It is required rather than optional so a consumer never has to
+	// tell "certain" apart from "not stated".
+	IdentityConfidence float64 `json:"identityConfidence"`
+	// IdentityUncertain is true when the identity could not be re-established and was
+	// re-acquired, which is the case for an element that returns after being occluded. A
+	// consumer that needs a stable handle treats such an identity as new.
+	IdentityUncertain bool `json:"identityUncertain"`
 }
 
 // Condition explains why a document reports what it does, or does not.
@@ -175,17 +183,7 @@ func (d Document) Validate() error {
 		}
 	}
 
-	identities := make(map[uint64]bool, len(d.Regions))
 	for index, region := range d.Regions {
-		if identities[region.Identity] {
-			return &FieldError{
-				Op:      "delta.Validate",
-				Subject: "document",
-				Field:   "regions[" + itoa(index) + "].identity",
-				Problem: "is already used by another region in this document",
-			}
-		}
-		identities[region.Identity] = true
 		if err := validateRegion(index, region, d.Frame.Width, d.Frame.Height); err != nil {
 			return err
 		}
@@ -282,6 +280,14 @@ func validateRegion(index int, region Region, frameWidth, frameHeight int) error
 	if region.PreviousBounds != nil {
 		if err := validateBounds(where+".previousBounds", *region.PreviousBounds); err != nil {
 			return err
+		}
+	}
+	if !isFinite(region.IdentityConfidence) || region.IdentityConfidence < 0 || region.IdentityConfidence > 1 {
+		return &FieldError{
+			Op:      "delta.Validate",
+			Subject: "document",
+			Field:   where + ".identityConfidence",
+			Problem: "must be a finite number between 0 and 1",
 		}
 	}
 	if !isFinite(region.Magnitude) || region.Magnitude < 0 || region.Magnitude > 1 {

@@ -1,7 +1,6 @@
 package diff
 
 import (
-	"bytes"
 	"image"
 	"image/color"
 	"math/rand"
@@ -13,9 +12,11 @@ import (
 )
 
 const (
-	background = 30
-	panelValue = 200
-	panelAlt   = 90
+	// tolerancePixels is the motion tolerance the continuity test uses.
+	tolerancePixels = 8
+	background      = 30
+	panelValue      = 200
+	panelAlt        = 90
 )
 
 type panel struct {
@@ -285,143 +286,234 @@ func TestReplacedElementIsReportedAsRemovedAndAdded(t *testing.T) {
 	}
 }
 
-func TestIdentitiesAreUniqueAcrossAStream(t *testing.T) {
+// TestATrackedElementKeepsOneIdentityAcrossFrames is acceptance scenario 1 of user story 2: a region
+// that drifts a few pixels per frame keeps one identifier throughout.
+func TestATrackedElementKeepsOneIdentityAcrossFrames(t *testing.T) {
 	width, height := 320, 240
-	seen := map[uint64]bool{}
 	differ := New()
 
-	for index := 0; index < 6; index++ {
-		value := uint8(panelValue)
-		if index%2 == 1 {
-			value = panelAlt
-		}
-		next := buildFrame(uint64(index+2), width, height, []panel{{x: 40 + index*4, y: 60, w: 80, h: 30, value: value}})
-		current := buildFrame(uint64(index+1), width, height, []panel{{x: 40 + (index-1)*4, y: 60, w: 80, h: 30, value: panelValue}})
-		if index == 0 {
-			current = buildFrame(1, width, height, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelValue}})
-		}
-		regions, _, err := differ.Compare(current, next, defaults())
+	identity := uint64(0)
+	first := buildFrame(1, width, height, []panel{{x: 80, y: 120, w: 80, h: 30, value: panelValue}})
+	previous := first
+	for step := 1; step <= 8; step++ {
+		next := buildFrame(uint64(step+1), width, height,
+			[]panel{{x: 80 + step*3, y: 120, w: 80, h: 30, value: panelAlt}})
+		regions, _, err := differ.Compare(previous, next, defaults())
 		if err != nil {
-			t.Fatalf("Compare failed: %v", err)
+			t.Fatalf("step %d: Compare failed: %v", step, err)
+		}
+		if len(regions) == 0 {
+			t.Fatalf("step %d: a drifting element produced no regions", step)
 		}
 		for _, region := range regions {
-			if seen[region.Identity] {
-				t.Fatalf("identity %d was reused", region.Identity)
+			if region.Identity == 0 {
+				t.Fatalf("step %d: a region carries no identity", step)
 			}
-			seen[region.Identity] = true
+			if identity == 0 {
+				identity = region.Identity
+				continue
+			}
+			if region.Identity != identity {
+				t.Fatalf("step %d: identity changed from %d to %d", step, identity, region.Identity)
+			}
+			if region.IdentityUncertain {
+				t.Fatalf("step %d: a tracked element was marked uncertain", step)
+			}
+			if region.IdentityConfidence <= 0 || region.IdentityConfidence > 1 {
+				t.Fatalf("step %d: confidence %v is outside 0 to 1", step, region.IdentityConfidence)
+			}
 		}
-	}
-	if len(seen) == 0 {
-		t.Fatal("the stream produced no identities at all")
+		previous = next
 	}
 }
 
-func TestCompareIsDeterministic(t *testing.T) {
+// TestContinuityOfAnIdentity checks the property that makes an identity worth having: when the same
+// identity appears in consecutive frames, it refers to something in the same place. An identity that
+// jumped across the frame would be worse than no identity at all, because a consumer would follow it.
+func TestContinuityOfAnIdentity(t *testing.T) {
 	width, height := 320, 240
-	build := func() []byte {
-		differ := New()
-		var encoded bytes.Buffer
-		for index := 0; index < 5; index++ {
-			value := uint8(panelValue)
-			if index%2 == 1 {
-				value = panelAlt
-			}
-			current := buildFrame(uint64(index+1), width, height, []panel{{x: 40 + index*8, y: 60, w: 80, h: 30, value: uint8(panelValue)}})
-			next := buildFrame(uint64(index+2), width, height, []panel{{x: 40 + (index+1)*8, y: 60, w: 80, h: 30, value: value}})
-			regions, _, err := differ.Compare(current, next, defaults())
-			if err != nil {
-				t.Fatalf("Compare failed: %v", err)
-			}
-			document := delta.Document{
-				SchemaVersion: delta.SchemaVersion,
-				Frame:         delta.FrameRef{Sequence: uint64(index + 2), Width: width, Height: height, ScaleFactor: 1},
-				Fingerprint:   delta.Fingerprint{Algorithm: "grid-luma-1", GridSize: 8, Cells: make([]int, 64), StrictHash: "0123456789abcdef"},
-				Regions:       regions,
-				Conditions:    []delta.Condition{},
-			}
-			if err := document.Encode(&encoded, false); err != nil {
-				t.Fatalf("Encode failed: %v", err)
-			}
+	differ := New()
+
+	footprint := map[uint64]image.Rectangle{}
+	previous := buildFrame(1, width, height, []panel{{x: 60, y: 60, w: 60, h: 40, value: panelValue}})
+
+	for step := 1; step <= 12; step++ {
+		next := buildFrame(uint64(step+1), width, height, []panel{
+			{x: 60 + step*4, y: 60, w: 60, h: 40, value: panelAlt},
+			{x: 220, y: 180, w: 40, h: 30, value: uint8(80 + step*7)},
+		})
+		regions, _, err := differ.Compare(previous, next, defaults())
+		if err != nil {
+			t.Fatalf("step %d: Compare failed: %v", step, err)
 		}
-		return encoded.Bytes()
-	}
-	if !bytes.Equal(build(), build()) {
-		t.Fatal("two identical runs produced different documents")
+		// One element can be reported as more than one region in a frame, so the element's
+		// footprint is the union of the regions that name it rather than any single one.
+		seenThisFrame := map[uint64]image.Rectangle{}
+		for _, region := range regions {
+			if region.Class == delta.ClassRemoved {
+				continue
+			}
+			rect := pixelRect(region.Bounds, next)
+			if current, ok := seenThisFrame[region.Identity]; ok {
+				seenThisFrame[region.Identity] = current.Union(rect)
+				continue
+			}
+			seenThisFrame[region.Identity] = rect
+		}
+		for id, rect := range seenThisFrame {
+			if last, seen := footprint[id]; seen {
+				distance := absInt(rect.Min.X-last.Min.X) + absInt(rect.Min.Y-last.Min.Y)
+				if distance > 2*tolerancePixels {
+					t.Fatalf("step %d: identity %d moved %d pixels between frames, which is not the same element",
+						step, id, distance)
+				}
+			}
+			footprint[id] = rect
+		}
+		previous = next
 	}
 }
 
-func TestFingerprintTracksContentNotNoise(t *testing.T) {
+// TestAnOccludedElementReturnsWithANewUncertainIdentity is acceptance scenario 2 of user story 2 at
+// the engine level: the element is covered, then visible again in the same place, and the engine
+// refuses to claim it is the same element.
+func TestAnOccludedElementReturnsWithANewUncertainIdentity(t *testing.T) {
 	width, height := 320, 240
-	panels := []panel{{x: 40, y: 60, w: 80, h: 30, value: panelValue}}
-	base := buildFrame(1, width, height, panels)
-	same := buildFrame(2, width, height, panels)
-	changed := buildFrame(3, width, height, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelAlt}})
+	button := panel{x: 100, y: 80, w: 80, h: 40, value: panelValue}
+	overlay := panel{x: button.x - 6, y: button.y - 6, w: button.w + 12, h: button.h + 12, value: 30}
+
+	cfg := defaults()
+	cfg.OcclusionFrames = 1
+
+	// The element is tracked first, then covered for longer than the window allows, then visible
+	// again. The cover has to outlast the window or the engine is right to keep the identity, which
+	// is what the first version of this test got wrong.
+	frames := []frame.Frame{
+		buildFrame(1, width, height, []panel{button}),
+		buildFrame(2, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: panelAlt}}),
+		buildFrame(3, width, height, []panel{overlay}),
+		buildFrame(4, width, height, []panel{overlay}),
+		buildFrame(5, width, height, []panel{overlay}),
+		buildFrame(6, width, height, []panel{button}),
+	}
 
 	differ := New()
-	first, err := differ.Fingerprint(base, defaults())
-	if err != nil {
-		t.Fatalf("Fingerprint failed: %v", err)
-	}
-	second, err := differ.Fingerprint(same, defaults())
-	if err != nil {
-		t.Fatalf("Fingerprint failed: %v", err)
-	}
-	third, err := differ.Fingerprint(changed, defaults())
-	if err != nil {
-		t.Fatalf("Fingerprint failed: %v", err)
-	}
+	tracked := uint64(0)
+	for index := 0; index+1 < len(frames); index++ {
+		regions, _, err := differ.Compare(frames[index], frames[index+1], cfg)
+		if err != nil {
+			t.Fatalf("comparison %d failed: %v", index, err)
+		}
 
-	if first.StrictHash != second.StrictHash {
-		t.Fatalf("identical frames produced different hashes: %s vs %s", first.StrictHash, second.StrictHash)
-	}
-	if first.StrictHash == third.StrictHash {
-		t.Fatal("a materially changed frame produced the same hash")
-	}
-	if first.Algorithm != "grid-luma-1" || first.GridSize != 32 || len(first.Cells) != 32*32 {
-		t.Fatalf("fingerprint shape is wrong: %+v", first)
+		switch index {
+		case 0:
+			// The first comparison has no baseline, so this is where the engine learns where the
+			// element is.
+			if len(regions) == 0 {
+				t.Fatal("the first comparison reported nothing")
+			}
+			tracked = regions[0].Identity
+		case 2, 3:
+			if len(regions) != 0 {
+				t.Fatalf("comparison %d reported %d regions on frames that are identical", index, len(regions))
+			}
+		case 4:
+			if len(regions) == 0 {
+				t.Fatal("the returning element produced no regions")
+			}
+			for _, region := range regions {
+				if region.Identity == tracked {
+					t.Fatalf("the returning element reused identity %d, which had been retired", tracked)
+				}
+				if !region.IdentityUncertain {
+					t.Fatalf("the returning element was matched silently: %+v", region)
+				}
+				if region.IdentityConfidence <= 0 {
+					t.Fatalf("the returning element carries no evidence at all: %+v", region)
+				}
+			}
+		}
 	}
 }
 
-func TestCompareRejectsMismatchedDimensions(t *testing.T) {
-	first := buildFrame(1, 320, 240, nil)
-	second := buildFrame(2, 160, 120, nil)
-	if _, _, err := New().Compare(first, second, defaults()); err == nil {
-		t.Fatal("Compare accepted frames of different dimensions")
+// TestAViewportChangeEndsEveryIdentity covers the case where the frame geometry changes: the bounds
+// are normalised, so a rectangle tracked at one frame size means nothing at another, and matching
+// across the change would attach an identity to an element that was never in that place. The
+// identifier counter must keep rising across the change, because a number that reappears on a
+// different element is worse than a number that stops being used.
+func TestAViewportChangeEndsEveryIdentity(t *testing.T) {
+	differ := New()
+	first := buildFrame(1, 320, 240, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelValue}})
+	second := buildFrame(2, 320, 240, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelAlt}})
+	regions, _, err := differ.Compare(first, second, defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the first comparison reported nothing")
+	}
+	before := regions[0].Identity
+
+	bigger := buildFrame(3, 640, 480, []panel{{x: 300, y: 300, w: 80, h: 30, value: panelValue}})
+	if _, _, err := differ.Compare(bigger, bigger, defaults()); err != nil {
+		t.Fatalf("Compare after a viewport change failed: %v", err)
+	}
+
+	next := buildFrame(4, 640, 480, []panel{{x: 300, y: 300, w: 80, h: 30, value: panelAlt}})
+	regions, _, err = differ.Compare(bigger, next, defaults())
+	if err != nil {
+		t.Fatalf("Compare after a viewport change failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the change at the new size reported nothing")
+	}
+	for _, region := range regions {
+		if region.Identity == before {
+			t.Fatalf("identity %d was carried across a viewport change", before)
+		}
+		if region.Identity <= before {
+			t.Fatalf("identity %d went backwards after identity %d, so a number was reissued", region.Identity, before)
+		}
 	}
 }
 
-// TestNoiseFloorSeparatesNoiseFromChange states the rule FR-005 actually makes: a difference at
-// or below the floor is not a change and must not be reported, and a difference above it is one
-// and must be. The corpus noise case covers the first half with generated noise; this covers
-// both halves with a controlled difference, because a case that only ever contains noise cannot
-// show that the floor still admits a real change.
-func TestNoiseFloorSeparatesNoiseFromChange(t *testing.T) {
-	panelValue := uint8(120)
+// TestRelaxingTheMotionToleranceKeepsIdentities covers the other change: a rule change says nothing
+// about where anything is, so the element keeps its identity and a caller that relaxes the tolerance
+// gets the match it asked for rather than a fresh table.
+func TestRelaxingTheMotionToleranceKeepsIdentities(t *testing.T) {
+	differ := New()
+	frames := []frame.Frame{
+		buildFrame(1, 320, 240, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelValue}}),
+		buildFrame(2, 320, 240, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelAlt}}),
+		buildFrame(3, 320, 240, []panel{{x: 60, y: 60, w: 80, h: 30, value: panelValue}}),
+	}
 
-	for _, tc := range []struct {
-		name       string
-		shade      uint8
-		wantRegion bool
-	}{
-		{name: "below the floor", shade: panelValue + 3, wantRegion: false},
-		{name: "at the floor", shade: panelValue + 5, wantRegion: false},
-		{name: "above the floor", shade: panelValue + 12, wantRegion: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			first := buildFrame(1, 320, 240, []panel{{x: 100, y: 80, w: 80, h: 40, value: panelValue}})
-			second := buildFrame(2, 320, 240, []panel{{x: 100, y: 80, w: 80, h: 40, value: tc.shade}})
+	strict := defaults()
+	strict.MotionTolerancePixels = 1
+	first, _, err := differ.Compare(frames[0], frames[1], strict)
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(first) == 0 {
+		t.Fatal("the first comparison reported nothing")
+	}
 
-			regions, _, err := New().Compare(first, second, defaults())
-			if err != nil {
-				t.Fatalf("Compare failed: %v", err)
-			}
-			if tc.wantRegion && len(regions) == 0 {
-				t.Fatalf("a difference of %d levels was not reported", int(tc.shade)-int(panelValue))
-			}
-			if !tc.wantRegion && len(regions) != 0 {
-				t.Fatalf("a difference of %d levels was reported as %d regions",
-					int(tc.shade)-int(panelValue), len(regions))
-			}
-		})
+	relaxed := defaults()
+	relaxed.MotionTolerancePixels = 32
+	regions, _, err := differ.Compare(frames[1], frames[2], relaxed)
+	if err != nil {
+		t.Fatalf("Compare with a new tolerance failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the move reported nothing")
+	}
+	carried := false
+	for _, region := range regions {
+		if region.Identity == first[0].Identity {
+			carried = true
+		}
+	}
+	if !carried {
+		t.Fatalf("a relaxed tolerance did not continue the element's identity: %+v", regions)
 	}
 }

@@ -129,9 +129,6 @@ func TestValidateRejectsBrokenInvariants(t *testing.T) {
 		{"algorithm not an identifier", func(d *Document) { d.Fingerprint.Algorithm = "BAD NAME" }, "fingerprint.algorithm"},
 		{"hash not hexadecimal", func(d *Document) { d.Fingerprint.StrictHash = strings.Repeat("z", 16) }, "fingerprint.strictHash"},
 		{"hash too long", func(d *Document) { d.Fingerprint.StrictHash = strings.Repeat("a", 129) }, "fingerprint.strictHash"},
-		{"duplicate identity", func(d *Document) {
-			d.Regions = append(d.Regions, d.Regions[0])
-		}, "regions[1].identity"},
 		{"area beyond the frame", func(d *Document) { d.Regions[0].AreaPixels = 1920*1080 + 1 }, "regions[0].areaPixels"},
 		{"area disagrees with bounds", func(d *Document) { d.Regions[0].AreaPixels = 1000 }, "regions[0].areaPixels"},
 		{"area zero", func(d *Document) { d.Regions[0].AreaPixels = 0 }, "regions[0].areaPixels"},
@@ -196,4 +193,32 @@ func asFieldError(err error, target **FieldError) bool {
 	}
 	*target = fieldErr
 	return true
+}
+
+// TestSharedIdentitiesAreAllowedAndSortTotally states what replaced the old uniqueness rule.
+//
+// A moved element is reported as the area it left and the area it arrived in, and both are the same
+// element, so both carry its identity. Uniqueness per document was wrong for that reason. What the
+// ordering must still be is total, so two regions that share a position and an identity as well
+// still sort deterministically.
+func TestSharedIdentitiesAreAllowedAndSortTotally(t *testing.T) {
+	document := validDocument()
+	shared := document.Regions[0]
+	shared.Class = ClassChanged
+	moved := shared
+	moved.Bounds = Bounds{X: 0.5, Y: 0.2, W: 0.3, H: 0.1}
+	document.Regions = []Region{shared, moved}
+	document.Conditions = []Condition{}
+
+	if err := document.Validate(); err != nil {
+		t.Fatalf("two regions sharing an identity were rejected: %v", err)
+	}
+
+	// The same rectangle twice: the ordering still has to be deterministic.
+	twins := []Region{shared, shared}
+	sorted := append([]Region(nil), twins...)
+	SortRegions(sorted)
+	if sorted[0].Identity != sorted[1].Identity {
+		t.Fatalf("sorting changed the regions: %+v", sorted)
+	}
 }

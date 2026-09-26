@@ -19,6 +19,7 @@ import (
 	"github.com/theoabw/screendelta/internal/delta"
 	"github.com/theoabw/screendelta/internal/fielderr"
 	"github.com/theoabw/screendelta/internal/frame"
+	"github.com/theoabw/screendelta/internal/identity"
 )
 
 // wordBytes is how much of a row the comparison skips at a time once it knows the row changed.
@@ -84,8 +85,13 @@ type Differ struct {
 	changedRows  []int
 	gridSequence uint64
 
-	hasPrevious  bool
-	nextIdentity uint64
+	identities       *identity.Map
+	identityOccluded int
+	identityMotion   int
+
+	hasPrevious    bool
+	previousWidth  int
+	previousHeight int
 }
 
 // regionState is what the differ needs to remember about the previous frame: where the
@@ -97,8 +103,13 @@ type regionState struct {
 }
 
 // New creates a differ for one stream.
+//
+// The identity map exists from construction rather than being created on the first comparison, so
+// there is no state in which a differ has none. The matching rules come from the configuration and
+// are applied before the first comparison; a differ used without a configuration matches only
+// rectangles in the same place, which is the strictest useful default.
 func New() *Differ {
-	return &Differ{}
+	return &Differ{identities: identity.New(0, 0)}
 }
 
 // plane returns the luma plane for a frame, converting it only if it is not already held.
@@ -167,6 +178,23 @@ func (d *Differ) Compare(previous, current frame.Frame, cfg config.Config) ([]de
 		d.previous = d.previous[:0]
 		d.hasPrevious = true
 		return []delta.Region{}, nil, nil
+	}
+
+	// A geometry change invalidates every remembered rectangle: the bounds are normalised, so an
+	// element tracked at one frame size means nothing at another. The engine reports a viewport
+	// change and starts the stream again; the differ clears its state so it cannot match across it.
+	if d.hasPrevious && (d.previousWidth != current.Width || d.previousHeight != current.Height) {
+		d.previous = d.previous[:0]
+		// Every tracked element ends at a viewport change, and the identifier counter keeps rising:
+		// rebuilding the table would restart the sequence and hand a consumer a number that used to
+		// mean something else.
+		d.identities.RetireAll()
+	}
+	if d.identityOccluded != cfg.OcclusionFrames || d.identityMotion != cfg.MotionTolerancePixels {
+		// A rule change says nothing about where anything is, so the tracked elements are kept and
+		// only the rules move.
+		d.identities.SetRules(cfg.OcclusionFrames, cfg.MotionTolerancePixels)
+		d.identityOccluded, d.identityMotion = cfg.OcclusionFrames, cfg.MotionTolerancePixels
 	}
 
 	components := d.components(previous, current, cfg)

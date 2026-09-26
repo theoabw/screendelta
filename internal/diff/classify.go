@@ -6,6 +6,7 @@ import (
 	"github.com/theoabw/screendelta/internal/config"
 	"github.com/theoabw/screendelta/internal/delta"
 	"github.com/theoabw/screendelta/internal/frame"
+	"github.com/theoabw/screendelta/internal/identity"
 )
 
 // candidate is a changed area in pixels, after filtering and clipping.
@@ -45,6 +46,7 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 		for _, c := range candidates {
 			regions = append(regions, d.regionFor(delta.ClassChanged, c, nil, current))
 		}
+		d.identities.EndFrame(current.Sequence)
 		d.remember(regions, nil, current)
 		sortRegions(regions)
 		return regions
@@ -147,6 +149,10 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	// removed. An element whose pixels did not change is still on the screen; it is simply
 	// absent from the delta, and calling it removed would invent a disappearance out of a
 	// frame pair that only differs by noise.
+	// One EndFrame per comparison, after every region has been assigned: the occlusion window counts
+	// frames, and an element hidden by an overlay is unmatched in the frames that cover it.
+	d.identities.EndFrame(current.Sequence)
+
 	// Elements whose pixels did not change are still on the screen, so they carry over.
 	unchanged := make([]regionState, 0, len(d.previous))
 	for index, state := range d.previous {
@@ -159,23 +165,50 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	return regions
 }
 
-// regionFor builds a document region, allocating an identity that this stream has never
-// used before. Identity stability across frames is the next user story; what holds here
-// is the guarantee that an identity is never reused.
+// regionFor builds a document region, asking the identity map which element it is.
+//
+// The identity decision follows the class, because the classifier has already decided what
+// happened to the geometry: a region that continues an element carries its identity over, a region
+// that appeared gets a new one, and a region that is gone retires the identity it names. An element
+// that returns after being occluded is the interesting case, and the map marks it uncertain rather
+// than claiming a match it cannot support.
 func (d *Differ) regionFor(class delta.RegionClass, c candidate, previousBounds *delta.Bounds, current frame.Frame) delta.Region {
-	d.nextIdentity++
 	bounds := boundsOf(rect(c.left, c.top, c.right, c.bottom), current)
 	if previousBounds == nil && class == delta.ClassRemoved {
 		copied := bounds
 		previousBounds = &copied
 	}
+
+	var assignment identity.Assignment
+	switch {
+	case class == delta.ClassRemoved:
+		assignment = d.identities.Vanish(bounds, current.Width, current.Height, current.Sequence)
+	case class == delta.ClassAdded:
+		assignment = d.identities.Appear(bounds, current.Width, current.Height, current.Sequence)
+	case previousBounds != nil:
+		// A moved region is one of the areas a translation changed, so the element is looked up
+		// where it was rather than where this area is. Looking it up by the area would give each
+		// half of a movement its own identity, which is what happened before this was fixed.
+		assignment = d.identities.Carry(*previousBounds, bounds, current.Width, current.Height, current.Sequence)
+		if assignment.Carried {
+			// The element's own footprint is a better answer than the area that changed, and the
+			// identity map is the only layer that knows it.
+			carried := assignment.PreviousBounds
+			previousBounds = &carried
+		}
+	default:
+		assignment = d.identities.Carry(bounds, bounds, current.Width, current.Height, current.Sequence)
+	}
+
 	return delta.Region{
-		Identity:       d.nextIdentity,
-		Class:          class,
-		Bounds:         bounds,
-		PreviousBounds: previousBounds,
-		Magnitude:      clampMagnitude(c.magnitude),
-		AreaPixels:     c.area(),
+		Identity:           assignment.ID,
+		Class:              class,
+		Bounds:             bounds,
+		PreviousBounds:     previousBounds,
+		Magnitude:          clampMagnitude(c.magnitude),
+		AreaPixels:         c.area(),
+		IdentityConfidence: assignment.Confidence,
+		IdentityUncertain:  assignment.Uncertain,
 	}
 }
 
@@ -202,6 +235,7 @@ func (d *Differ) remember(regions []delta.Region, unchanged []regionState, curre
 		})
 	}
 	d.hasPrevious = true
+	d.previousWidth, d.previousHeight = current.Width, current.Height
 }
 
 // filter grows, discards and clips the changed areas according to the configuration.
