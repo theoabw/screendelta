@@ -30,6 +30,11 @@ rules; this file is the order of operations an agent should follow.
   `.specify/memory/constitution.md` without recording the amendment reason.
 - Run `make check` before proposing a commit, and report exactly what was run
   and what it returned.
+- Commit in small, single-purpose commits, following the granularity rules in
+  `CONTRIBUTING.md`: one logical change per commit, never mixing a specification
+  change with a code, test or documentation change, and never one large commit at
+  the end of a work item. Git activity is graded separately from the report, so
+  the history is a graded artefact rather than a by-product.
 
 ## Writing style
 

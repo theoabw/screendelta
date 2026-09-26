@@ -114,6 +114,49 @@ Which trailers apply:
 
 A commit that implements behaviour without a `Req` line is a process failure.
 
+## Commit granularity
+
+Git activity is graded separately from the report, and this history is the
+evidence, so a few large commits cost points even when the work inside them is
+correct.
+
+1. **One logical change per commit.** If the summary needs "and", split it.
+2. **Commit at every phase gate, not at the end:** the specification, the plan, each
+   plan artifact, the tasks, the analysis capture, each implemented task or small
+   group of tasks, and each fix that comes out of review.
+3. **Never mix kinds of change.** A specification change, a code change, a test-only
+   change and a documentation change are four commits, because each one answers a
+   different question in section 6 of the report.
+4. **Commit evidence with the claim.** A benchmark result belongs in the same commit
+   as the code that produced it, and a traceability row belongs in the commit that
+   makes it `verified`.
+5. **Keep a commit under roughly 400 changed lines** where the work allows it. A
+   generated file, a lockfile and the initial scaffold are exempt.
+6. **Prefer several commits on a branch over one squashed merge.** The history is
+   read as a process record, so a squashed branch destroys the thing being graded.
+7. **Amend only unpushed commits.** Once a branch is on the remote, fix a mistake
+   with a follow-up commit rather than rewriting history.
+
+Examples:
+
+- Good: `spec(001): add external regions of interest as a requirement`, then
+  `plan(001): choose the frame diffing strategy`, then
+  `task(001): implement tile hashing (T012)`.
+- Bad: `feat: add delta engine, tests, docs and CI` in one 3,000 line commit.
+
+## Issues and merge requests
+
+The course asks for modifications, issues and discussions to be visible in git, so
+they are used deliberately rather than treated as ceremony:
+
+- Open one issue per feature before implementing it, and one per review finding that
+  needs a fix. Reference the issue number in the commit and in the merge request.
+- Put the review discussion in the merge request body, not in a chat, because the
+  merge request is the artefact the grader can read.
+- Close the issue in the commit that resolves it, by referencing it in the message.
+- Working solo, an issue is also the place to write down what was rejected and why,
+  which is the material sections 3 and 7 of the report need anyway.
+
 ## What never goes into the repository
 
 - Credentials, tokens, private keys, `.env` files with real values.
