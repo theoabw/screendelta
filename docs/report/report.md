@@ -249,53 +249,162 @@ implementation could not satisfy the original wording.
 
 ### 3.1 Prompting Framework
 
-The prompting techniques used: chain of thought, role prompting, structured
-agentic workflows, or a mix. Justify the choice.
+The framework is a mix, chosen per activity rather than per project:
+
+| Activity | Technique | Why |
+|---|---|---|
+| Exploration before the specification | Role prompting with a named constraint ("you are choosing a system that a single agent team can finish and that a course can grade on process") | The first attempts failed by exploring systems with no constraint to optimise for, which section 1.2 records |
+| Writing the specification | Structured, one Spec Kit command per step, with the command's own template as the prompt | The template asks for the fields the process needs; a free-form prompt produced a specification with no measurable criteria |
+| Implementation | Chain of thought inside a task-bounded brief: goal, files, constraints, existing patterns, how to verify | An agent given a task from `tasks.md` has a bounded problem, and the brief carries the conventions it would otherwise guess |
+| Verification | Adversarial role prompting: "your job is to falsify the claims below, not to comment on style" | A review prompt that asks for correctness returns code style; the one that asks for a counterexample returns defects |
+| Measurement | No prompting: the harness is code, and the agent's role is to build and then try to defeat it | The most valuable findings in this project came from an agent trying to pass a measurement with a deliberately wrong implementation |
+
+The single most important choice is the last one. Three of the five review rounds found defects in the
+measurement rather than in the engine: a success criterion that could be satisfied by an engine with
+broken classification, a memory guard that passed with a deliberate per-frame leak, and a latency run
+inside the full test suite whose tail belonged to the machine rather than to the engine. Each is recorded
+as a defect with the fix, because a measurement that reports success while measuring nothing is worse than
+one that fails.
 
 ### 3.2 Master Prompts and System Prompts
 
-The system prompts used for each agent surface, quoted verbatim, with the
-reasoning, the expected result, the actual result, and the later revisions.
-Source material: `docs/prompt-log/`.
+The agent surfaces are configured in the repository rather than in a chat history, so the prompts are
+reviewable artifacts. The three that matter:
+
+**The repository constitution** (`.specify/memory/constitution.md`) is the system prompt for every
+authoring session. Its operative rules, quoted from the file: requirements are written before code;
+requirement identifiers are stable; a deviation is recorded rather than edited away; every emitted
+document declares its schema version; the engine fails explicitly rather than emitting a partial document;
+and the engine never reaches the network. It is amended only with the reason recorded, and it has been
+amended once, for the identity fields FR-007 requires.
+
+**The authoring brief** (`AGENTS.md`) is the working agreement. It fixes the order of operations (read the
+constitution, then the specification, then the plan and tasks, then the traceability matrix), the hard
+rules (no code without a task, update the matrix in the same change, log the session, run `make check`
+before proposing a commit), and the autonomy boundary (local and reversible work needs no permission;
+anything that publishes or changes shared state does). It exists because an agent that has to be told the
+conventions each session will eventually forget one.
+
+**The review brief** is not stored as a file but as a fixed shape, because it is sent fresh each round:
+name the repository and the commit range, state that the pass is read-only, list the claims to falsify
+numbered one by one, require a demonstrating case for each finding with a severity and a file and line,
+and ask for a verdict on whether the acceptance claim can be made. The prompt that produced round five is
+quoted in `docs/prompt-log/0007-measurement-review.md`, along with the two earlier rounds' briefs.
+
+The expected result was that independent review would find defects the authoring pass could not. The actual
+result was stronger and less comfortable: it found that the *evidence* was not what it claimed. The later
+revisions to the brief ask about the measurement first and the code second.
 
 ### 3.3 Prompt Iteration Log
 
-The table from `docs/prompt-log/iteration-log.md`, including at least one case
-where a prompt failed or hallucinated and how the refinement fixed it.
+The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the course asks for:
 
-## 4. Specification Driven Development and the Project (7 points)
+| Original prompt | Failure it caused | Corrected prompt | Result | Verified by |
+|---|---|---|---|---|
+| "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 27,211 pairs scored at F1 1.0000 with every asserted class correct; 22.5 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
+
+The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
+attempt to pass it with a deliberately wrong implementation has failed. Three of the 26 recorded defects
+were found by exactly that, and none of them by reading the code.
 
 ### 4.1 SDD Tool Kit
 
-GitHub Spec Kit, the version pinned by this repository, and why it was chosen
-over the alternatives. The decision record is `docs/adr/0001-adopt-spec-kit.md`.
+GitHub Spec Kit v1.0.12, pinned in the repository so the workflow cannot drift under it. The decision
+record is `docs/adr/0001-adopt-spec-kit.md`. It was chosen over three alternatives: a bespoke markdown
+process, which would have had no templates and no integration; a document-driven generator, which would
+have kept the specification outside the repository; and writing the process as prompts only, which is what
+parts of this project do in addition rather than instead.
+
+What the kit contributes, and what was overridden:
+
+| Spec Kit artifact | Used for | Overridden |
+|---|---|---|
+| `.specify/memory/constitution.md` | The project rules every session reads | Amended once, with the reason recorded |
+| `.specify/templates/` | The specification, plan, tasks and checklist shapes | Partly: the report skeleton and the V&V plan are repository documents, and the traceability matrix is generated by a script rather than a template |
+| `/speckit.specify`, `clarify`, `plan`, `checklist`, `tasks`, `analyze`, `implement` | The workflow, one command per step | `analyze` output is captured to `docs/analysis/` because the command is read-only by design |
+| `.specify/scripts/bash/` | Creating the feature directory, resolving templates | Used unchanged |
 
 ### 4.2 Development Environment
 
-The operating systems, editors, coding agents and models used, and why. Include
-the three command surfaces configured in this repository, and say why a solo
-project still needs all three: the specification workflow stays usable from any
-agent, and the independent review pass runs in a different one from the authoring
-pass, which is what keeps a single author from reviewing their own blind spots.
+One Linux workstation (Ubuntu, Go 1.26 toolchain, 10 cores) with the repository reachable from three agent
+surfaces, all three configured in this repository:
+
+- **GitHub Copilot prompts** in `.github/prompts/`, for editing inside an editor;
+- **opencode commands** in `.opencode/commands/`, for a terminal agent with the repository in reach;
+- **dsh skills** in `.dsh/skills/`, the harness used for the authoring rounds in this project.
+
+A solo project still needs all three for one reason that is worth stating: the authoring pass and the
+review pass must run in *different* contexts, or the review is the author agreeing with themselves.
+Changing surface is the cheapest way to guarantee that, and it is what kept the five review rounds from
+inheriting the assumptions of the code they were reading. The review rounds in this project ran in a
+separate harness with no access to the authoring conversation, given only the repository, the commit range
+and the claims to falsify.
+
+The models are named in the prompt log per session: a DeepSeek-backed agent for authoring, and a
+Codex-based agent at low reasoning effort for review. The reasoning effort is deliberate: the review task
+is to construct counterexamples against a specification, which is bounded work, and the value comes from
+the questions asked rather than from the model's depth.
 
 ### 4.3 Deriving the Requirements Using the IDE and Coding Agents
 
-How the functional and non-functional requirements, constraints, interfaces,
-acceptance criteria and compliance requirements were produced with the agents.
-Include the prompts used.
+The functional requirements came from the user stories by asking, for each story, what a consumer would
+have to be told and what the engine could be wrong about. That second question is where most of the
+interesting requirements come from: FR-007 (an identity that cannot be re-established is marked, not
+guessed), FR-015 (fail explicitly without a partial document) and NFR-005 (zero false removals on noise)
+are all answers to "how would this fail silently?".
+
+The prompts that produced them, and what was rejected:
+
+- "Write the functional requirements for a frame delta engine as observable behaviours, not as
+  implementation" produced the skeleton in one pass. The agent's first version included "use a tile grid
+  for comparison", which is a design decision that would have made the later measured removal of the tile
+  grid a requirement change. It was rewritten as "report changed regions with bounds and magnitude".
+- "What can this engine know for certain, and what can it only infer?" produced the distinction the whole
+  design rests on: bounds and classes are observations, identity is an inference, and the uncertainty
+  marker exists because the second is not the first.
+- "List the ways a document consumer could be misled" produced the multiplicity rule (one element may be
+  two regions), the ordering guarantee, and the rule that no timing field appears in a document.
+
+The non-functional requirements were harder and were derived by asking what would be measured and by what
+command, before the command existed. That order matters: three of the ten targets failed their first
+measurement, and because the method was fixed in `docs/vv/plan.md` first, the response was to fix the
+engine rather than to adjust the target.
 
 ### 4.4 SDD Workflow and Implementation
 
-The workflow as actually followed, step by step, with the real command order and
-the gates that were enforced. `.specify/` holds the constitution, templates and
-scripts that implement it.
+The workflow as actually followed, with the gate that ends each step:
+
+| Step | Command | Output | Gate |
+|---|---|---|---|
+| 1 | `/speckit.constitution` | `.specify/memory/constitution.md` | The rules are quoted in `AGENTS.md` and enforced by review |
+| 2 | `/speckit.specify` | `specs/001-frame-delta-engine/spec.md` | Every success criterion measurable, checked by hand |
+| 3 | `/speckit.clarify` | The requirements notes and research decisions | Open questions in the specification brief are answered or recorded as research items |
+| 4 | `/speckit.plan` | `plan.md`, `research.md`, `data-model.md`, `contracts/` | The contracts exist before the code they constrain |
+| 5 | `/speckit.checklist` | `checklists/requirements.md` | Reviewer-owned items are never ticked by the author |
+| 6 | `/speckit.analyze` | `docs/analysis/analyze-2026-09-26.md` | Five findings, all resolved or recorded |
+| 7 | `/speckit.tasks` | `tasks.md`, 53 tasks | Every requirement has at least one task; checked by `scripts/check_traceability.py` |
+| 8 | `/speckit.implement`, task by task | Code, tests, evidence | `make check` (traceability, format, vet, tests) before any commit; an independent review before a slice is called done |
+| 9 | `/speckit.converge` (not yet used) | A gap list | Planned for the endgame, once the acceptance testing has run |
+
+Two deviations from the comfortable path are worth recording. First, the implementation started before the
+whole task list was written: the frame, error and document types existed while tasks 20 onwards were still
+being refined, because the interfaces they define had to be real before the plan could say anything true
+about them. The task list was updated in the same round. Second, the review gate was added after the fact:
+eleven code commits went in without an independent review, which the audit log records as a process
+failure, and the standing rule since is that a slice is not finished until a review in a separate context
+has tried to break it. That rule has since found 36 findings across five rounds.
 
 ### 4.5 Prompts
 
-The prompts used during SDD, with reasoning, expectations, what did not go to
-plan, and the modifications made. Source material: `docs/prompt-log/`.
+The prompts used during the specification and implementation rounds are in `docs/prompt-log/`, one entry
+per session, each with the verbatim prompt, the intent, what happened, what was corrected in the
+specification or the documents, and what the agent got wrong. Seven entries exist. The ones that carry the
+most information for a reader are:
 
-## 5. Verification and Validation (6 points)
+- `0005-system-selection.md`: the selection round, including the four systems explored and rejected first;
+- `0006-implementation-rounds.md`: the first implementation round, including the missing review step;
+- `0007-measurement-review.md`: the round that falsified its own measurement, and the prompt change it
+  caused.
 
 ### 5.1 V&V Strategy
 
