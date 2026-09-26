@@ -122,7 +122,7 @@ func (e *Engine) Push(f frame.Frame) (delta.Document, error) {
 		previous := e.frameFromPrevious(f)
 		compared, extra, err := e.differ.Compare(previous, current, e.cfg)
 		if err != nil {
-			return delta.Document{}, wrapDifferError(f.Sequence, err)
+			return delta.Document{}, wrapDifferError("compare", f.Sequence, err)
 		}
 		regions = compared
 		conditions = append(conditions, extra...)
@@ -130,7 +130,7 @@ func (e *Engine) Push(f frame.Frame) (delta.Document, error) {
 
 	fingerprint, err := e.differ.Fingerprint(current, e.cfg)
 	if err != nil {
-		return delta.Document{}, wrapDifferError(f.Sequence, err)
+		return delta.Document{}, wrapDifferError("fingerprint", f.Sequence, err)
 	}
 
 	document := delta.Document{
@@ -141,8 +141,8 @@ func (e *Engine) Push(f frame.Frame) (delta.Document, error) {
 			Height:      f.Height,
 			ScaleFactor: f.ScaleFactor,
 		},
-		Fingerprint: fingerprint,
-		Regions:     normaliseRegions(regions),
+		Fingerprint: ownFingerprint(fingerprint),
+		Regions:     ownRegions(regions),
 		Conditions:  delta.SortConditions(conditions),
 	}
 	if err := document.Validate(); err != nil {
@@ -221,29 +221,60 @@ func (e *Engine) swap() {
 	e.previous, e.scratch = e.scratch, e.previous
 }
 
-func normaliseRegions(regions []delta.Region) []delta.Region {
-	if regions == nil {
-		return []delta.Region{}
+// ownRegions takes ownership of what the differ returned.
+//
+// The engine cannot assume the differ allocates fresh slices per call: a differ that
+// pools its own storage is exactly what a streaming implementation should do. So the
+// document gets a deep copy, including the pointed-to previous bounds, and the copy is
+// sorted rather than the differ's slice, which also stops the engine reordering memory
+// it does not own.
+func ownRegions(regions []delta.Region) []delta.Region {
+	owned := make([]delta.Region, len(regions))
+	for index, region := range regions {
+		owned[index] = region
+		if region.PreviousBounds != nil {
+			bounds := *region.PreviousBounds
+			owned[index].PreviousBounds = &bounds
+		}
 	}
-	delta.SortRegions(regions)
-	return regions
+	delta.SortRegions(owned)
+	return owned
 }
 
-func wrapDifferError(sequence uint64, err error) error {
-	if fieldErr, ok := err.(*fielderr.Error); ok {
-		if fieldErr.Subject == "" {
-			fieldErr.Subject = "frame"
+// ownFingerprint copies the cell slice for the same reason.
+func ownFingerprint(fingerprint delta.Fingerprint) delta.Fingerprint {
+	if fingerprint.Cells != nil {
+		fingerprint.Cells = append([]int(nil), fingerprint.Cells...)
+	}
+	return fingerprint
+}
+
+// wrapDifferError attributes a differ failure to the operation that failed and to the
+// frame being processed, without rewriting the error it was handed: an error value may
+// be shared, and mutating it is how a message ends up naming the wrong frame. The cause
+// is preserved so a caller can still test for the original error.
+func wrapDifferError(operation string, sequence uint64, err error) error {
+	if fieldErr, ok := err.(*fielderr.Error); ok && fieldErr != nil {
+		context := *fieldErr
+		if context.Subject == "" {
+			context.Subject = "frame"
 		}
-		if fieldErr.Sequence == 0 {
-			fieldErr.Sequence = sequence
+		// The frame number is always the one this engine handed to the differ. A
+		// differ that pools its errors can carry a stale number from an earlier call,
+		// and reporting that would send an operator to the wrong frame.
+		context.Sequence = sequence
+		if context.Op == "" {
+			context.Op = "stream.Push"
 		}
-		return fieldErr
+		context.Cause = err
+		return &context
 	}
 	return &fielderr.Error{
 		Op:       "stream.Push",
 		Subject:  "frame",
 		Sequence: sequence,
-		Field:    "compare",
+		Field:    operation,
 		Problem:  err.Error(),
+		Cause:    err,
 	}
 }

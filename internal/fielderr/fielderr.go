@@ -23,6 +23,9 @@ type Error struct {
 	Field string
 	// Problem states what is wrong, in a form an operator can act on.
 	Problem string
+	// Cause is the underlying failure, when there is one. It is kept so that
+	// errors.Is and errors.As still work through the context this type adds.
+	Cause error
 }
 
 func (e *Error) Error() string {
@@ -36,6 +39,21 @@ func (e *Error) Error() string {
 	return message + ": " + e.Field + ": " + e.Problem
 }
 
+// Unwrap exposes the cause, so a caller can still test for the original error.
+func (e *Error) Unwrap() error {
+	return e.Cause
+}
+
+// With returns a copy carrying the operation, subject and sequence. A copy, not a
+// mutation: an error value may be shared, and rewriting someone else's context is
+// how a message ends up naming the wrong frame.
+func (e Error) With(op, subject string, sequence uint64) *Error {
+	e.Op = op
+	e.Subject = subject
+	e.Sequence = sequence
+	return &e
+}
+
 // Range renders a range violation in one place so every message reads the same.
 func Range(field string, low, high, got int) *Error {
 	return &Error{
@@ -44,8 +62,9 @@ func Range(field string, low, high, got int) *Error {
 	}
 }
 
-// At sets the operation and subject on an error built elsewhere, so callers can
-// build the specific complaint first and attach the context after.
+// At sets the operation and subject on an error built elsewhere, in place. It is kept
+// for the simple case where the value was just constructed and cannot be shared; use
+// With when the error came from somewhere else.
 func (e *Error) At(op, subject string, sequence uint64) *Error {
 	e.Op = op
 	e.Subject = subject

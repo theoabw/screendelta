@@ -8,6 +8,8 @@
 package frame
 
 import (
+	"math"
+
 	"github.com/theoabw/screendelta/internal/fielderr"
 )
 
@@ -81,6 +83,15 @@ func (f Frame) Validate() error {
 			Problem:  "unsupported pixel format " + string(f.Format) + ", expected " + string(FormatRGBA8),
 		}
 	}
+	if !isFinite(f.ScaleFactor) {
+		return &FieldError{
+			Op:       operation,
+			Subject:  "frame",
+			Sequence: f.Sequence,
+			Field:    "scaleFactor",
+			Problem:  "must be a finite number, not NaN or infinity",
+		}
+	}
 	if f.ScaleFactor <= 0 {
 		return &FieldError{
 			Op:       operation,
@@ -105,8 +116,25 @@ func (f Frame) Validate() error {
 
 // ViewportChanged reports whether the two frames describe different viewports, in
 // which case their difference is a display change rather than content.
+//
+// Two NaN scale factors are treated as equal, so the relation stays reflexive: a value
+// that is not equal to itself would make every comparison report a viewport change.
+// Validated frames never carry a NaN scale in the first place.
 func ViewportChanged(previous, current Frame) bool {
-	return previous.Width != current.Width ||
-		previous.Height != current.Height ||
-		previous.ScaleFactor != current.ScaleFactor
+	if previous.Width != current.Width || previous.Height != current.Height {
+		return true
+	}
+	if previous.ScaleFactor == current.ScaleFactor {
+		return false
+	}
+	return !(isNaN(previous.ScaleFactor) && isNaN(current.ScaleFactor))
+}
+
+// isFinite reports whether a float is a usable number.
+func isFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func isNaN(value float64) bool {
+	return math.IsNaN(value)
 }

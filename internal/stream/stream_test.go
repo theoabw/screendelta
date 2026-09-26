@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/theoabw/screendelta/internal/config"
 	"github.com/theoabw/screendelta/internal/delta"
+	"github.com/theoabw/screendelta/internal/fielderr"
 	"github.com/theoabw/screendelta/internal/frame"
 )
 
@@ -276,5 +278,172 @@ func TestDifferErrorsAreAttributedToTheFrame(t *testing.T) {
 func TestNewRejectsAMissingDiffer(t *testing.T) {
 	if _, err := New(config.Defaults(), nil); err == nil {
 		t.Fatal("New accepted a nil differ")
+	}
+}
+
+// reusingDiffer behaves like a streaming implementation that pools its own output
+// storage, which is what the ownership rule has to survive.
+type reusingDiffer struct {
+	regions     []delta.Region
+	cells       []int
+	previous    delta.Bounds
+	frameNumber int
+	shared      *fielderr.Error
+}
+
+func (d *reusingDiffer) Compare(previous, current frame.Frame, cfg config.Config) ([]delta.Region, []delta.Condition, error) {
+	d.frameNumber = int(current.Sequence)
+	if d.shared != nil {
+		return nil, nil, d.shared
+	}
+	d.previous = delta.Bounds{X: float64(d.frameNumber) / 100, Y: 0, W: 0.1, H: 0.1}
+	d.regions = []delta.Region{{
+		Identity:       1,
+		Class:          delta.ClassMoved,
+		Bounds:         delta.Bounds{X: 0, Y: 0, W: 0.1, H: 0.1},
+		PreviousBounds: &d.previous,
+		Magnitude:      float64(d.frameNumber) / 10,
+		AreaPixels:     4,
+	}}
+	return d.regions, nil, nil
+}
+
+func (d *reusingDiffer) Fingerprint(current frame.Frame, cfg config.Config) (delta.Fingerprint, error) {
+	size := cfg.Fingerprint.GridSize
+	if d.cells == nil {
+		d.cells = make([]int, size*size)
+	}
+	d.cells[0] = int(current.Sequence)
+	return delta.Fingerprint{
+		Algorithm:  "reuse-1",
+		GridSize:   size,
+		Cells:      d.cells,
+		StrictHash: checksum(current.Pixels)[:16],
+	}, nil
+}
+
+func TestRetainedDocumentsDoNotAliasDifferStorage(t *testing.T) {
+	differ := &reusingDiffer{}
+	engine := newEngine(t, differ)
+
+	var documents []delta.Document
+	for sequence := uint64(1); sequence <= 3; sequence++ {
+		document, err := engine.Push(testFrame(sequence, 8, 8, byte(sequence)))
+		if err != nil {
+			t.Fatalf("Push failed: %v", err)
+		}
+		documents = append(documents, document)
+	}
+
+	if len(documents[0].Regions) != 0 {
+		t.Fatalf("the first frame reported %d regions, want none", len(documents[0].Regions))
+	}
+	if got := documents[0].Fingerprint.Cells[0]; got != 1 {
+		t.Fatalf("the first document's fingerprint now reads %d, so it aliases the differ's storage", got)
+	}
+	if got := documents[1].Regions[0].Magnitude; got != 0.2 {
+		t.Fatalf("the second document's magnitude now reads %v, so it aliases the differ's storage", got)
+	}
+	if got := documents[1].Regions[0].PreviousBounds.X; got != 0.02 {
+		t.Fatalf("the second document's previous bounds now read %v, so they alias the differ's storage", got)
+	}
+	if got := documents[2].Regions[0].Magnitude; got != 0.3 {
+		t.Fatalf("the third document's magnitude now reads %v", got)
+	}
+}
+
+func TestDifferErrorsNameTheFailingOperation(t *testing.T) {
+	cases := []struct {
+		name         string
+		differ       *stubDiffer
+		operation    string
+		expectFrame  string
+		failsOnFirst bool
+	}{
+		{name: "compare", differ: &stubDiffer{err: errors.New("comparison exploded")}, operation: "compare", expectFrame: "frame 2"},
+		// The fingerprint is computed for every frame, including the first, so this
+		// failure is reported against frame 1.
+		{name: "fingerprint", differ: &stubDiffer{fingerprintErr: errors.New("fingerprint exploded")}, operation: "fingerprint", expectFrame: "frame 1", failsOnFirst: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := newEngine(t, tc.differ)
+			_, firstErr := engine.Push(testFrame(1, 8, 8, 0x10))
+			if tc.failsOnFirst {
+				if firstErr == nil {
+					t.Fatal("Push hid the fingerprint error on the first frame")
+				}
+			} else if firstErr != nil {
+				t.Fatalf("Push failed on the first frame: %v", firstErr)
+			}
+
+			var err error
+			if tc.failsOnFirst {
+				err = firstErr
+			} else {
+				_, err = engine.Push(testFrame(2, 8, 8, 0x10))
+			}
+			if err == nil {
+				t.Fatal("Push hid a differ error")
+			}
+			if !strings.Contains(err.Error(), tc.operation) {
+				t.Fatalf("error does not name the failing operation %q: %q", tc.operation, err.Error())
+			}
+			if !strings.Contains(err.Error(), tc.expectFrame) {
+				t.Fatalf("error does not name %s: %q", tc.expectFrame, err.Error())
+			}
+		})
+	}
+}
+
+func TestWrappingADifferErrorDoesNotRewriteIt(t *testing.T) {
+	shared := &fielderr.Error{Op: "differ.Compare", Subject: "frame", Sequence: 7, Field: "tile", Problem: "shared failure"}
+	differ := &stubDiffer{}
+	engine := newEngine(t, differ)
+	if _, err := engine.Push(testFrame(1, 8, 8, 0x10)); err != nil {
+		t.Fatalf("Push failed: %v", err)
+	}
+
+	// The same error value is handed back for a later frame, which a pooled differ may
+	// legitimately do. The message must name the frame that actually failed.
+	differ.err = shared
+	if _, err := engine.Push(testFrame(2, 8, 8, 0x10)); err == nil {
+		t.Fatal("Push hid the shared error")
+	}
+	if shared.Sequence != 7 {
+		t.Fatalf("wrapping rewrote the caller's error to frame %d", shared.Sequence)
+	}
+
+	differ.err = nil
+	if _, err := engine.Push(testFrame(3, 8, 8, 0x10)); err != nil {
+		t.Fatalf("Push failed: %v", err)
+	}
+	differ.err = shared
+	_, err := engine.Push(testFrame(4, 8, 8, 0x10))
+	if err == nil {
+		t.Fatal("Push hid the shared error")
+	}
+	// The engine knows which frame it handed to the differ, so that is the frame the
+	// message must name, however stale the error value's own number is.
+	if !strings.Contains(err.Error(), "frame 4") {
+		t.Fatalf("error names a stale frame: %q", err.Error())
+	}
+	if shared.Sequence != 7 {
+		t.Fatalf("wrapping rewrote the caller's error to frame %d", shared.Sequence)
+	}
+}
+
+func TestDifferErrorKeepsItsCause(t *testing.T) {
+	sentinel := errors.New("disk on fire")
+	engine := newEngine(t, &stubDiffer{err: sentinel})
+	if _, err := engine.Push(testFrame(1, 8, 8, 0x10)); err != nil {
+		t.Fatalf("Push failed: %v", err)
+	}
+	_, err := engine.Push(testFrame(2, 8, 8, 0x10))
+	if err == nil {
+		t.Fatal("Push hid the error")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("errors.Is no longer finds the cause: %v", err)
 	}
 }
