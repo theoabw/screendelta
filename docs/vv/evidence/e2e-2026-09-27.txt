@@ -1,0 +1,56 @@
+End-to-end and compliance measurement, 2026-09-27.
+Command: go test ./tests/... -v
+
+The end-to-end tests build the real command, generate real frames with the corpus generator, and run the
+command the way a reviewer following the quickstart does, checking the exit code, standard output and the
+files it left behind. They are a level above the unit tests: the unit tests prove the rules, these prove
+that the documented scenarios produce the documented result.
+
+Quickstart scenarios, each with the test that runs it against the built binary:
+
+  scenario 1  identical frames report no regions and the document carries no timing field
+              TestScenario1IdenticalFramesReportNothing
+  scenario 2  a changed region is reported once, with normalized bounds inside the frame
+              TestScenario2AChangedRegionIsReportedOnce
+  scenario 3  noise alone reports nothing
+              TestScenario3NoiseAloneReportsNothing
+  scenario 4  identity survives motion and is not reissued per frame
+              TestScenario4IdentitySurvivesMotion
+  scenario 6  a fingerprint distinguishes noise from content, equal and different
+              TestScenario6FingerprintDistinguishesNoiseFromContent
+  scenario 7  regions of interest restrict the output, and an empty list reports nothing
+              TestScenario7RegionsOfInterestRestrict
+  scenario 8  unusable input fails loudly, with exit codes 1 and 2, and writes nothing to standard output
+              TestScenario8UnusableInputFailsLoudly
+  scenario 9  two runs with different thread counts produce byte-identical output
+              TestScenario9OutputIsDeterministicAcrossThreads
+
+Scenario 5 of the quickstart (an occluded element reported as uncertain rather than matched) is exercised
+by TestAReturnAfterACoverIsAddedUncertain and TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities in
+internal/diff rather than here, because it needs a specific sequence of frames rather than a corpus case,
+and the corpus occluded case covers by an amount the cover rule does not treat as a cover. That is recorded
+rather than hidden: the scenario is demonstrated, at a different level.
+
+Compliance, FR-016:
+
+  no network import      TestEngineImportsNoNetworkPackage
+  no process execution   TestEngineStartsNoProcess
+  writes only where declared, statically
+                         TestWritesHappenOnlyWhereDeclared
+  writes only its output, dynamically
+                         TestARunWritesOnlyItsDeclaredOutput
+
+The static checks walk the syntax trees of every non-test file in internal, cmd and tools. The dynamic one
+runs the command in a working directory of its own and compares the tree before and after, allowing exactly
+one new file, the one named by --out.
+
+Both halves were falsified before they were believed. Adding an import of net/http and a stray os.WriteFile
+to internal/diff made the first two static checks fail with the file and the call named; removing the change
+made them pass again. A guard that has never failed is a guard nobody has tested.
+
+Requirements this measures:
+  FR-016    no network access and no writes outside the declared output path   met
+  FR-013    the same capabilities through the command line and the library, exercised through the command
+            line only, so the library half is covered by its own tests rather than here   partly
+  NFR-008   CPU only, no network at runtime: the network half is met; the Windows half is the cross-build
+            in CI, and a smoke test on Windows is still outstanding
