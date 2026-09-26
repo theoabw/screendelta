@@ -52,11 +52,11 @@
 
 ## Phase 5: User Story 3, fingerprint a screen (P3)
 
-- [ ] T035 Implement grid downscaling and luma quantisation (`internal/fingerprint`) (FR-008)
-- [ ] T036 Implement strict hashing over the quantized grid (`internal/fingerprint`) (FR-008)
-- [ ] T037 Implement tolerant comparison bounded by `maxCellDelta` (`internal/fingerprint`) (FR-009)
-- [ ] T038 Add fingerprint tests: a noisy copy is equal, a materially changed copy is different (`internal/fingerprint`) (FR-008, FR-009)
-- [ ] T039 Implement the fingerprint subcommand and decode-time rejection of an unknown schema version (`cmd/screendelta`) (FR-009, FR-014, NFR-010)
+- [x] T035 Implement grid downscaling and luma quantisation (`internal/fingerprint`) (FR-008)
+- [x] T036 Implement strict hashing over the quantized grid (`internal/fingerprint`) (FR-008)
+- [x] T037 Implement tolerant comparison bounded by `maxCellDelta` (`internal/fingerprint`) (FR-009)
+- [x] T038 Add fingerprint tests: a noisy copy is equal, a materially changed copy is different (`internal/fingerprint`) (FR-008, FR-009)
+- [x] T039 Implement the fingerprint subcommand and decode-time rejection of an unknown schema version (`cmd/screendelta`) (FR-009, FR-014, NFR-010)
 
 ## Phase 6: Polish and cross-cutting concerns
 

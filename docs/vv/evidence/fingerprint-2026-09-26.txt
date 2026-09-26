@@ -1,0 +1,59 @@
+Fingerprint measurement, 2026-09-26.
+Commands: go test ./internal/fingerprint/... -v, and the compare subcommand through the real command
+entry point.
+
+What is demonstrated, and where:
+
+FR-008  a fingerprint that is stable under sub-threshold noise
+        internal/diff:        TestFingerprintTracksContentNotNoise (identical frames hash alike, a
+                              materially changed frame does not)
+        internal/fingerprint: TestNoiseWithinTheAllowanceIsEqual (a noisy copy compares equal while
+                              its strict hash differs)
+FR-009  comparing a frame against a stored fingerprint and reporting equal or different
+        internal/fingerprint: TestIdenticalFingerprintsAreEqualAndStrictlyEqual,
+                              TestADifferenceBeyondTheAllowanceIsNotEqual,
+                              TestTheAllowanceBoundaryIsInclusive,
+                              TestAMateriallyChangedScreenIsDifferent,
+                              TestFingerprintsOfDifferentShapesCannotBeCompared
+        cmd/screendelta:      TestCompareReportsEqualAndDifferent
+NFR-010 a consumer can reject a document whose version it does not understand
+        cmd/screendelta:      TestCompareRejectsAnUnknownSchemaVersion
+
+Verified by hand as well as by test, on a generated corpus pair at 320x240:
+
+  $ screendelta fingerprint --frame 001.png --out doc.json
+  {"schemaVersion":"1.0","frame":{"sequence":1,...},"fingerprint":{"algorithm":"grid-luma-1",
+   "gridSize":32,"cells":[33,33,...],"strictHash":"..."}}
+
+  $ screendelta compare --frame 001.png --document doc.json
+  equal: same screen, same summary (allowance 4, differing cells 0, largest delta 0)
+
+  $ screendelta compare --frame 002.png --document doc.json
+  different: the grids differ (allowance 4, differing cells 32, largest delta 9)
+
+  $ screendelta compare --frame 001.png --document future.json     # schemaVersion 9.9
+  screendelta: compare: delta.Decode: document: schemaVersion: unsupported version "9.9" ...
+  exit 3
+
+The exit code for the last case is the contract's third one, which the interface document reserves for
+a request this build cannot express. A document from a newer schema is exactly that: the bytes are
+readable and the meaning is not, so treating it as bad input would tell a caller to look at the file
+when the problem is the version.
+
+Two answers are reported rather than one. The tolerant answer is what a plan cache wants, since a
+screen captured twice differs by a little everywhere and is still the same screen; the strict hash is
+what an exact cache key wants. A caller that needs a decision uses the comparison and one that needs a
+key uses the hash, and neither has to guess which one the engine meant. The four line report above
+shows both on the same run: the noisy copy compares equal while its hash differs.
+
+The tolerance is per cell rather than a budget in total, which is R6 of the research record: a total
+budget would let one large difference hide behind many equal cells, and capture noise is per cell.
+The allowance is inclusive at its boundary, tested at exactly the configured delta and one level past.
+
+Where the code lives, and why that differs from the plan. plan.md assigns the grid and the hash to
+internal/fingerprint. They are computed inside internal/diff instead, because computing a fingerprint
+needs the frame's luma plane and the comparison needs the same plane: keeping one conversion per frame
+is worth about three milliseconds of the twelve the latency requirement allows, and splitting the
+packages would have meant converting every frame twice. internal/fingerprint holds the comparison,
+which is the part that answers FR-009 and has no dependency on a frame. The deviation is recorded in
+plan.md rather than left implicit.

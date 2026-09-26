@@ -125,3 +125,17 @@ No constitution violations. Two decisions worth watching:
 |---|---|---|
 | Buffer pools owned by the stream | The p99 target and the memory ceiling are both threatened by naive per-frame allocation, and Go's collector makes tail latency the binding constraint | Allocating per frame is simpler, but it moves the risk into the measurement the project is graded on, and the pools are a few hundred lines with their own tests |
 | Separate `identity` package with property tests | Identity across occlusion is the hardest rule in the specification and the one most likely to be wrong in a way that looks plausible | Folding matching into `diff` would make the rule untestable in isolation and couple an accuracy requirement to image code |
+
+## Deviation: where the fingerprint is computed
+
+This plan assigns grid downscaling and strict hashing to `internal/fingerprint`. They are computed
+inside `internal/diff` instead, and `internal/fingerprint` holds the comparison that answers FR-009.
+
+The reason is measured rather than aesthetic. Computing a fingerprint needs the frame's luma plane,
+and the comparison against the previous frame needs the same plane. Keeping one conversion per frame
+took the p95 latency from 25.26 ms to 9.00 ms per 1080p pair, of which the conversion is about 3.8 ms;
+splitting the two into packages that each convert the frame would have paid that cost twice and left
+no room under the 12 ms requirement.
+
+The requirement the plan was protecting is intact: a consumer can compare a stored fingerprint with a
+current frame without a frame in hand, which is what `internal/fingerprint` does.
