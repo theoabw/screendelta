@@ -169,8 +169,29 @@ plus coverage and any defect that remains open. The running record is
 
 How commit messages link code changes to specification changes and prompt
 iterations, and how the workspace was configured. The convention and its
-rationale are in `CONTRIBUTING.md` and `AGENTS.md`. Report the measured result:
-counts of commits carrying `Spec:` and `Req:` trailers, for example.
+rationale are in `CONTRIBUTING.md`, and the agent-facing version is in
+`AGENTS.md`.
+
+Git activity carries 15 of the 50 course points, and the course asks for
+modifications, issues and discussions to be visible in git, so report the process
+evidence rather than only the convention:
+
+- Commit counts by phase and by type, and the fact that the history was kept to
+  one logical change per commit by design (`CONTRIBUTING.md`, commit granularity).
+- Counts of commits carrying each trailer, which is what links code to
+  specification changes and prompt iterations. These are reproducible:
+  `git log --oneline --grep='Req:'`, `git log --format='%s' | cut -d'(' -f1 | sort | uniq -c`.
+- Issues raised and closed, with the commit that closed each one, and the merge
+  requests where review happened, including the independent agent review findings
+  and their resolutions.
+- The workspace configuration itself: the Spec Kit version pin, the three agent
+  command surfaces, the constitution, the gates in `CONTRIBUTING.md`, and the
+  traceability check that runs in CI.
+- One honest note about what the single-author history cannot show, which is a
+  second human reviewer, and what was put in its place.
+
+State where the evidence lives and how to reproduce it, so a reader can verify the
+counts instead of taking them on trust.
 
 ### 6.2 Team Contribution Breakdown
 
