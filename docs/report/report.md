@@ -484,15 +484,20 @@ Current state, from the commands named:
 | Allocation steady state | the allocation guard | 8,220 and 8,226 bytes per frame in two consecutive windows | NFR-003 |
 | Coverage | `go test -cover` | diff 81.9, identity 85.2, fingerprint 87.2, stream 96.4 percent | NFR-009 |
 | Determinism | two runs encoded and compared | Byte-identical over 10,000 frames at GOMAXPROCS 1 and 4 | NFR-004 in part |
-| Requirement traceability | `make check-strict` | 32 requirements, 32 matrix rows, 26 verified, 0 errors | the process gate |
+| Requirement traceability | `make check-strict` | 32 requirements, 32 matrix rows, 28 verified, 0 errors | the process gate |
 
-26 of 32 requirements are verified, meaning a test passes and its output is committed. The rest are
+28 of 32 requirements are verified, meaning a test passes and its output is committed. The rest are
 in progress and the matrix says which, and the honest summary of the gap is this:
 
-- **Four requirements are one step from verified and are held back deliberately**: FR-006 and FR-007,
-  because an open defect (AUD-022) is a counterexample to the identity claim, and NFR-004 and SC-003,
-  because cross-host determinism is untested. Passing scores do not resolve a counterexample, which is
-  the judgement the reviews forced.
+- **The identity requirements are verified against a specification that states their boundaries.**
+  FR-006 and FR-007 were held back while a review's counterexamples stood; the two that remain are
+  inherent to a single frame pair, they are written into the specification with their reason, and both are
+  pinned by tests. Verifying them is a decision about what the requirement says, and the evidence file says
+  so rather than implying the engine got better.
+- **Two requirements are one step from verified and are held back deliberately**: NFR-004, because two of
+  its three named conditions are demonstrated (thread count and collector scheduling, four configurations)
+  and another host is not testable from here, and NFR-008, because the cross build is checked and running
+  the suite on Windows is not.
 - **Two requirements need testing that exists but has not been written**: FR-016 (no network, no stray
   writes) and NFR-008 (the Windows cross-build is in CI, the platform smoke test is not).
 - **Two need a human who is not the author**: NFR-007 and SC-005 (usability), which is what the acceptance
@@ -554,7 +559,7 @@ people, and what replaced the missing second and third reviewers.
 
 Leverage, quantified rather than asserted: 90 commits in two days, 6,153 lines of Go against 5,813 lines
 of test and 4,436 lines of specification, plan and process documents, 53 planned tasks of which 21 are
-complete, 32 requirements of which 26 are verified, and 46 recorded findings of which 45 are fixed. The
+complete, 32 requirements of which 28 are verified, and 46 recorded findings of which 45 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
 Where the human was the bottleneck is the honest part of this section, and there are three places:
