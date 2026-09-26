@@ -222,3 +222,61 @@ func TestSharedIdentitiesAreAllowedAndSortTotally(t *testing.T) {
 		t.Fatalf("sorting changed the regions: %+v", sorted)
 	}
 }
+
+// TestDecodeRejectsAMissingRequiredField closes what the review recorded as an open defect: a document that
+// omits a required field decoded successfully, because unmarshalling gives a missing field the same value as
+// an explicitly zero one. The engine always writes every field, so the exposure was a consumer reading a
+// document written by something else and believing it had values it did not have.
+func TestDecodeRejectsAMissingRequiredField(t *testing.T) {
+	cells := make([]string, 64)
+	for index := range cells {
+		cells[index] = "0"
+	}
+	valid := `{"schemaVersion":"1.0","frame":{"sequence":2,"width":640,"height":480,"scaleFactor":1},` +
+		`"fingerprint":{"algorithm":"grid-luma-1","gridSize":8,"cells":[` + strings.Join(cells, ",") + `],"strictHash":"0123456789abcdef"},` +
+		`"regions":[{"identity":1,"class":"changed","bounds":{"x":0.1,"y":0.1,"w":0.2,"h":0.2},"magnitude":0.5,"areaPixels":12288,` +
+		`"identityConfidence":1,"identityUncertain":false}],"conditions":[]}`
+
+	if _, err := Decode(strings.NewReader(valid)); err != nil {
+		t.Fatalf("the valid document was rejected: %v", err)
+	}
+
+	cases := []struct {
+		name  string
+		body  string
+		field string
+	}{
+		{name: "identity confidence", field: "regions[0].identityConfidence",
+			body: strings.Replace(valid, `,"identityConfidence":1`, "", 1)},
+		{name: "identity uncertainty", field: "regions[0].identityUncertain",
+			body: strings.Replace(valid, `,"identityUncertain":false`, "", 1)},
+		{name: "identity", field: "regions[0].identity",
+			body: strings.Replace(valid, `"identity":1,`, "", 1)},
+		{name: "area", field: "regions[0].areaPixels",
+			body: strings.Replace(valid, `"areaPixels":12288,`, "", 1)},
+		{name: "frame sequence", field: "frame.sequence",
+			body: strings.Replace(valid, `"sequence":2,`, "", 1)},
+		{name: "frame scale factor", field: "frame.scaleFactor",
+			body: strings.Replace(valid, `,"scaleFactor":1`, "", 1)},
+		{name: "fingerprint hash", field: "fingerprint.strictHash",
+			body: strings.Replace(valid, `,"strictHash":"0123456789abcdef"`, "", 1)},
+		{name: "conditions", field: "conditions",
+			body: strings.Replace(valid, `,"conditions":[]`, "", 1)},
+		{name: "null identity confidence", field: "regions[0].identityConfidence",
+			body: strings.Replace(valid, `"identityConfidence":1`, `"identityConfidence":null`, 1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.body == valid {
+				t.Fatalf("the fixture for %s did not change the document, so this test would prove nothing", tc.name)
+			}
+			_, err := Decode(strings.NewReader(tc.body))
+			if err == nil {
+				t.Fatalf("a document missing %s was accepted", tc.field)
+			}
+			if !strings.Contains(err.Error(), tc.field) {
+				t.Fatalf("the error does not name %s: %v", tc.field, err)
+			}
+		})
+	}
+}

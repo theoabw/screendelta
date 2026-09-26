@@ -54,6 +54,12 @@ func Decode(r io.Reader) (Document, error) {
 		return Document{}, &FieldError{Op: "delta.Decode", Subject: "document", Field: "input", Problem: "cannot read: " + err.Error()}
 	}
 
+	// Presence is checked before the struct is built, because after that a missing required field is
+	// indistinguishable from one that was written as a zero value.
+	if err := checkRequiredFields(raw); err != nil {
+		return Document{}, err
+	}
+
 	var document Document
 	if err := json.Unmarshal(raw, &document); err != nil {
 		return Document{}, &FieldError{Op: "delta.Decode", Subject: "document", Field: "json", Problem: "cannot parse: " + err.Error()}
