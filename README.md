@@ -5,7 +5,10 @@ project. It holds the specification, the implementation plan, the code, the
 verification evidence and the experience report. Development follows
 Specification-Driven Development (SDD) with [GitHub Spec Kit](https://github.com/github/spec-kit).
 
-**Status**: scaffold complete, system not yet selected. See [Open decisions](#open-decisions).
+**Status**: system selected, specification drafted. ScreenDelta, a deterministic
+frame delta and element identity engine, is specified in
+`specs/001-frame-delta-engine/spec.md` with 32 traced requirements. The plan and
+tasks come next. See [Open decisions](#open-decisions) for what is still unsettled.
 
 ## Deliverables
 
@@ -118,11 +121,14 @@ specifications fails instead of passing quietly.
 
 ## Open decisions
 
-1. **Which system to build.** Candidate systems are scored in `docs/ideas.md`.
-   Once chosen, record it as `docs/adr/0002-<system>.md` and write the first
-   specification, `specs/001-<slug>/spec.md`.
-2. **Technology stack.** Follows from the system. The choice and its
-   justification go into section 2.4 of the report.
+1. **The system is chosen**: ScreenDelta, the frame delta and element identity
+   engine, recorded in `docs/adr/0002-frame-delta-engine.md` and specified in
+   `specs/001-frame-delta-engine/spec.md`. Candidate systems that were rejected are
+   scored in `docs/ideas.md`.
+2. **Technology stack**, which the plan decides against the constraints in
+   `.specify/memory/constitution.md`: single-command distribution, predictable
+   numeric behaviour, and a native image path fast enough for the latency budget.
+   The choice and its justification go into section 2.4 of the report.
 3. **External testers for user acceptance.** Two or three people who are not the
    author, identified before implementation starts, because section 5.1 grades
    validation against stakeholders rather than tests alone.

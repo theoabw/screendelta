@@ -19,3 +19,4 @@ Decisions taken so far:
 | Record | Decision |
 |---|---|
 | [0001](0001-adopt-spec-kit.md) | Adopt GitHub Spec Kit 1.0.12 with three agent surfaces and mechanical traceability |
+| [0002](0002-frame-delta-engine.md) | Build ScreenDelta, a bounded frame delta and element identity engine, as one stage of a GUI-navigation pipeline |

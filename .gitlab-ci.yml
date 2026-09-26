@@ -5,12 +5,10 @@ spec-traceability:
   stage: verify
   image: python:3.12-slim
   script:
-    # While specs/ is empty this succeeds with a warning, so the pipeline is green
-    # on an unstarted repository. Once specs/001-<slug>/spec.md exists, replace the
-    # line below with `python3 scripts/check_traceability.py --require-specs`, which
-    # is what `make check-strict` runs, so that a repository whose specification
-    # disappeared fails instead of passing quietly.
-    - python3 scripts/check_traceability.py
+    # --require-specs is on because specs/001-frame-delta-engine/spec.md now exists,
+    # so a repository whose specification disappeared must fail rather than pass
+    # quietly. `make check-strict` runs the same command locally.
+    - python3 scripts/check_traceability.py --require-specs
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH
