@@ -245,3 +245,89 @@ func TestReadErrorsExitTwo(t *testing.T) {
 		t.Fatalf("exit code = %d, want 2 for an unreadable frame: %s", code, stderr)
 	}
 }
+
+// TestCompareReportsEqualAndDifferent covers FR-009 through the command line: a frame compared against
+// a fingerprint stored earlier, and the answer on standard output rather than in the exit code,
+// because a comparison that ran is a success whichever way it came out.
+func TestCompareReportsEqualAndDifferent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "frame.png")
+	writePNG(t, path, 200)
+
+	stored := filepath.Join(dir, "stored.json")
+	code, _, stderr := invoke(t, "fingerprint", "--frame", path, "--out", stored)
+	if code != 0 {
+		t.Fatalf("fingerprint exited %d: %s", code, stderr)
+	}
+
+	code, stdout, stderr := invoke(t, "compare", "--frame", path, "--document", stored)
+	if code != 0 {
+		t.Fatalf("compare exited %d: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "equal") {
+		t.Fatalf("a frame compared against its own fingerprint said %q", stdout)
+	}
+
+	// A materially different screen must come out different.
+	other := filepath.Join(dir, "other.png")
+	writePNG(t, other, 40)
+	code, stdout, stderr = invoke(t, "compare", "--frame", other, "--document", stored)
+	if code != 0 {
+		t.Fatalf("compare exited %d: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "different") {
+		t.Fatalf("a different screen said %q", stdout)
+	}
+}
+
+// TestCompareRejectsAnUnknownSchemaVersion covers NFR-010 and FR-015 through the command line: a
+// document from a version this build does not understand is a contract problem, not bad input, which
+// is what the third exit code is for.
+func TestCompareRejectsAnUnknownSchemaVersion(t *testing.T) {
+	dir := t.TempDir()
+	frame := filepath.Join(dir, "frame.png")
+	writePNG(t, frame, 200)
+
+	stored := filepath.Join(dir, "stored.json")
+	if code, _, stderr := invoke(t, "fingerprint", "--frame", frame, "--out", stored); code != 0 {
+		t.Fatalf("fingerprint exited %d: %s", code, stderr)
+	}
+
+	body, err := os.ReadFile(stored)
+	if err != nil {
+		t.Fatalf("cannot read the stored document: %v", err)
+	}
+	future := strings.Replace(string(body), `"schemaVersion":"1.0"`, `"schemaVersion":"2.0"`, 1)
+	if future == string(body) {
+		t.Fatalf("the stored document does not declare the schema version: %s", body)
+	}
+	futurePath := filepath.Join(dir, "future.json")
+	if err := os.WriteFile(futurePath, []byte(future), 0o644); err != nil {
+		t.Fatalf("cannot write the fixture: %v", err)
+	}
+
+	code, _, stderr := invoke(t, "compare", "--frame", frame, "--document", futurePath)
+	if code != 3 {
+		t.Fatalf("a document from an unknown schema version exited %d, want 3: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "schemaVersion") {
+		t.Fatalf("the error does not name the field: %q", stderr)
+	}
+}
+
+func TestCompareNeedsBothArguments(t *testing.T) {
+	code, _, stderr := invoke(t, "compare", "--frame", "a.png")
+	if code != 1 {
+		t.Fatalf("exit code = %d, want 1: %s", code, stderr)
+	}
+	if !strings.Contains(stderr, "--document") {
+		t.Fatalf("the error does not say what is missing: %q", stderr)
+	}
+}
+
+func TestCompareReportsAnUnreadableDocumentAsInput(t *testing.T) {
+	code, _, _ := invoke(t, "compare", "--frame", "/nonexistent/frame.png", "--document", "/nonexistent/doc.json")
+	if code != 2 {
+		t.Fatalf("exit code = %d, want 2 for a missing file", code)
+	}
+}

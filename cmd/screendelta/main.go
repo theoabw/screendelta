@@ -26,6 +26,7 @@ import (
 	"github.com/theoabw/screendelta/internal/delta"
 	"github.com/theoabw/screendelta/internal/diff"
 	"github.com/theoabw/screendelta/internal/fielderr"
+	"github.com/theoabw/screendelta/internal/fingerprint"
 	"github.com/theoabw/screendelta/internal/frame"
 	"github.com/theoabw/screendelta/internal/stream"
 )
@@ -39,8 +40,14 @@ Usage:
   screendelta diff        --previous <frame> --current <frame> [--config <file>] [--out <path>]
   screendelta stream      --source <dir|->        [--config <file>] [--out <path>]
   screendelta fingerprint --frame <frame>         [--config <file>] [--out <path>]
+  screendelta compare     --frame <frame> --document <json> [--config <file>]
   screendelta validate    --config <file>
   screendelta version
+
+screendelta compare reports whether a frame is the same screen as a stored fingerprint
+document, allowing each cell to differ by the configured tolerance. It prints equal or
+different and exits 0 either way, because a comparison that ran is a success: the answer is
+on standard output. A stored document the build does not understand is exit 3.
 
 Frame options:
   --width N --height N   required for raw rgba8 input, rejected for PNG
@@ -63,6 +70,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	subcommand, rest := args[0], args[1:]
 	switch subcommand {
+	case "compare":
+		return runCompare(rest, stdout, stderr)
 	case "diff":
 		return runDiff(rest, stdout, stderr)
 	case "stream":
@@ -101,6 +110,83 @@ func addFrameFlags(fs *flag.FlagSet, ff *frameFlags) {
 	fs.IntVar(&ff.height, "height", 0, "frame height for raw input")
 	fs.StringVar(&ff.pixelFormat, "pixel-format", string(frame.FormatRGBA8), "pixel format for raw input")
 	fs.BoolVar(&ff.pretty, "pretty", false, "indent the JSON output")
+}
+
+// runCompare answers FR-009: compare a frame against a fingerprint stored earlier. It is also where
+// an unsupported schema version is rejected with the exit code that means a contract problem rather
+// than an input problem, because a document the build does not understand is not bad data.
+func runCompare(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("compare", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var (
+		ff       frameFlags
+		frameArg string
+		document string
+	)
+	addFrameFlags(fs, &ff)
+	fs.StringVar(&frameArg, "frame", "", "the frame to fingerprint")
+	fs.StringVar(&document, "document", "", "a stored document whose fingerprint to compare against")
+	if err := fs.Parse(args); err != nil {
+		return usageError(stderr, "compare", err)
+	}
+	if frameArg == "" || document == "" {
+		fmt.Fprintln(stderr, "screendelta: compare: --frame and --document are both required")
+		return 1
+	}
+
+	cfg, code := loadConfig(ff, stderr, "compare")
+	if code != 0 {
+		return code
+	}
+
+	stored, code := readDocument(document, stderr, "compare")
+	if code != 0 {
+		return code
+	}
+
+	f, code := readFrame(frameArg, 1, ff, stderr, "compare")
+	if code != 0 {
+		return code
+	}
+	current, err := diff.New().Fingerprint(f, cfg)
+	if err != nil {
+		return reportError(stderr, "compare", err)
+	}
+
+	result, err := fingerprint.Compare(stored.Fingerprint, current, cfg.Fingerprint.MaxCellDelta)
+	if err != nil {
+		return reportError(stderr, "compare", err)
+	}
+
+	verdict := "different"
+	if result.Equal {
+		verdict = "equal"
+	}
+	fmt.Fprintf(stdout, "%s: %s (allowance %d, differing cells %d, largest delta %d)\n",
+		verdict, result.Explain(), cfg.Fingerprint.MaxCellDelta, result.DifferingCells, result.LargestDelta)
+	return 0
+}
+
+// readDocument reads a stored document, rejecting one this build does not understand. The distinction
+// matters: an unreadable file is bad input, and a document from a newer schema is a contract problem.
+func readDocument(path string, stderr io.Writer, subcommand string) (delta.Document, int) {
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Fprintf(stderr, "screendelta: %s: cannot open %s: %v\n", subcommand, path, err)
+		return delta.Document{}, 2
+	}
+	defer file.Close()
+
+	document, err := delta.Decode(file)
+	if err != nil {
+		var fieldErr *fielderr.Error
+		if errors.As(err, &fieldErr) && fieldErr.Field == "schemaVersion" {
+			fmt.Fprintf(stderr, "screendelta: %s: %s\n", subcommand, err.Error())
+			return delta.Document{}, 3
+		}
+		return delta.Document{}, reportError(stderr, subcommand, err)
+	}
+	return document, 0
 }
 
 func runDiff(args []string, stdout, stderr io.Writer) int {
