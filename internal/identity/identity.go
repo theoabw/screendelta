@@ -57,6 +57,137 @@ type Element struct {
 	pendingSet bool
 }
 
+// CoverDecision says whether a changed area has covered a tracked element.
+type CoverDecision struct {
+	// IsCover is true when the area contains most of a tracked element and extends past its footprint.
+	IsCover bool
+	// CoveredID is the identity of the element that is gone, and CoveredBounds is where it was.
+	CoveredID     uint64
+	CoveredBounds delta.Bounds
+}
+
+// ReturnDecision says whether a changed area is a retired element coming back rather than a change of
+// something currently on the screen.
+type ReturnDecision struct {
+	// IsReturn is true when the area looks like a retired element and unlike the one it overlaps.
+	IsReturn bool
+	// CoveredID is the identity of the tracked element the area overlaps, which the caller reports as
+	// removed because it is no longer what is there.
+	CoveredID     uint64
+	CoveredBounds delta.Bounds
+	// Assignment is the new identity for the returning content, marked uncertain.
+	Assignment Assignment
+}
+
+// Cover reports whether a changed area has taken the place of a tracked element.
+//
+// The test is that the area contains nearly all of the element and reaches past its footprint. A change
+// inside an element does neither, and an element that grows into new ground does not contain itself plus
+// margin without also containing whatever the growth covered, which is the case this rule exists for.
+func (m *Map) Cover(bounds delta.Bounds, frameWidth, frameHeight int) CoverDecision {
+	rect := pixelRect(bounds, frameWidth, frameHeight)
+
+	best := -1
+	bestContained := 0.0
+	for index := range m.elements {
+		element := &m.elements[index]
+		if element.State != Live {
+			continue
+		}
+		footprint := pixelRect(element.Bounds, frameWidth, frameHeight)
+		if footprint.Empty() {
+			continue
+		}
+		if !exceedsBy(rect, footprint, coverExceedancePixels) {
+			continue
+		}
+		contained := coveredFraction(rect, footprint)
+		if contained < coverInteriorFraction {
+			continue
+		}
+		if contained > bestContained {
+			best, bestContained = index, contained
+		}
+	}
+	if best < 0 {
+		return CoverDecision{}
+	}
+
+	element := &m.elements[best]
+	element.pendingSet = false
+	element.State = Retired
+	element.Confidence = 0
+	return CoverDecision{IsCover: true, CoveredID: element.ID, CoveredBounds: element.Bounds}
+}
+
+// Return reports whether a changed area is a retired element coming back.
+//
+// The question cannot be answered from one frame pair, so the answer is evidence rather than proof. The
+// area must overlap something currently tracked, look unlike it, and look like an element the engine has
+// retired. Where any of those is missing the answer is no, and the caller reports an ordinary change.
+func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, frameHeight int, sequence uint64) ReturnDecision {
+	if signature == nil {
+		return ReturnDecision{}
+	}
+	rect := pixelRect(bounds, frameWidth, frameHeight)
+
+	liveIndex, _ := m.bestLive(rect, frameWidth, frameHeight)
+	if liveIndex < 0 {
+		return ReturnDecision{}
+	}
+	live := &m.elements[liveIndex]
+	if !live.SignatureSet || signature.Close(live.Signature) {
+		// Nothing currently tracked is contradicted by how this area looks, so there is no return to
+		// report.
+		return ReturnDecision{}
+	}
+	liveDistance := signature.Distance(live.Signature)
+
+	retiredIndex, retiredScore := m.bestRetired(rect, frameWidth, frameHeight, signature)
+	if retiredIndex < 0 || retiredScore < returnGeometryFraction {
+		return ReturnDecision{}
+	}
+	retired := &m.elements[retiredIndex]
+	if !retired.SignatureSet || !signature.Close(retired.Signature) {
+		return ReturnDecision{}
+	}
+	retiredDistance := signature.Distance(retired.Signature)
+	if retiredDistance >= liveDistance {
+		// The area looks at least as much like what is on the screen as like what left, so the engine
+		// has no reason to call it a return.
+		return ReturnDecision{}
+	}
+
+	// The evidence is the margin between the two, tempered by how much of the element is actually back.
+	// One would require a perfect appearance match over a perfect overlap, which is still not proof of
+	// identity: the number measures the evidence and the uncertainty flag carries the claim.
+	margin := float64(liveDistance-retiredDistance) / float64(liveDistance+retiredDistance)
+	confidence := margin * retiredScore
+
+	coveredID, coveredBounds := live.ID, live.Bounds
+	live.pendingSet = false
+	live.State = Retired
+	live.Confidence = 0
+
+	assignment := m.allocate(bounds, sequence, confidence, signature)
+	assignment.Uncertain = true
+	return ReturnDecision{
+		IsReturn:      true,
+		CoveredID:     coveredID,
+		CoveredBounds: coveredBounds,
+		Assignment:    assignment,
+	}
+}
+
+// exceedsBy reports whether inner reaches further than outer by more than the given margin on at least
+// one side, which is what makes it bigger than the element rather than the element itself.
+func exceedsBy(inner, outer rectangle, margin int) bool {
+	return inner.Min.X < outer.Min.X-margin ||
+		inner.Min.Y < outer.Min.Y-margin ||
+		inner.Max.X > outer.Max.X+margin ||
+		inner.Max.Y > outer.Max.Y+margin
+}
+
 // LiveElement is a snapshot of one tracked element, for the layer that decides what changed.
 //
 // The classifier needs to know where the engine believes the elements are, and it must ask the layer

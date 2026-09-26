@@ -115,3 +115,12 @@ func regionMagnitude(previous, current frame.Frame, r image.Rectangle) float64 {
 	}
 	return float64(sum) / float64(count) / 255
 }
+
+// areaOf is the pixel area of normalized bounds, which is what a region reports.
+func areaOf(bounds delta.Bounds, current frame.Frame) int {
+	r := pixelRectOf(bounds, current)
+	if r.Empty() {
+		return 1
+	}
+	return r.Dx() * r.Dy()
+}

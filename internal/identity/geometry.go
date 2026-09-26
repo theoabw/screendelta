@@ -20,6 +20,18 @@ const (
 	// that appeared where the first one was.
 	minimumAreaRatio = 0.5
 	maximumAreaRatio = 2.0
+
+	// coverInteriorFraction is how much of a tracked element a changed area has to contain before the
+	// engine treats it as covering rather than as a change of that element. Nine tenths allows for the
+	// element's own edge pixels changing along with everything else.
+	coverInteriorFraction = 0.90
+	// coverExceedancePixels is how far past the element's footprint the area has to reach, in pixels, to
+	// be something bigger rather than the element itself. It matches the growth margin the comparison
+	// applies to every region, so an area that is only the element cannot qualify.
+	coverExceedancePixels = 2
+	// returnGeometryFraction is the overlap with a retired element's last position that makes it worth
+	// asking whether the returning content is that element.
+	returnGeometryFraction = 0.5
 )
 
 // rectangle is the pixel form of normalized bounds, kept local so the matching below reads in whole

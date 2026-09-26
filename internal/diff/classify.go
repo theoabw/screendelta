@@ -84,9 +84,43 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	usedPrevious := make([]bool, len(d.liveElements))
 	regions := make([]delta.Region, 0, len(candidates)+len(d.liveElements))
 
-	// Pass one: unchanged footprints that changed content.
 	matchedCandidate := make([]bool, len(candidates))
+
+	// Pass zero: a return, or a cover. Both are cases where a tracked element is not what is there any
+	// more, and both would otherwise be reported as a change of that element and inherit its identity.
+	for index := range candidates {
+		if matchedCandidate[index] {
+			continue
+		}
+		c := candidates[index]
+
+		// A return comes first, because it is the case where the area looks like something the engine
+		// has retired. A cover is the case where it looks like nothing it knows.
+		if decision := d.identities.Return(boundsOf(rect(c.left, c.top, c.right, c.bottom), current),
+			c.signature(), current.Width, current.Height, current.Sequence); decision.IsReturn {
+			matchedCandidate[index] = true
+			covered := decision.CoveredBounds
+			regions = append(regions, d.regionRemoved(decision.CoveredID, covered, previous, current))
+			regions = append(regions, d.regionWithAssignment(delta.ClassAdded, c, decision.Assignment, nil, current))
+			continue
+		}
+
+		if decision := d.identities.Cover(boundsOf(rect(c.left, c.top, c.right, c.bottom), current),
+			current.Width, current.Height); decision.IsCover {
+			matchedCandidate[index] = true
+			covered := decision.CoveredBounds
+			regions = append(regions, d.regionRemoved(decision.CoveredID, covered, previous, current))
+			regions = append(regions, d.regionFor(delta.ClassAdded, c, nil, current))
+		}
+	}
+
+	// Pass one: unchanged footprints that changed content.
 	for index, c := range candidates {
+		if matchedCandidate[index] {
+			// A previous pass already answered for this area, which happens when a cover or a return
+			// consumed it.
+			continue
+		}
 		best, bestOverlap := -1, 0.0
 		for previousIndex, state := range d.liveElements {
 			if usedPrevious[previousIndex] {
@@ -191,6 +225,39 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	}
 	sortRegions(regions)
 	return regions
+}
+
+// regionRemoved builds a region for an element the engine has retired, naming the identity it held.
+func (d *Differ) regionRemoved(id uint64, bounds delta.Bounds, previous, current frame.Frame) delta.Region {
+	where := bounds
+	// The magnitude describes how much changed where the element was, because a removal is still a
+	// change on the screen and a zero there would tell a consumer nothing happened.
+	magnitude := regionMagnitude(previous, current, pixelRectOf(bounds, current))
+	return delta.Region{
+		Identity:           id,
+		Class:              delta.ClassRemoved,
+		Bounds:             where,
+		PreviousBounds:     &where,
+		Magnitude:          clampMagnitude(magnitude),
+		AreaPixels:         areaOf(bounds, current),
+		IdentityConfidence: 0,
+	}
+}
+
+// regionWithAssignment builds a region around an identity the map already decided, which is how a
+// reacquisition keeps the uncertainty the map recorded for it.
+func (d *Differ) regionWithAssignment(class delta.RegionClass, c candidate, assignment identity.Assignment, previous *delta.Bounds, current frame.Frame) delta.Region {
+	bounds := boundsOf(rect(c.left, c.top, c.right, c.bottom), current)
+	return delta.Region{
+		Identity:           assignment.ID,
+		Class:              class,
+		Bounds:             bounds,
+		PreviousBounds:     previous,
+		Magnitude:          clampMagnitude(c.magnitude),
+		AreaPixels:         c.area(),
+		IdentityConfidence: clampMagnitude(assignment.Confidence),
+		IdentityUncertain:  assignment.Uncertain,
+	}
 }
 
 // regionFor builds a document region, asking the identity map which element it is.

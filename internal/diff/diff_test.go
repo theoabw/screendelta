@@ -663,3 +663,209 @@ func TestAPartialChangeKeepsOneIdentity(t *testing.T) {
 		}
 	}
 }
+
+// TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities is the first half of user story 2's second
+// acceptance scenario: an element covered by a larger one is reported as removed under its own identity,
+// and the covering area as added under a different one. Before this, the covering area was called a
+// change of the covered element and inherited its identity, which was a confident wrong answer.
+func TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities(t *testing.T) {
+	width, height := 320, 240
+	button := panel{x: 120, y: 100, w: 60, h: 40, value: panelValue}
+	// The overlay has to differ from the background, or it changes nothing outside the button.
+	overlay := panel{x: button.x - 10, y: button.y - 10, w: button.w + 20, h: button.h + 20, value: 220}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, []panel{button}),
+		buildFrame(2, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: panelAlt}}),
+		buildFrame(3, width, height, []panel{overlay}),
+	}
+
+	differ := New()
+	regions, _, err := differ.Compare(frames[0], frames[1], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the button's own change produced no regions")
+	}
+	tracked := regions[0].Identity
+
+	regions, _, err = differ.Compare(frames[1], frames[2], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+
+	var removed, added []delta.Region
+	for _, region := range regions {
+		switch region.Class {
+		case delta.ClassRemoved:
+			removed = append(removed, region)
+		case delta.ClassAdded:
+			added = append(added, region)
+		}
+	}
+	if len(removed) != 1 || len(added) != 1 {
+		t.Fatalf("a cover produced %d removals and %d additions: %+v", len(removed), len(added), regions)
+	}
+	if removed[0].Identity != tracked {
+		t.Fatalf("the removal named identity %d instead of the covered %d", removed[0].Identity, tracked)
+	}
+	if added[0].Identity == tracked {
+		t.Fatalf("the covering area inherited identity %d", tracked)
+	}
+	if added[0].IdentityUncertain {
+		t.Fatalf("the covering area was marked uncertain, but it is simply new: %+v", added[0])
+	}
+}
+
+// TestAReturnAfterACoverIsAddedUncertain is the second half: when the covered content shows again, the
+// element that covered it is reported as removed and the returning content as added with a newly
+// allocated identity whose uncertainty is true and whose confidence lies strictly between zero and one.
+func TestAReturnAfterACoverIsAddedUncertain(t *testing.T) {
+	width, height := 320, 240
+	button := panel{x: 120, y: 100, w: 60, h: 40, value: panelValue}
+	// The overlay has to differ from the background, or it changes nothing outside the button.
+	overlay := panel{x: button.x - 10, y: button.y - 10, w: button.w + 20, h: button.h + 20, value: 220}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, []panel{button}),
+		buildFrame(2, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: panelAlt}}),
+		buildFrame(3, width, height, []panel{overlay}),
+		buildFrame(4, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: panelAlt}}),
+	}
+
+	differ := New()
+	seen := map[uint64]bool{}
+	tracked := uint64(0)
+	for index := 0; index+1 < len(frames); index++ {
+		regions, _, err := differ.Compare(frames[index], frames[index+1], defaults())
+		if err != nil {
+			t.Fatalf("comparison %d failed: %v", index, err)
+		}
+		for _, region := range regions {
+			if index == 0 {
+				tracked = region.Identity
+			}
+			seen[region.Identity] = true
+		}
+
+		if index != 2 {
+			continue
+		}
+		// The third comparison is the return.
+		if len(regions) != 2 {
+			t.Fatalf("the return produced %d regions, want a removal and an addition: %+v", len(regions), regions)
+		}
+		var removed, added []delta.Region
+		for _, region := range regions {
+			switch region.Class {
+			case delta.ClassRemoved:
+				removed = append(removed, region)
+			case delta.ClassAdded:
+				added = append(added, region)
+			}
+		}
+		if len(removed) != 1 || len(added) != 1 {
+			t.Fatalf("the return was not reported as a removal and an addition: %+v", regions)
+		}
+		if added[0].Identity == tracked {
+			t.Fatalf("the returning content reused the covered element's identity %d", tracked)
+		}
+		if removed[0].Identity == tracked {
+			t.Fatalf("the removal named the covered element %d, which was already retired", tracked)
+		}
+		if !added[0].IdentityUncertain {
+			t.Fatalf("the returning content was matched silently: %+v", added[0])
+		}
+		if added[0].IdentityConfidence <= 0 || added[0].IdentityConfidence > 1 {
+			t.Fatalf("the returning content's confidence is %v, which is outside zero to one",
+				added[0].IdentityConfidence)
+		}
+	}
+
+	if !seen[tracked] {
+		t.Fatal("the covered element was never named")
+	}
+}
+
+// TestASameFootprintDisappearanceIsReportedAsChanged pins the decision recorded in R18. An element that
+// goes away leaving its footprint the same size is reported as a change, not a removal, because the
+// evidence that would justify a removal also fires on a subtle repaint of an element whose fill
+// resembles its surroundings, and a false removal is what the noise corpus exists to catch. A consumer
+// reads the magnitude against the bounds instead: a value near one over the whole footprint is
+// consistent with a disappearance.
+func TestASameFootprintDisappearanceIsReportedAsChanged(t *testing.T) {
+	width, height := 320, 240
+	button := panel{x: 120, y: 100, w: 60, h: 40, value: panelValue}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: 120}}),
+		buildFrame(2, width, height, []panel{button}),
+		// The button is gone and the dark background shows where it was.
+		buildFrame(3, width, height, nil),
+	}
+
+	differ := New()
+	regions, _, err := differ.Compare(frames[0], frames[1], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the button's own change produced no regions")
+	}
+	tracked := regions[0].Identity
+
+	regions, _, err = differ.Compare(frames[1], frames[2], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the disappearance produced no regions")
+	}
+	for _, region := range regions {
+		if region.Class == delta.ClassRemoved {
+			t.Fatalf("a same-footprint disappearance was reported as removed: %+v", region)
+		}
+		if region.Class != delta.ClassChanged {
+			t.Fatalf("the disappearance was reported as %s: %+v", region.Class, region)
+		}
+		if region.Identity != tracked {
+			t.Fatalf("the change carried identity %d instead of %d", region.Identity, tracked)
+		}
+		if region.Magnitude < 0.5 {
+			t.Fatalf("the magnitude is %v, which does not warn a consumer that the element is gone", region.Magnitude)
+		}
+	}
+}
+
+// TestAGrowingElementIsNotReportedAsACover guards the cover rule against firing on ordinary growth. The
+// rule needs the changed area to contain the element and reach past it; a change that only adds ground
+// at one edge does neither.
+func TestAGrowingElementIsNotReportedAsACover(t *testing.T) {
+	width, height := 320, 240
+	small := panel{x: 100, y: 100, w: 60, h: 40, value: panelValue}
+	grown := panel{x: 100, y: 100, w: 90, h: 40, value: panelValue}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{small}),
+		buildFrame(3, width, height, []panel{grown}),
+	}
+
+	differ := New()
+	if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	regions, _, err := differ.Compare(frames[1], frames[2], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the growth produced no regions")
+	}
+	for _, region := range regions {
+		if region.Class == delta.ClassRemoved {
+			t.Fatalf("an element growing at one edge was reported as covering itself: %+v", region)
+		}
+	}
+}

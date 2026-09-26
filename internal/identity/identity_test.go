@@ -850,3 +850,174 @@ func TestSignatureDistanceAndTolerance(t *testing.T) {
 		t.Fatalf("ClosestTo chose %d at distance %d, want 1 at %d", closest, distance, identity.SignatureCells)
 	}
 }
+
+// --- covers and returns ------------------------------------------------------------------------
+
+func TestCoverNeedsAnAreaBiggerThanTheElement(t *testing.T) {
+	m := identity.New(2, 8)
+	element := boundsOf(100, 100, 60, 40)
+	live := m.Appear(element, frameWidth, frameHeight, 1, nil)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	// A change inside the element does not cover it.
+	if decision := m.Cover(boundsOf(110, 110, 20, 10), frameWidth, frameHeight); decision.IsCover {
+		t.Fatalf("a change inside the element was called a cover: %+v", decision)
+	}
+	// An area exactly the element's size does not cover it either: there is no margin past it.
+	if decision := m.Cover(element, frameWidth, frameHeight); decision.IsCover {
+		t.Fatalf("an area the size of the element was called a cover: %+v", decision)
+	}
+	if state := stateOf(m, live.ID); state != identity.Live {
+		t.Fatalf("the element is %s after an area that does not cover it", state)
+	}
+
+	// An area that contains the element and reaches past it does.
+	decision := m.Cover(boundsOf(90, 90, 80, 60), frameWidth, frameHeight)
+	if !decision.IsCover {
+		t.Fatal("an area containing the element and exceeding it was not called a cover")
+	}
+	if decision.CoveredID != live.ID {
+		t.Fatalf("the cover named identity %d instead of %d", decision.CoveredID, live.ID)
+	}
+	if state := stateOf(m, live.ID); state != identity.Retired {
+		t.Fatalf("the covered element is %s, want retired", state)
+	}
+}
+
+func TestCoverIgnoresRetiredElementsAndEmptyAreas(t *testing.T) {
+	m := identity.New(0, 8)
+	bounds := boundsOf(100, 100, 60, 40)
+	element := m.Appear(bounds, frameWidth, frameHeight, 1, nil)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+	// Retire it by changing its area and not matching it.
+	m.EndFrame(2, []delta.Bounds{bounds}, frameWidth, frameHeight)
+	if state := stateOf(m, element.ID); state != identity.Retired {
+		t.Fatalf("the element is %s, want retired for the test", state)
+	}
+
+	if decision := m.Cover(boundsOf(90, 90, 80, 60), frameWidth, frameHeight); decision.IsCover {
+		t.Fatalf("a cover named a retired element: %+v", decision)
+	}
+	if decision := m.Cover(boundsOf(0, 0, 0, 0), frameWidth, frameHeight); decision.IsCover {
+		t.Fatalf("an empty area was called a cover: %+v", decision)
+	}
+	if decision := m.Cover(boundsOf(300, 200, 30, 30), frameWidth, frameHeight); decision.IsCover {
+		t.Fatalf("an area nowhere near an element was called a cover: %+v", decision)
+	}
+}
+
+func TestReturnNeedsEvidenceInBothDirections(t *testing.T) {
+	// Each case starts from the same state: one element tracked and then retired, so the question is
+	// only what the returning area looks like.
+	build := func() (*identity.Map, uint64, identity.Signature) {
+		m := identity.New(1, 8)
+		bounds := boundsOf(100, 100, 60, 40)
+		appearance := filledSignature(80)
+		element := m.Appear(bounds, frameWidth, frameHeight, 1, &appearance)
+		m.EndFrame(1, nil, frameWidth, frameHeight)
+		m.EndFrame(2, []delta.Bounds{bounds}, frameWidth, frameHeight)
+		m.EndFrame(3, []delta.Bounds{bounds}, frameWidth, frameHeight)
+		return m, element.ID, appearance
+	}
+	bounds := boundsOf(100, 100, 60, 40)
+
+	t.Run("no appearance to compare", func(t *testing.T) {
+		m, _, _ := build()
+		if decision := m.Return(bounds, nil, frameWidth, frameHeight, 4); decision.IsReturn {
+			t.Fatalf("a return was decided without an appearance: %+v", decision)
+		}
+	})
+
+	t.Run("nothing live overlaps", func(t *testing.T) {
+		m := identity.New(1, 8)
+		if decision := m.Return(bounds, ptrSignature(filledSignature(80)), frameWidth, frameHeight, 1); decision.IsReturn {
+			t.Fatalf("a return was decided with nothing tracked: %+v", decision)
+		}
+	})
+
+	t.Run("the area looks like what is there", func(t *testing.T) {
+		m := identity.New(1, 8)
+		appearance := filledSignature(80)
+		m.Appear(bounds, frameWidth, frameHeight, 1, &appearance)
+		m.EndFrame(1, nil, frameWidth, frameHeight)
+		// A live element, and an area that looks just like it: that is a change, not a return.
+		if decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 2); decision.IsReturn {
+			t.Fatalf("an area that looks like what is on screen was called a return: %+v", decision)
+		}
+	})
+
+	t.Run("no retired element matches the geometry", func(t *testing.T) {
+		m, _, _ := build()
+		// Far from where the retired element was, and looking nothing like either element.
+		elsewhere := boundsOf(10, 10, 60, 40)
+		if decision := m.Return(elsewhere, ptrSignature(filledSignature(200)), frameWidth, frameHeight, 4); decision.IsReturn {
+			t.Fatalf("a return was decided away from every retired element: %+v", decision)
+		}
+	})
+
+	t.Run("the retired element is not the closer one", func(t *testing.T) {
+		m, _, _ := build()
+		// Overlaps the retired element's place, but looks nothing like it and nothing like anything
+		// else either, so the engine has no reason to prefer the retired one.
+		if decision := m.Return(bounds, ptrSignature(filledSignature(200)), frameWidth, frameHeight, 4); decision.IsReturn {
+			t.Fatalf("a return was decided on geometry alone: %+v", decision)
+		}
+	})
+
+	t.Run("the evidence supports a return", func(t *testing.T) {
+		m, original, appearance := build()
+		// A live element that looks quite different, and an area that looks like the retired one.
+		// The covering element sits over the retired element's place, which is what makes the geometric
+		// question worth asking at all, and looks quite different from the returning content.
+		cover := boundsOf(100, 100, 80, 50)
+		liveElement := m.Appear(cover, frameWidth, frameHeight, 4, ptrSignature(filledSignature(200)))
+		m.EndFrame(4, []delta.Bounds{cover}, frameWidth, frameHeight)
+
+		decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 5)
+		if !decision.IsReturn {
+			t.Fatalf("a returning element was not recognised: %+v", decision)
+		}
+		if decision.CoveredID != liveElement.ID {
+			t.Fatalf("the return covered identity %d instead of %d", decision.CoveredID, liveElement.ID)
+		}
+		if decision.Assignment.ID == original || decision.Assignment.ID == liveElement.ID {
+			t.Fatalf("the returning content reused identity %d", decision.Assignment.ID)
+		}
+		if !decision.Assignment.Uncertain {
+			t.Fatal("the returning content was not marked uncertain")
+		}
+		if decision.Assignment.Confidence <= 0 || decision.Assignment.Confidence > 1 {
+			t.Fatalf("confidence %v is outside zero to one", decision.Assignment.Confidence)
+		}
+		if state := stateOf(m, liveElement.ID); state != identity.Retired {
+			t.Fatalf("the element that was covered is %s, want retired", state)
+		}
+	})
+}
+
+func TestLiveElementsAreOnlyTheLiveOnesInOrder(t *testing.T) {
+	m := identity.New(0, 8)
+	first := m.Appear(boundsOf(20, 20, 30, 30), frameWidth, frameHeight, 1, nil)
+	second := m.Appear(boundsOf(200, 20, 30, 30), frameWidth, frameHeight, 1, nil)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	live := m.LiveElements()
+	if len(live) != 2 {
+		t.Fatalf("LiveElements returned %d elements, want 2", len(live))
+	}
+	if live[0].ID != first.ID || live[1].ID != second.ID {
+		t.Fatalf("LiveElements is not ordered by identity: %+v", live)
+	}
+
+	// Change the first element's area and do not match it, so it retires.
+	m.EndFrame(2, []delta.Bounds{boundsOf(20, 20, 30, 30)}, frameWidth, frameHeight)
+	if state := stateOf(m, first.ID); state != identity.Retired {
+		t.Fatalf("the first element is %s, want retired", state)
+	}
+	live = m.LiveElements()
+	if len(live) != 1 || live[0].ID != second.ID {
+		t.Fatalf("LiveElements returned %+v after a retirement", live)
+	}
+}
+
+func ptrSignature(s identity.Signature) *identity.Signature { return &s }
