@@ -39,6 +39,11 @@ One rectangular area reported as different from the previous frame.
 | `identityConfidence` | number | 0 to 1, the strength of the evidence that this region is the element its identity refers to |
 | `identityUncertain` | boolean | True when the identity could not be re-established and was re-acquired |
 
+**Multiplicity**: two regions in one document may carry the same `identity`. A translated element
+is reported as the area it left and the area it arrived in, and both are the same element, so both
+name it. Identities are therefore unique among the elements a document refers to, not among its
+rectangles, and a consumer that groups regions by identity gets one group per element per frame.
+
 **Invariants**: all bounds are within the frame, so `x + w <= 1` and `y + h <= 1`;
 `magnitude` is inside 0 to 1 inclusive; a `changed` or `added` region's bounds are
 the current frame's, a `removed` region's bounds are the previous frame's.

@@ -57,7 +57,11 @@ consumer can rely on:
   the engine has evidence that something similar was there before but not enough to claim it is
   the same element;
 - an `identity` is never reissued, so a consumer can keep a handle forever and learn that it is
-  gone from a `removed` region.
+  gone from a `removed` region;
+- one element may appear as more than one region in a document, all carrying its identity, because a
+  translation changes two areas and both belong to the element. A consumer that needs one rectangle
+  per element merges the regions sharing an identity, and one that needs the changed area uses them
+  as they are.
 
 ### Exit codes
 
