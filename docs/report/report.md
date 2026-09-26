@@ -111,8 +111,8 @@ design rather than the wording become ADRs; deviations that change a requirement
 
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: 68 commits, 5,409 lines of Go and
-4,755 lines of test, with the specification, plan and task list written before the code they describe.
+is graded on what the process produced rather than on how long it took: 70 commits, 5409 lines of Go and
+4755 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
 
@@ -507,8 +507,8 @@ The numbers, all reproducible from the repository:
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Commits | 68 | `git rev-list --count HEAD` |
-| By type | 21 feat, 20 docs, 13 fix, 6 plan, 2 spec, 2 refactor, 1 test, 1 perf, 1 chore | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
+| Commits | 70 | `git rev-list --count HEAD` |
+| By type | 21 feat, 22 docs, 13 fix, 6 plan, 2 spec, 2 refactor, 1 test, 1 perf, 1 chore (sums to 70) | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
 | Commits carrying a `Spec:` trailer | 57 | `git log --grep='^Spec:' --oneline | wc -l` |
 | Carrying a `Req:` trailer | 55 | the same with `^Req:` |
 | Carrying a `Task:` trailer | 38 | the same with `^Task:` |
@@ -541,8 +541,8 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 68 commits in two days, 5,409 lines of Go against 4,755 lines
-of test and 2,025 lines of specification, plan and process documents, 53 planned tasks of which 15 are
+Leverage, quantified rather than asserted: 70 commits in two days, 5409 lines of Go against 4755 lines
+of test and 4230 lines of specification, plan and process documents, 53 planned tasks of which 15 are
 complete, 32 requirements of which 12 are verified, and 37 recorded defects of which 35 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
@@ -585,7 +585,7 @@ What worked, with the measurement or the artifact that shows it:
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
-verified instead: 5,409 lines of implementation and 4,755 lines of test in two working days, with a
+verified instead: 5409 lines of implementation and 4755 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
 hour but defects per requirement: 37 recorded findings across 32 requirements, of which 35 are fixed, is a
 rate that only holds because the review was as cheap as it was.
