@@ -10,21 +10,21 @@ that failed.
 exit=0
 
 == make accuracy ==
-    corpus_test.go:151: moving-button: 11 pairs, 22 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 22 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+    corpus_test.go:147: moving-button: 11 pairs, 22 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 22 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
 === RUN   TestCorpus/occluded-button
-    corpus_test.go:151: occluded-button: 3 pairs, 2 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 2 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+    corpus_test.go:147: occluded-button: 3 pairs, 2 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 2 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
 === RUN   TestCorpus/noise
-    corpus_test.go:151: noise: 119 pairs, 0 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 0 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+    corpus_test.go:147: noise: 119 pairs, 0 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 0 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
 === RUN   TestCorpus/sweep
-    corpus_test.go:151: sweep: 5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+    corpus_test.go:147: sweep: 5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
 === NAME  TestCorpus
-    corpus_test.go:184: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
---- PASS: TestCorpus (13.76s)
-    --- PASS: TestCorpus/changed-label (0.01s)
+    corpus_test.go:180: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+--- PASS: TestCorpus (13.05s)
+    --- PASS: TestCorpus/changed-label (0.00s)
     --- PASS: TestCorpus/moving-button (0.03s)
     --- PASS: TestCorpus/occluded-button (0.00s)
-    --- PASS: TestCorpus/noise (0.24s)
-    --- PASS: TestCorpus/sweep (13.48s)
+    --- PASS: TestCorpus/noise (0.23s)
+    --- PASS: TestCorpus/sweep (12.78s)
 PASS
 exit=0
 
@@ -32,27 +32,27 @@ exit=0
 SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 === RUN   TestLatencyPercentiles
     perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
-    perf_test.go:237: mean 8.51 ms, p50 8.57 ms, p90 9.06 ms, p95 9.43 ms, p99 10.23 ms, worst 12.42 ms, fastest 6.71 ms
+    perf_test.go:237: mean 8.44 ms, p50 8.40 ms, p90 9.04 ms, p95 9.42 ms, p99 11.09 ms, worst 14.11 ms, fastest 6.82 ms
     perf_test.go:239: 456 of 460 frames reported at least one region
---- PASS: TestLatencyPercentiles (5.89s)
+--- PASS: TestLatencyPercentiles (5.81s)
 === RUN   TestLatencyOnALargerChange
-    perf_test.go:291: 1920x1080, large change, one core: p50 39.53 ms, p95 42.95 ms, p99 44.03 ms
+    perf_test.go:291: 1920x1080, large change, one core: p50 37.65 ms, p95 40.56 ms, p99 43.19 ms
     perf_test.go:293: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
---- PASS: TestLatencyOnALargerChange (6.10s)
+--- PASS: TestLatencyOnALargerChange (5.83s)
 === RUN   TestThroughput
-    perf_test.go:316: sustained 74.4 frame pairs per second on one core (300 pairs in 4.034s)
---- PASS: TestThroughput (4.03s)
+    perf_test.go:316: sustained 75.2 frame pairs per second on one core (300 pairs in 3.991s)
+--- PASS: TestThroughput (3.99s)
 PASS
 exit=0
 
 == make memcheck ==
 go test ./internal/stream/... -run TestMemoryCeiling -count=1 -v
 === RUN   TestMemoryCeiling
-    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.468s
-    memory_test.go:202: peak heap 25200392 bytes (24.0 MiB), engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 23457792 bytes (22.4 MiB)
-    memory_test.go:208: heap at frame 1000: 25195072 bytes, at frame 10000: 25200392 bytes
---- PASS: TestMemoryCeiling (2.47s)
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.642s
+    memory_test.go:202: peak heap 25195280 bytes (24.0 MiB), engine buffers 16588800 bytes
+    memory_test.go:204: peak resident 23334912 bytes (22.3 MiB)
+    memory_test.go:208: heap at frame 1000: 25195184 bytes, at frame 10000: 25195184 bytes
+--- PASS: TestMemoryCeiling (2.64s)
 PASS
 exit=0
 
@@ -67,8 +67,8 @@ exit=0
 capture: frames written: 8
 go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
 source corpus/real, 8 frames replayed 20 times, 160 frames processed
-capture 1280x720, elapsed 425ms
-frames per second 376.1, decisions 119, decisions per second 279.7
+capture 1280x720, elapsed 420ms
+frames per second 381.3, decisions 119, decisions per second 283.6
 exit=0
 
 == coverage of the measured modules ==
@@ -84,7 +84,7 @@ vet diagnostics: 0
 python3 scripts/check_traceability.py --require-specs
 traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
 python3 scripts/check_report.py
-repository state: {'requirements': 33, 'verified': 29, 'defects': 37, 'findings': 48, 'fixed': 36, 'commits': '114', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+repository state: {'requirements': 33, 'verified': 29, 'defects': 40, 'findings': 51, 'fixed': 39, 'commits': '122', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
 
 
 every claim in the report and the README holds against this commit
