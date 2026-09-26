@@ -42,23 +42,26 @@ if [ -n "$(dirty)" ]; then
   exit 2
 fi
 
-# file|search|replace|what the mutation breaks
+# file::search::replace::what the mutation breaks
+#
+# The separator is "::" rather than "|" because a search string may legitimately contain "||", and the first
+# version of this list used a pipe: one entry was split into the wrong fields, applied as a malformed edit, and
+# reported as inconclusive because the package no longer built.
 mutations=(
-  "internal/identity/geometry.go|minimumOverlap = 0.30|minimumOverlap = 0.60|the overlap needed to keep an identity"
-  "internal/identity/geometry.go|minimumAreaRatio = 0.5|minimumAreaRatio = 0.05|the size gate on a match"
-  "internal/identity/geometry.go|coverInteriorFraction = 0.90|coverInteriorFraction = 0.40|how much of an element must be contained before it counts as covered"
-  "internal/identity/identity.go|retiredRetentionFrames = 300|retiredRetentionFrames = 2|how long a retired identity can be reacquired"
-  "internal/identity/geometry.go|returnAppearanceCeiling = 60|returnAppearanceCeiling = 100000|the appearance ceiling on a return"
-  "internal/identity/signature.go|SignatureTolerance = 12|SignatureTolerance = 120|the signature tolerance"
-  "internal/diff/diff.go|growthMargin = 2|growthMargin = 12|the margin a reported region is grown by"
-  "internal/diff/diff.go|lumaRed   = 299|lumaRed   = 199|the red luma weight"
-  "internal/diff/diff.go|wordBytes = 8|wordBytes = 2|the word size used to compare pixels"
-  "internal/config/config.go|DefaultNoiseFloor            = 0.02|DefaultNoiseFloor            = 0.0|the default noise floor"
-  "internal/config/config.go|DefaultMinRegionAreaPixels   = 64|DefaultMinRegionAreaPixels   = 4|the default minimum region area"
-  "internal/delta/delta.go|if a.Class != b.Class {|if false {|the class tie-breaker in the region order"
-  "internal/delta/delta.go|return a.AreaPixels < b.AreaPixels|return false|the area tie-breaker in the region order"
-  "internal/delta/required.go|if raw == nil || isNull(*raw) {|if raw == nil && isNull(*raw) {|the check that a null value counts as a missing required field"
-)
+  "internal/identity/geometry.go::minimumOverlap = 0.30::minimumOverlap = 0.60::the overlap needed to keep an identity"
+  "internal/identity/geometry.go::minimumAreaRatio = 0.5::minimumAreaRatio = 0.05::the size gate on a match"
+  "internal/identity/geometry.go::coverInteriorFraction = 0.90::coverInteriorFraction = 0.40::how much of an element must be contained before it counts as covered"
+  "internal/identity/identity.go::retiredRetentionFrames = 300::retiredRetentionFrames = 2::how long a retired identity can be reacquired"
+  "internal/identity/geometry.go::returnAppearanceCeiling = 60::returnAppearanceCeiling = 100000::the appearance ceiling on a return"
+  "internal/identity/signature.go::SignatureTolerance = 12::SignatureTolerance = 120::the signature tolerance"
+  "internal/diff/diff.go::growthMargin = 2::growthMargin = 12::the margin a reported region is grown by"
+  "internal/diff/diff.go::lumaRed   = 299::lumaRed   = 199::the red luma weight"
+  "internal/diff/diff.go::wordBytes = 8::wordBytes = 2::the word size used to compare pixels"
+  "internal/config/config.go::DefaultNoiseFloor            = 0.02::DefaultNoiseFloor            = 0.0::the default noise floor"
+  "internal/config/config.go::DefaultMinRegionAreaPixels   = 64::DefaultMinRegionAreaPixels   = 4::the default minimum region area"
+  "internal/delta/delta.go::if a.Class != b.Class {::if false {::the class tie-breaker in the region order"
+  "internal/delta/delta.go::return a.AreaPixels < b.AreaPixels::return false::the area tie-breaker in the region order"
+  "internal/delta/required.go::if raw == nil || isNull(*raw) {::if raw == nil && isNull(*raw) {::the check that a null value counts as a missing required field"
 
 total=0
 killed=0
@@ -78,7 +81,7 @@ notapplied=()
 } > "$output"
 
 for entry in "${mutations[@]}"; do
-  IFS='|' read -r file search replace note <<< "$entry"
+  IFS='::' read -r file search replace note <<< "$entry"
 
   if ! grep -qF -- "$search" "$file"; then
     notapplied+=("$note")
