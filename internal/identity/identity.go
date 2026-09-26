@@ -109,6 +109,15 @@ func (m *Map) SetRules(occlusionFrames, motionTolerancePixels int) {
 	m.motionTolerancePixels = motionTolerancePixels
 }
 
+// retiredRetentionFrames is how long a retired element is kept for reacquisition.
+//
+// Retired entries exist for one reason: to recognise that an element which has returned is the one
+// that left. That is only meaningful for something that left recently, so a retired entry is dropped
+// after this many frames. Dropping it can only turn a reacquisition into an addition, which is the
+// safe direction: an addition claims nothing. Keeping every retired entry forever would make the
+// table grow with the length of the session, which is the one thing NFR-003 forbids.
+const retiredRetentionFrames = 300
+
 // RetireAll ends every live element without touching the identifier counter.
 //
 // This is what a viewport change means. Bounds are normalised, so a rectangle tracked at one frame
@@ -209,7 +218,20 @@ func (m *Map) Vanish(bounds delta.Bounds, frameWidth, frameHeight int, sequence 
 		}
 	}
 	if best < 0 || bestScore < minimumOverlap {
-		return m.allocate(bounds, sequence, 1)
+		// Nothing live was there to retire, so the document still needs a name for the removed
+		// element. It gets a fresh one, and that identity is retired immediately: a removal that
+		// named a live identity would tell a consumer that an element it has never seen is gone,
+		// while the engine kept matching it.
+		assignment := m.allocate(bounds, sequence, 1)
+		for index := range m.elements {
+			if m.elements[index].ID == assignment.ID {
+				m.elements[index].State = Retired
+				m.elements[index].Confidence = 0
+				break
+			}
+		}
+		assignment.Confidence = 0
+		return assignment
 	}
 
 	element := &m.elements[best]
@@ -255,12 +277,18 @@ func (m *Map) Retire(id uint64, sequence uint64, bounds delta.Bounds) Assignment
 	return m.allocate(bounds, sequence, 1)
 }
 
-// EndFrame ages the elements that were not matched in the given frame.
+// EndFrame ages the elements that were not matched in the given frame, and drops retired entries
+// that are too old to be worth keeping.
 //
 // It must be called once per frame after every region has been assigned, and it takes the frame
-// number rather than remembering the last one, because a frame in which nothing was matched makes
-// no other call at all: without the number, an element hidden by an overlay would never age.
-func (m *Map) EndFrame(sequence uint64) {
+// number rather than remembering the last one, because a frame in which nothing was matched makes no
+// other call at all: without the number, an element hidden by an overlay would never age.
+//
+// changed are the areas reported this frame. An element whose footprint none of them touches is
+// still on the screen: nothing there changed, so the element cannot have gone anywhere. Without that
+// rule an element that simply sat still for longer than the occlusion window was retired as though
+// it had been covered, and the next change to it was reported as a reacquisition of something new.
+func (m *Map) EndFrame(sequence uint64, changed []delta.Bounds, frameWidth, frameHeight int) {
 	for index := range m.elements {
 		element := &m.elements[index]
 		if element.pendingSet {
@@ -270,11 +298,45 @@ func (m *Map) EndFrame(sequence uint64) {
 		if element.State != Live || element.LastFrame >= sequence {
 			continue
 		}
+		if !touchesAny(element.Bounds, changed, frameWidth, frameHeight) {
+			// Nothing changed where it is, so it is still there.
+			element.LastFrame = sequence
+			element.Missed = 0
+			continue
+		}
 		element.Missed++
 		if element.Missed > m.occlusionFrames {
 			element.State = Retired
 		}
 	}
+
+	m.dropStaleRetired(sequence)
+}
+
+// dropStaleRetired removes retired entries that have been gone longer than they are useful for.
+func (m *Map) dropStaleRetired(sequence uint64) {
+	kept := m.elements[:0]
+	for _, element := range m.elements {
+		if element.State == Retired && sequence > element.LastFrame+retiredRetentionFrames {
+			continue
+		}
+		kept = append(kept, element)
+	}
+	m.elements = kept
+}
+
+// touchesAny reports whether a footprint overlaps any of the changed areas.
+func touchesAny(bounds delta.Bounds, changed []delta.Bounds, frameWidth, frameHeight int) bool {
+	if len(changed) == 0 {
+		return false
+	}
+	rect := pixelRect(bounds, frameWidth, frameHeight)
+	for _, area := range changed {
+		if !rect.Intersect(pixelRect(area, frameWidth, frameHeight)).Empty() {
+			return true
+		}
+	}
+	return false
 }
 
 // bestLive returns the live element that best explains a rectangle, and the score of that match.
@@ -292,45 +354,54 @@ func (m *Map) EndFrame(sequence uint64) {
 // the second rule exists for. The motion tolerance still applies, so a stale element on the other
 // side of the frame cannot claim a small change.
 func (m *Map) bestLive(rect rectangle, frameWidth, frameHeight int) (int, float64) {
-	best, bestScore := -1, 0.0
+	best, bestScore, bestRank, bestArea := -1, 0.0, 0, 0
+
 	for index := range m.elements {
 		element := &m.elements[index]
 		if element.State != Live {
 			continue
 		}
 		candidate := pixelRect(element.Bounds, frameWidth, frameHeight)
+		area := candidate.Dx() * candidate.Dy()
 
-		score := 0.0
+		// Two kinds of explanation, ranked so that the better one always wins. An overlap match is
+		// the ordinary case of the same element changing or moving; a containment match is a change
+		// inside a larger element. An overlap match is preferred even when its score is lower,
+		// because a large element that happens to contain a small one must not be able to take the
+		// small one's identity: before this rule, containment scored a perfect one and tied with the
+		// exact match, so the older of the two won and the answer depended on allocation order.
+		rank, score := 0, 0.0
 		if withinTolerance(candidate, rect, m.motionTolerancePixels) {
 			overlap := intersectionOverUnion(candidate, rect)
-			if overlap >= minimumOverlap {
-				if !similarSize(candidate, rect) {
-					continue
-				}
-				score = overlap
+			if overlap >= minimumOverlap && similarSize(candidate, rect) {
+				rank, score = 2, overlap
 			}
 		}
-		if score == 0 {
-			// The area is part of the element rather than most of it. Two things have to hold:
-			// the area lies inside the element, and it is not larger than the element, because an
-			// area that engulfs what was tracked is a bigger thing that appeared there, not a part
-			// of it. Distance is measured by containment here rather than from centre to centre,
-			// because an area inside a large element is far from that element's centre by definition.
-			if rect.Dx()*rect.Dy() > candidate.Dx()*candidate.Dy() {
-				continue
+		if rank == 0 {
+			// The area is part of the element rather than most of it. It has to be inside the element
+			// and no larger than it, which is what makes this a part rather than a bigger thing that
+			// appeared there. No size ratio applies: a part is naturally much smaller than the whole,
+			// and requiring them to be alike is what made the two paths disagree at the overlap
+			// threshold, where a contained rectangle of three tenths the area lost its identity while
+			// one of 0.29 kept it. Distance is measured by containment rather than from centre to
+			// centre, because an area inside a large element is far from that element's centre.
+			if rect.Dx()*rect.Dy() <= area && withinReach(candidate, rect, m.motionTolerancePixels) {
+				contained := coveredFraction(candidate, rect)
+				if contained >= minimumOverlap {
+					rank, score = 1, contained
+				}
 			}
-			if !withinReach(candidate, rect, m.motionTolerancePixels) {
-				continue
-			}
-			contained := coveredFraction(candidate, rect)
-			if contained < minimumOverlap {
-				continue
-			}
-			score = contained
+		}
+		if rank == 0 {
+			continue
 		}
 
-		if score > bestScore || (score == bestScore && best >= 0 && element.ID < m.elements[best].ID) {
-			best, bestScore = index, score
+		better := rank > bestRank ||
+			(rank == bestRank && score > bestScore) ||
+			(rank == bestRank && score == bestScore && best >= 0 && area < bestArea) ||
+			(rank == bestRank && score == bestScore && best >= 0 && area == bestArea && element.ID < m.elements[best].ID)
+		if better {
+			best, bestScore, bestRank, bestArea = index, score, rank, area
 		}
 	}
 	return best, bestScore

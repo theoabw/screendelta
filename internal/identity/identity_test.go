@@ -59,7 +59,7 @@ func TestAMovingElementKeepsOneIdentity(t *testing.T) {
 		}
 		// A stream ends every frame, which is what moves an element's footprint from the frame
 		// being resolved to the one the next comparison will look up.
-		m.EndFrame(sequence)
+		m.EndFrame(sequence, nil, frameWidth, frameHeight)
 	}
 }
 
@@ -89,7 +89,7 @@ func TestAnElementThatChangesSizeTooMuchIsNotMatched(t *testing.T) {
 func TestRemovedElementRetiresItsIdentity(t *testing.T) {
 	m := identity.New(2, 8)
 	live := m.Appear(boundsOf(50, 50, 60, 40), frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	gone := m.Vanish(boundsOf(50, 50, 60, 40), frameWidth, frameHeight, 2)
 	if gone.ID != live.ID {
@@ -108,11 +108,13 @@ func TestReappearanceAfterOcclusionIsNewAndUncertain(t *testing.T) {
 	m := identity.New(1, 8)
 	bounds := boundsOf(100, 80, 60, 40)
 	original := m.Appear(bounds, frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
-	// Frames two and three: the element is covered, so nothing is reported where it was.
-	m.EndFrame(2)
-	m.EndFrame(3)
+	// Frames two and three: the element is covered, so what is reported is the cover, and the
+	// element's own footprint is inside the area that changed.
+	cover := []delta.Bounds{boundsOf(90, 70, 80, 60)}
+	m.EndFrame(2, cover, frameWidth, frameHeight)
+	m.EndFrame(3, cover, frameWidth, frameHeight)
 
 	switch elements := m.Elements(); {
 	case len(elements) != 1:
@@ -139,10 +141,10 @@ func TestAnElementHiddenWithinTheWindowKeepsItsIdentity(t *testing.T) {
 	m := identity.New(2, 8)
 	bounds := boundsOf(100, 80, 60, 40)
 	original := m.Appear(bounds, frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	// Frame two: nothing is reported where the element is.
-	m.EndFrame(2)
+	m.EndFrame(2, nil, frameWidth, frameHeight)
 
 	// Frame three: visible again. The element was never retired, so it is matched, not reacquired.
 	assignment := m.Carry(bounds, bounds, frameWidth, frameHeight, 3)
@@ -198,7 +200,7 @@ func TestIdentifiersAreNeverReused(t *testing.T) {
 		case 3:
 			// The element is gone and nothing is reported, so only the window ages.
 		}
-		m.EndFrame(sequence)
+		m.EndFrame(sequence, nil, frameWidth, frameHeight)
 	}
 
 	if len(issued) < 100 {
@@ -231,7 +233,7 @@ func TestMemoryDoesNotGrowWithStreamLength(t *testing.T) {
 		} else {
 			m.Carry(bounds, bounds, frameWidth, frameHeight, sequence)
 		}
-		m.EndFrame(sequence)
+		m.EndFrame(sequence, nil, frameWidth, frameHeight)
 	}
 
 	elements := m.Elements()
@@ -270,7 +272,7 @@ func TestTheSameSequenceProducesTheSameIdentities(t *testing.T) {
 				assignment := m.Carry(bounds, bounds, frameWidth, frameHeight, sequence)
 				report += fmt.Sprintf("%d:carry:%d:%v ", sequence, assignment.ID, assignment.Uncertain)
 			}
-			m.EndFrame(sequence)
+			m.EndFrame(sequence, nil, frameWidth, frameHeight)
 		}
 		return report
 	}
@@ -283,7 +285,7 @@ func TestSortedReturnsEveryIdentityInAllocationOrder(t *testing.T) {
 	m := identity.New(1, 8)
 	for index := 0; index < 5; index++ {
 		m.Appear(boundsOf(10+index*50, 10, 30, 30), frameWidth, frameHeight, uint64(index+1))
-		m.EndFrame(uint64(index + 1))
+		m.EndFrame(uint64(index+1), nil, frameWidth, frameHeight)
 	}
 
 	sorted := m.Sorted()
@@ -309,15 +311,24 @@ func TestVanishWithNothingToRetireAllocatesAName(t *testing.T) {
 	if assignment.ID != 1 {
 		t.Fatalf("identity is %d, want a fresh 1", assignment.ID)
 	}
-	if elements := m.Elements(); len(elements) != 1 || elements[0].State != identity.Live {
+	// The identity is retired at once: a removal that named a live identity would tell a consumer
+	// that an element it has never seen is gone, while the engine kept matching it.
+	elements := m.Elements()
+	if len(elements) != 1 {
 		t.Fatalf("a removal with nothing to retire left %+v", elements)
+	}
+	if elements[0].State != identity.Retired {
+		t.Fatalf("the identity a removal named is %s, want retired", elements[0].State)
+	}
+	if elements[0].Confidence != 0 {
+		t.Fatalf("a removed identity kept confidence %v", elements[0].Confidence)
 	}
 }
 
 func TestConfidenceFallsWhenAnElementOnlyPartlyOverlaps(t *testing.T) {
 	m := identity.New(2, 16)
 	first := m.Appear(boundsOf(100, 100, 60, 40), frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	// Moved ten pixels along, so it overlaps its previous footprint by most but not all of itself.
 	assignment := m.Carry(boundsOf(110, 100, 60, 40), boundsOf(110, 100, 60, 40), frameWidth, frameHeight, 2)
@@ -330,7 +341,7 @@ func TestConfidenceFallsWhenAnElementOnlyPartlyOverlaps(t *testing.T) {
 	if assignment.Confidence <= 0.5 {
 		t.Fatalf("confidence %v is too low for an element that mostly still overlaps", assignment.Confidence)
 	}
-	m.EndFrame(2)
+	m.EndFrame(2, nil, frameWidth, frameHeight)
 
 	for _, element := range m.Elements() {
 		if element.ID != first.ID {
@@ -348,13 +359,13 @@ func TestConfidenceFallsWhenAnElementOnlyPartlyOverlaps(t *testing.T) {
 func TestZeroToleranceMatchesOnlyTheSamePlace(t *testing.T) {
 	m := identity.New(2, 0)
 	first := m.Appear(boundsOf(50, 50, 40, 30), frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	same := m.Carry(boundsOf(50, 50, 40, 30), boundsOf(50, 50, 40, 30), frameWidth, frameHeight, 2)
 	if same.ID != first.ID {
 		t.Fatalf("an unmoved element lost its identity with zero tolerance")
 	}
-	m.EndFrame(2)
+	m.EndFrame(2, nil, frameWidth, frameHeight)
 
 	moved := m.Carry(boundsOf(52, 50, 40, 30), boundsOf(52, 50, 40, 30), frameWidth, frameHeight, 3)
 	if moved.ID == first.ID {
@@ -368,7 +379,7 @@ func TestAnElementAtTheAreaRatioBoundaryIsMatched(t *testing.T) {
 	build := func() (*identity.Map, uint64) {
 		m := identity.New(2, 8)
 		first := m.Appear(boundsOf(100, 100, 40, 40), frameWidth, frameHeight, 1)
-		m.EndFrame(1)
+		m.EndFrame(1, nil, frameWidth, frameHeight)
 		return m, first.ID
 	}
 
@@ -395,7 +406,7 @@ func TestAnAreaInsideAnElementIsAttributedToIt(t *testing.T) {
 	// far from the element's centre, so only containment can attribute it.
 	m := identity.New(2, 32)
 	element := m.Appear(boundsOf(100, 100, 200, 120), frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	inside := boundsOf(110, 110, 20, 16)
 	assignment := m.Carry(inside, inside, frameWidth, frameHeight, 2)
@@ -414,10 +425,12 @@ func TestSetRulesChangesTheWindowWithoutLosingIdentities(t *testing.T) {
 	m := identity.New(0, 2)
 	bounds := boundsOf(50, 50, 40, 30)
 	first := m.Appear(bounds, frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
-	// A window of zero retires an element the moment it is missed.
-	m.EndFrame(2)
+	// A window of zero retires an element the moment it is missed, which requires something to have
+	// changed where it is; otherwise the map is right that it is still on the screen.
+	cover := []delta.Bounds{boundsOf(40, 40, 60, 50)}
+	m.EndFrame(2, cover, frameWidth, frameHeight)
 	if state := m.Elements()[0].State; state != identity.Retired {
 		t.Fatalf("a window of zero left the element %s after a miss", state)
 	}
@@ -425,7 +438,7 @@ func TestSetRulesChangesTheWindowWithoutLosingIdentities(t *testing.T) {
 	// Widening the window afterwards does not revive it, which is the rule: a retired identity never
 	// returns to live.
 	m.SetRules(5, 2)
-	m.EndFrame(3)
+	m.EndFrame(3, cover, frameWidth, frameHeight)
 	if state := m.Elements()[0].State; state != identity.Retired {
 		t.Fatalf("widening the window revived a retired identity: %s", state)
 	}
@@ -435,8 +448,8 @@ func TestSetRulesChangesTheWindowWithoutLosingIdentities(t *testing.T) {
 
 	// A second element tracked under the new rules is matched normally.
 	other := m.Appear(boundsOf(200, 150, 40, 30), frameWidth, frameHeight, 4)
-	m.EndFrame(4)
-	m.EndFrame(5)
+	m.EndFrame(4, nil, frameWidth, frameHeight)
+	m.EndFrame(5, nil, frameWidth, frameHeight)
 	if state := stateOf(m, other.ID); state != identity.Live {
 		t.Fatalf("an element missed once under a window of five is %s", state)
 	}
@@ -446,7 +459,7 @@ func TestRetireAllEndsEveryElementWithoutReissuingNumbers(t *testing.T) {
 	m := identity.New(5, 8)
 	first := m.Appear(boundsOf(20, 20, 40, 30), frameWidth, frameHeight, 1)
 	second := m.Appear(boundsOf(200, 150, 40, 30), frameWidth, frameHeight, 1)
-	m.EndFrame(1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	m.RetireAll()
 	for _, element := range m.Elements() {
@@ -473,4 +486,105 @@ func stateOf(m *identity.Map, id uint64) identity.State {
 		}
 	}
 	return ""
+}
+
+// TestASmallElementInsideALargeOneKeepsItsOwnIdentity is the case the review found: an exact match
+// must beat containment, or a large element can take the identity of a small one that sits inside it
+// and the answer depends on which of the two was allocated first.
+func TestASmallElementInsideALargeOneKeepsItsOwnIdentity(t *testing.T) {
+	for _, order := range []string{"large first", "small first"} {
+		t.Run(order, func(t *testing.T) {
+			m := identity.New(2, 8)
+			largeBounds := boundsOf(40, 40, 100, 100)
+			smallBounds := boundsOf(80, 80, 10, 10)
+
+			var large, small identity.Assignment
+			if order == "large first" {
+				large = m.Appear(largeBounds, frameWidth, frameHeight, 1)
+				small = m.Appear(smallBounds, frameWidth, frameHeight, 1)
+			} else {
+				small = m.Appear(smallBounds, frameWidth, frameHeight, 1)
+				large = m.Appear(largeBounds, frameWidth, frameHeight, 1)
+			}
+			m.EndFrame(1, nil, frameWidth, frameHeight)
+
+			// The small element changes inside the large one. It must continue as itself, whichever
+			// order the two were allocated in.
+			carried := m.Carry(smallBounds, smallBounds, frameWidth, frameHeight, 2)
+			if carried.ID != small.ID {
+				t.Fatalf("%s: the small element's identity became %d instead of %d", order, carried.ID, small.ID)
+			}
+			if carried.ID == large.ID {
+				t.Fatalf("%s: the large element took the small element's identity", order)
+			}
+
+			// And the large element's own change continues as itself.
+			largeEdge := boundsOf(40, 40, 100, 10)
+			largeCarried := m.Carry(largeEdge, largeEdge, frameWidth, frameHeight, 2)
+			if largeCarried.ID != large.ID {
+				t.Fatalf("%s: the large element's identity became %d instead of %d", order, largeCarried.ID, large.ID)
+			}
+		})
+	}
+}
+
+// TestAnElementThatSitsStillIsNotRetired is the other case the review found: frames passing without
+// a change are not occlusion. An element whose pixels did not change is still on the screen.
+func TestAnElementThatSitsStillIsNotRetired(t *testing.T) {
+	m := identity.New(1, 8)
+	bounds := boundsOf(60, 60, 40, 30)
+	original := m.Appear(bounds, frameWidth, frameHeight, 1)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	// Many frames pass with nothing reported anywhere, which is what a still screen looks like.
+	for sequence := uint64(2); sequence <= 50; sequence++ {
+		m.EndFrame(sequence, nil, frameWidth, frameHeight)
+	}
+	if state := stateOf(m, original.ID); state != identity.Live {
+		t.Fatalf("an element that sat still for fifty frames is %s", state)
+	}
+
+	// A change to it is still a change to the same element, not a reacquisition.
+	changed := m.Carry(bounds, bounds, frameWidth, frameHeight, 51)
+	if changed.ID != original.ID || changed.Uncertain {
+		t.Fatalf("a change to an element that never went away was reported as %+v", changed)
+	}
+}
+
+// TestRetiredEntriesAreBoundedByTheRetentionWindow checks the memory bound: retired identities exist
+// only to recognise a returning element, so they are dropped once that is no longer plausible. The
+// real property is that the table does not grow with the length of the session, so two runs of
+// different length are compared rather than one run against a fixed number.
+func TestRetiredEntriesAreBoundedByTheRetentionWindow(t *testing.T) {
+	m := identity.New(1, 8)
+	cover := []delta.Bounds{boundsOf(50, 50, 60, 50)}
+	bounds := boundsOf(60, 60, 40, 30)
+	sequence := uint64(0)
+
+	run := func(cycles int) {
+		for cycle := 0; cycle < cycles; cycle++ {
+			sequence++
+			m.Appear(bounds, frameWidth, frameHeight, sequence)
+			m.EndFrame(sequence, nil, frameWidth, frameHeight)
+			for step := 0; step < 3; step++ {
+				sequence++
+				// The area changes, so the element is not matched and ages out.
+				m.EndFrame(sequence, cover, frameWidth, frameHeight)
+			}
+		}
+	}
+
+	run(200)
+	after200 := len(m.Elements())
+	run(200)
+	after400 := len(m.Elements())
+
+	t.Logf("table holds %d entries after 200 cycles and %d after 400", after200, after400)
+	if after400 > after200+10 {
+		t.Fatalf("the table grew from %d to %d entries with session length, so retired entries are not bounded",
+			after200, after400)
+	}
+	if after400 > 120 {
+		t.Fatalf("the table holds %d entries, more than the retention window allows", after400)
+	}
 }

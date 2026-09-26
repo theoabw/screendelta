@@ -41,15 +41,28 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	// The first comparison of a stream has no baseline: the differ knows that pixels
 	// changed but not whether the element was there before. Reporting "changed" is the
 	// honest answer, because "added" would assert an absence the engine cannot see.
+	changedBoundsFirst := make([]delta.Bounds, 0, len(candidates))
+	for _, c := range candidates {
+		changedBoundsFirst = append(changedBoundsFirst, boundsOf(rect(c.left, c.top, c.right, c.bottom), current))
+	}
+
 	if !d.hasPrevious {
 		regions := make([]delta.Region, 0, len(candidates))
 		for _, c := range candidates {
 			regions = append(regions, d.regionFor(delta.ClassChanged, c, nil, current))
 		}
-		d.identities.EndFrame(current.Sequence)
+		d.identities.EndFrame(current.Sequence, changedBoundsFirst, current.Width, current.Height)
 		d.remember(regions, nil, current)
 		sortRegions(regions)
 		return regions
+	}
+
+	// The areas reported this frame, in normalized form, are what the identity map needs to tell an
+	// element that is still on the screen from one that has been covered: nothing changed where it
+	// is, so it is still there.
+	changedBounds := make([]delta.Bounds, 0, len(candidates))
+	for _, c := range candidates {
+		changedBounds = append(changedBounds, boundsOf(rect(c.left, c.top, c.right, c.bottom), current))
 	}
 
 	usedPrevious := make([]bool, len(d.previous))
@@ -151,7 +164,7 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	// frame pair that only differs by noise.
 	// One EndFrame per comparison, after every region has been assigned: the occlusion window counts
 	// frames, and an element hidden by an overlay is unmatched in the frames that cover it.
-	d.identities.EndFrame(current.Sequence)
+	d.identities.EndFrame(current.Sequence, changedBounds, current.Width, current.Height)
 
 	// Elements whose pixels did not change are still on the screen, so they carry over.
 	unchanged := make([]regionState, 0, len(d.previous))

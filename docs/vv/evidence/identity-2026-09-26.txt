@@ -1,57 +1,75 @@
-Element identity measurement, 2026-09-26.
-Commands: go test ./internal/identity/... -v, and the identity tests in internal/diff.
+Element identity measurement, 2026-09-26, second revision.
+Commands: go test ./internal/identity/... -v, and the identity tests in internal/diff and internal/stream.
 
-User story 2 acceptance scenarios, each with the test that demonstrates it:
+What is demonstrated, and where:
 
-1. A region that moves a few pixels per frame keeps one identifier throughout.
-   internal/identity:  TestAMovingElementKeepsOneIdentity (ten steps of four pixels, one identity)
-   internal/diff:      TestATrackedElementKeepsOneIdentityAcrossFrames (eight steps of three pixels,
-                       and confidence stays inside 0 to 1)
-   internal/diff:      TestContinuityOfAnIdentity (the identity never moves further than the
-                       tolerance between frames, so a consumer can follow it)
-
-2. A region that disappears behind an overlay and returns carries a new identifier with an
-   explicit uncertainty marker.
+1. An identity is stable while an element is tracked.
+   internal/identity:  TestAMovingElementKeepsOneIdentity, TestTheSameSequenceProducesTheSameIdentities
+   internal/diff:      TestATrackedElementKeepsOneIdentityAcrossFrames, TestContinuityOfAnIdentity
+2. An identifier is never reused within a session.
+   internal/identity:  TestIdentifiersAreNeverReused (a thousand frames of four frame cycles: every
+                       identity issued once, every retirement recorded, no retired identity handed out
+                       again), TestRetireAllEndsEveryElementWithoutReissuingNumbers,
+                       TestSetRulesChangesTheWindowWithoutLosingIdentities
+   internal/stream:    TestTheDifferIsToldAboutAViewportChange, TestAViewportRoundTripStillResets
+3. The identity table does not grow with the length of the session.
+   internal/identity:  TestRetiredEntriesAreBoundedByTheRetentionWindow (75 entries after 200 cycles
+                       and 75 after 400), TestMemoryDoesNotGrowWithStreamLength
+   internal/stream:    TestMemoryCeiling (10,000 frames, heap identical at frame 1,000 and 10,000)
+4. The uncertainty marker exists and is set when an identity is reacquired after retirement.
    internal/identity:  TestReappearanceAfterOcclusionIsNewAndUncertain
-   internal/diff:      TestAnOccludedElementReturnsWithANewUncertainIdentity (the element is
-                       tracked, covered for longer than the window, then visible again: the new
-                       region carries a different identity, identityUncertain true, and a positive
-                       confidence recording the evidence that something was there)
-   internal/identity:  TestAnElementHiddenWithinTheWindowKeepsItsIdentity (the negative case: a
-                       cover shorter than the window is not a reason to lose the identity)
+   The marker is set by the identity package. See the limitation below for why the engine's classifier
+   does not reach that path in the scenarios tested.
 
-3. A thousand frames in which a region appears and disappears repeatedly reuse no identifier and
-   grow no memory.
-   internal/identity:  TestIdentifiersAreNeverReused (a thousand frames of four-frame cycles:
-                       every identity is issued once, every retirement is recorded, and no retired
-                       identity is ever handed out again)
-   internal/identity:  TestMemoryDoesNotGrowWithStreamLength (the live set stays bounded by the
-                       occlusion window after a thousand frames)
-   internal/stream:    TestMemoryCeiling (10,000 frames, heap identical at frame 1,000 and
-                       frame 10,000)
-
-Requirements this measures:
-  FR-006  identifiers stable across a stream and never reused within a session      met
-  FR-007  identity confidence reported and an unreestablishable identity marked
-          uncertain rather than silently matched                                   met
+Requirements:
+  FR-006  identifiers stable across a stream and never reused within a session
+          The allocation counter is demonstrated monotonic and never reused. Stability of the handle
+          is demonstrated for a moving element, but the review below shows the identity decision itself
+          is not yet sound enough to claim generally, so this requirement stays in progress.
+  FR-007  identity confidence reported, and an unreestablishable identity marked uncertain rather than
+          silently matched
+          The fields are emitted and validated, and the package sets the marker. The engine does not
+          reach the path in the reachable scenarios, so this stays in progress.
   NFR-009 at least 80 percent line coverage on the geometry and identity modules
-          met: internal/diff 80.2 percent, internal/identity 80.6 percent
+          met: internal/diff 80.7 percent, internal/identity 82.9 percent
 
-Two design decisions this round had to make, both recorded in the contract:
+Why this is the second revision, and what the first one got wrong.
 
-Element footprints, not changed areas. A translation changes two areas and both belong to one
-element, so a moved region is looked up by where the element was and the element's footprint for
-the frame is the union of the regions that named it. Reporting the changed area as the element's
-position instead gave each half of a movement its own identity, which the debug trace showed
-directly.
+An independent review falsified six claims, five of them reproduced with tests. What was fixed:
 
-A viewport change retires every element and keeps the identifier counter rising. Bounds are
-normalised, so a rectangle tracked at one frame size means nothing at another; the first version
-of this rebuilt the identity table instead, which restarted the identifier sequence mid-session
-and would have handed a consumer a number that used to mean something else. A rule change is
-different and is applied in place, because relaxing the motion tolerance says nothing about where
-anything is.
+- A large element could take the identity of a small one inside it. Containment scored a perfect one
+  and tied with an exact match, so the older identity won and the answer depended on allocation order.
+  Matches are now ranked: an overlap match beats a containment match, and ties are broken by the
+  smallest element and then by identifier, so the result is a property of the geometry rather than of
+  history. Test: TestASmallElementInsideALargeOneKeepsItsOwnIdentity, run in both allocation orders.
+- An element that sat still for longer than the occlusion window was retired as though it had been
+  covered, so the next change to it was reported as a reacquisition of something new. An element ages
+  only when the area it occupies changed and it was not matched: nothing changed where it is means it
+  is still on the screen. Test: TestAnElementThatSitsStillIsNotRetired.
+- Retired entries were kept forever, so the table grew with the session. They are now dropped once
+  they are too old to be worth reacquiring, and the counter keeps rising, so dropping one can only
+  turn a reacquisition into an addition. Tests: TestRetiredEntriesAreBoundedByTheRetentionWindow.
+- A removal that could not name a live element allocated a new identity and left it live, so a
+  consumer was told an element it had never seen was gone while the engine kept matching it. The
+  fallback identity is retired at once. Test: TestVanishWithNothingToRetireAllocatesAName.
+- A viewport change could leave identities live: the engine skipped the comparison, so the differ
+  never learned, and a scale change or a size round trip was invisible to it. The interface now has
+  Reset, the engine calls it on a viewport change, and the round trip is covered.
+- The size gate had a discontinuity where a contained rectangle of three tenths the area lost its
+  identity while one of 0.29 kept it. The containment path no longer applies a size ratio.
 
-FR-006 and FR-007 are the first requirements in this project whose evidence is an acceptance
-scenario rather than a measurement, so the scenario numbers above are the independent test the
-specification names.
+What is not fixed, and is therefore not claimed.
+
+- The engine cannot tell a cover from a content change. When an element is covered by a larger one,
+  the covering area is reported as a change of the covered element and inherits its identity, and when
+  the cover leaves, the return is reported as a change of the cover. The uncertain marker exists for
+  this case and the classifier does not reach it. Recorded in the test that asserts what the engine
+  does say: TestAReplacementIsReportedAsRemovedAndAdded.
+- An element whose pixels did not change cannot be reported as gone, so a disappearance and a
+  content change look the same in a document. Distinguishing them needs appearance reasoning that
+  this stage deliberately does not have.
+- A partial change replaces the tracked footprint of an element, so successive changes in different
+  parts of one large element can be given different identities.
+- delta.Decode accepts a document missing the identity fields, because a missing JSON field becomes a
+  valid zero value in Go. The engine always emits them; a library consumer reading a document from
+  elsewhere is not protected.

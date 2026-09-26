@@ -112,6 +112,15 @@ func New() *Differ {
 	return &Differ{identities: identity.New(0, 0)}
 }
 
+// Reset ends every comparison the differ remembers: the previous geometry and every tracked
+// identity. It is what the engine calls when it reports a viewport change, because bounds are
+// normalised and a rectangle tracked at one frame size says nothing at another.
+func (d *Differ) Reset() {
+	d.previous = d.previous[:0]
+	d.hasPrevious = false
+	d.identities.RetireAll()
+}
+
 // plane returns the luma plane for a frame, converting it only if it is not already held.
 //
 // The two slots hold the two most recent frames. A miss on a frame at least as recent as the
@@ -177,6 +186,11 @@ func (d *Differ) Compare(previous, current frame.Frame, cfg config.Config) ([]de
 	if cfg.SuppressesAllRegions() {
 		d.previous = d.previous[:0]
 		d.hasPrevious = true
+		// Nothing is reported, and nothing changed as far as the engine is concerned, so the tracked
+		// elements are refreshed rather than aged. Leaving the map untouched instead would freeze it:
+		// after a suppressed stretch every element would look as old as it was when suppression
+		// started.
+		d.identities.EndFrame(current.Sequence, nil, current.Width, current.Height)
 		return []delta.Region{}, nil, nil
 	}
 

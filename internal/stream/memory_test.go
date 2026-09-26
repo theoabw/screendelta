@@ -22,6 +22,8 @@ type cheapDiffer struct {
 	cells []int
 }
 
+func (d *cheapDiffer) Reset() {}
+
 func (d *cheapDiffer) Compare(frame.Frame, frame.Frame, config.Config) ([]delta.Region, []delta.Condition, error) {
 	return nil, nil, nil
 }

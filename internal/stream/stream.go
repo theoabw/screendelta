@@ -24,6 +24,12 @@ type Differ interface {
 	Compare(previous, current frame.Frame, cfg config.Config) ([]delta.Region, []delta.Condition, error)
 	// Fingerprint summarises a frame in a way that is stable under capture noise.
 	Fingerprint(current frame.Frame, cfg config.Config) (delta.Fingerprint, error)
+	// Reset ends whatever state the differ keeps across frames.
+	//
+	// The engine calls it when it reports a viewport change, because that is a discontinuity the
+	// differ cannot see: the engine skips the comparison for such a frame, so a differ that only
+	// watched frames would carry geometry and identities across a change it never observed.
+	Reset()
 }
 
 // viewport describes the geometry a frame was captured at.
@@ -116,7 +122,10 @@ func (e *Engine) Push(f frame.Frame) (delta.Document, error) {
 		// There is no predecessor, so there is nothing to be different from.
 		conditions = append(conditions, delta.ConditionFirstFrame)
 	case currentViewport.differsFrom(e.previousViewport):
-		// A display change would otherwise look like a screenful of content changes.
+		// A display change would otherwise look like a screenful of content changes. The differ is
+		// told, because this is a discontinuity it cannot observe: no comparison happens for this
+		// frame, so nothing else would tell it that the geometry it remembers is meaningless.
+		e.differ.Reset()
 		conditions = append(conditions, delta.ConditionViewportChanged)
 	default:
 		previous := e.frameFromPrevious(f)

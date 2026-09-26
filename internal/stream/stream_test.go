@@ -17,6 +17,7 @@ import (
 // stubDiffer records what it was asked and returns whatever the test configured, so
 // the loop can be tested without the image code.
 type stubDiffer struct {
+	reset          bool
 	regions        []delta.Region
 	conditions     []delta.Condition
 	compareCalls   int
@@ -25,6 +26,9 @@ type stubDiffer struct {
 	err            error
 	fingerprintErr error
 }
+
+// Reset records that the engine told the differ about a discontinuity.
+func (s *stubDiffer) Reset() { s.reset = true }
 
 func (s *stubDiffer) Compare(previous, current frame.Frame, _ config.Config) ([]delta.Region, []delta.Condition, error) {
 	s.compareCalls++
@@ -64,6 +68,27 @@ func testFrame(sequence uint64, width, height int, fill byte) frame.Frame {
 		ScaleFactor: 1,
 		Pixels:      pixels,
 	}
+}
+
+// testFrameWith builds a frame of a chosen size, which is what a viewport change looks like.
+func testFrameWith(sequence uint64, width, height int, fill byte) frame.Frame {
+	pixels := make([]byte, width*height*4)
+	for index := range pixels {
+		pixels[index] = fill
+	}
+	f, err := frame.NewRaw(sequence, width, height, frame.FormatRGBA8, 1, pixels)
+	if err != nil {
+		panic(err)
+	}
+	return f
+}
+
+// testFrameScaled builds a frame of the same geometry at a different display scale, which is the other
+// half of what a viewport change means.
+func testFrameScaled(sequence uint64, width, height int, scale float64) frame.Frame {
+	f := testFrameWith(sequence, width, height, 0x10)
+	f.ScaleFactor = scale
+	return f
 }
 
 func newEngine(t *testing.T, differ Differ) *Engine {
@@ -291,6 +316,8 @@ type reusingDiffer struct {
 	shared      *fielderr.Error
 }
 
+func (d *reusingDiffer) Reset() {}
+
 func (d *reusingDiffer) Compare(previous, current frame.Frame, cfg config.Config) ([]delta.Region, []delta.Condition, error) {
 	d.frameNumber = int(current.Sequence)
 	if d.shared != nil {
@@ -491,5 +518,58 @@ func TestStructuredDifferErrorNamesTheOperationAndFrame(t *testing.T) {
 	}
 	if shared.Subject != "tile" || shared.Sequence != 99 {
 		t.Fatalf("the caller's error was rewritten: %+v", shared)
+	}
+}
+
+// TestTheDifferIsToldAboutAViewportChange covers the discontinuity the differ cannot see: the engine
+// skips the comparison for a viewport change, so nothing else would tell a differ that the geometry it
+// remembers is meaningless.
+func TestTheDifferIsToldAboutAViewportChange(t *testing.T) {
+	cases := []struct {
+		name   string
+		second frame.Frame
+	}{
+		{name: "different width", second: testFrameWith(2, 16, 8, 0x10)},
+		{name: "different height", second: testFrameWith(2, 8, 16, 0x10)},
+		{name: "different scale factor", second: testFrameScaled(2, 8, 8, 2)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			differ := &stubDiffer{}
+			engine := newEngine(t, differ)
+			if _, err := engine.Push(testFrame(1, 8, 8, 0x10)); err != nil {
+				t.Fatalf("Push failed on the first frame: %v", err)
+			}
+			if differ.reset {
+				t.Fatal("the differ was reset before any viewport change")
+			}
+			document, err := engine.Push(tc.second)
+			if err != nil {
+				t.Fatalf("Push failed: %v", err)
+			}
+			if !differ.reset {
+				t.Fatalf("the differ was not told about the viewport change: %v", document.Conditions)
+			}
+		})
+	}
+}
+
+// TestAViewportRoundTripStillResets covers the case the review found: a size change and a change back,
+// with no comparison in between, still means the remembered geometry is worthless.
+func TestAViewportRoundTripStillResets(t *testing.T) {
+	differ := &stubDiffer{}
+	engine := newEngine(t, differ)
+	if _, err := engine.Push(testFrame(1, 8, 8, 0x10)); err != nil {
+		t.Fatalf("Push failed: %v", err)
+	}
+	if _, err := engine.Push(testFrameWith(2, 16, 8, 0x10)); err != nil {
+		t.Fatalf("Push failed: %v", err)
+	}
+	differ.reset = false
+	if _, err := engine.Push(testFrameWith(3, 8, 8, 0x10)); err != nil {
+		t.Fatalf("Push failed: %v", err)
+	}
+	if !differ.reset {
+		t.Fatal("changing the size back did not reset the differ")
 	}
 }

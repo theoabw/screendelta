@@ -374,73 +374,65 @@ func TestContinuityOfAnIdentity(t *testing.T) {
 	}
 }
 
-// TestAnOccludedElementReturnsWithANewUncertainIdentity is acceptance scenario 2 of user story 2 at
-// the engine level: the element is covered, then visible again in the same place, and the engine
-// refuses to claim it is the same element.
-func TestAnOccludedElementReturnsWithANewUncertainIdentity(t *testing.T) {
+// TestAReplacementIsReportedAsRemovedAndAdded records what the engine can actually say about an
+// element that is covered by a larger one, and why it cannot say more.
+//
+// The replacement is reported as a removal naming the covered element and an addition naming the
+// thing that covered it, which is a truthful account of the pixels. The return of the covered element
+// is then reported as a change of the thing that covered it, because that is where the pixels changed
+// and it is still tracked. The engine cannot tell that the element underneath came back, and the
+// identity it would need to report that is retired.
+//
+// This is a limitation, not a claim: the uncertain marker exists for exactly this case and the
+// classifier cannot reach it here. Falsifying it took a review that constructed the sequence and read
+// the documents; the test now records the behaviour so a later change has to be deliberate.
+func TestAReplacementIsReportedAsRemovedAndAdded(t *testing.T) {
 	width, height := 320, 240
-	button := panel{x: 100, y: 80, w: 80, h: 40, value: panelValue}
-	overlay := panel{x: button.x - 6, y: button.y - 6, w: button.w + 12, h: button.h + 12, value: 30}
+	small := panel{x: 120, y: 100, w: 40, h: 30, value: panelValue}
+	big := panel{x: 80, y: 60, w: 120, h: 100, value: 60}
 
 	cfg := defaults()
 	cfg.OcclusionFrames = 1
 
-	// The element is tracked first, then covered for longer than the window allows, then visible
-	// again. The cover has to outlast the window or the engine is right to keep the identity, which
-	// is what the first version of this test got wrong.
 	frames := []frame.Frame{
-		buildFrame(1, width, height, []panel{button}),
-		buildFrame(2, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: panelAlt}}),
-		buildFrame(3, width, height, []panel{overlay}),
-		buildFrame(4, width, height, []panel{overlay}),
-		buildFrame(5, width, height, []panel{overlay}),
-		buildFrame(6, width, height, []panel{button}),
+		buildFrame(1, width, height, []panel{small}),
+		buildFrame(2, width, height, []panel{{x: small.x, y: small.y, w: small.w, h: small.h, value: panelAlt}}),
+		buildFrame(3, width, height, []panel{big}),
 	}
 
 	differ := New()
 	tracked := uint64(0)
-	for index := 0; index+1 < len(frames); index++ {
-		regions, _, err := differ.Compare(frames[index], frames[index+1], cfg)
-		if err != nil {
-			t.Fatalf("comparison %d failed: %v", index, err)
-		}
+	if regions, _, err := differ.Compare(frames[0], frames[1], cfg); err != nil {
+		t.Fatalf("the first comparison failed: %v", err)
+	} else if len(regions) == 0 {
+		t.Fatal("the first comparison reported nothing")
+	} else {
+		tracked = regions[0].Identity
+	}
 
-		switch index {
-		case 0:
-			// The first comparison has no baseline, so this is where the engine learns where the
-			// element is.
-			if len(regions) == 0 {
-				t.Fatal("the first comparison reported nothing")
-			}
-			tracked = regions[0].Identity
-		case 2, 3:
-			if len(regions) != 0 {
-				t.Fatalf("comparison %d reported %d regions on frames that are identical", index, len(regions))
-			}
-		case 4:
-			if len(regions) == 0 {
-				t.Fatal("the returning element produced no regions")
-			}
-			for _, region := range regions {
-				if region.Identity == tracked {
-					t.Fatalf("the returning element reused identity %d, which had been retired", tracked)
-				}
-				if !region.IdentityUncertain {
-					t.Fatalf("the returning element was matched silently: %+v", region)
-				}
-				if region.IdentityConfidence <= 0 {
-					t.Fatalf("the returning element carries no evidence at all: %+v", region)
-				}
-			}
-		}
+	regions, _, err := differ.Compare(frames[1], frames[2], cfg)
+	if err != nil {
+		t.Fatalf("the replacement comparison failed: %v", err)
+	}
+
+	classes := map[delta.RegionClass][]uint64{}
+	for _, region := range regions {
+		classes[region.Class] = append(classes[region.Class], region.Identity)
+	}
+	if len(classes[delta.ClassRemoved]) != 1 {
+		t.Fatalf("a replacement produced %d removals, want one: %+v", len(classes[delta.ClassRemoved]), regions)
+	}
+	if classes[delta.ClassRemoved][0] != tracked {
+		t.Fatalf("the removal named identity %d instead of the covered %d", classes[delta.ClassRemoved][0], tracked)
+	}
+	if len(classes[delta.ClassAdded]) != 1 {
+		t.Fatalf("a replacement produced %d additions, want one: %+v", len(classes[delta.ClassAdded]), regions)
+	}
+	if classes[delta.ClassAdded][0] == tracked {
+		t.Fatal("the covering element was given the identity of the element it covered")
 	}
 }
 
-// TestAViewportChangeEndsEveryIdentity covers the case where the frame geometry changes: the bounds
-// are normalised, so a rectangle tracked at one frame size means nothing at another, and matching
-// across the change would attach an identity to an element that was never in that place. The
-// identifier counter must keep rising across the change, because a number that reappears on a
-// different element is worse than a number that stops being used.
 func TestAViewportChangeEndsEveryIdentity(t *testing.T) {
 	differ := New()
 	first := buildFrame(1, 320, 240, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelValue}})
@@ -515,5 +507,37 @@ func TestRelaxingTheMotionToleranceKeepsIdentities(t *testing.T) {
 	}
 	if !carried {
 		t.Fatalf("a relaxed tolerance did not continue the element's identity: %+v", regions)
+	}
+}
+
+// TestResetEndsEveryComparisonAndEveryIdentity is what the engine calls when it reports a viewport
+// change. Bounds are normalised, so nothing remembered at one frame size survives it.
+func TestResetEndsEveryComparisonAndEveryIdentity(t *testing.T) {
+	width, height := 320, 240
+	differ := New()
+	first := buildFrame(1, width, height, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelValue}})
+	second := buildFrame(2, width, height, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelAlt}})
+	regions, _, err := differ.Compare(first, second, defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the first comparison reported nothing")
+	}
+	before := regions[0].Identity
+
+	differ.Reset()
+
+	// Nothing is remembered, so the next comparison has no baseline and reports changed rather than
+	// matching anything from before.
+	next := buildFrame(3, width, height, []panel{{x: 40, y: 60, w: 80, h: 30, value: panelValue}})
+	regions, _, err = differ.Compare(second, next, defaults())
+	if err != nil {
+		t.Fatalf("Compare after Reset failed: %v", err)
+	}
+	for _, region := range regions {
+		if region.Identity == before {
+			t.Fatalf("identity %d survived Reset", before)
+		}
 	}
 }
