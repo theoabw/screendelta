@@ -74,8 +74,12 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 		}
 	}
 
-	// Pass two: one previous element whose footprint moved, possibly leaving a changed
-	// area on each side of the movement.
+	// Pass two: a previous element whose footprint moved. A translation changes two areas,
+	// the part of the old position the element no longer covers and the part of the new
+	// position it did not cover before, so both are reported separately and both are
+	// classified as moved with the element's earlier position as their origin. Reporting one
+	// box around the whole movement instead would describe pixels that did not change and
+	// miss the two areas that did.
 	for previousIndex, state := range d.previous {
 		if usedPrevious[previousIndex] {
 			continue
@@ -83,8 +87,7 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 		previousRect := pixelRectOf(state.bounds, current)
 		expanded := expand(previousRect, cfg.MotionTolerancePixels)
 
-		union := previousRect
-		var absorbedMagnitudes []float64
+		absorbed := make([]int, 0, 2)
 		for index, c := range candidates {
 			if matchedCandidate[index] {
 				continue
@@ -92,33 +95,18 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			if !contains(expanded, rect(c.left, c.top, c.right, c.bottom)) {
 				continue
 			}
-			union = unionRect(union, rect(c.left, c.top, c.right, c.bottom))
-			absorbedMagnitudes = append(absorbedMagnitudes, c.magnitude)
+			absorbed = append(absorbed, index)
 		}
-		if len(absorbedMagnitudes) == 0 {
+		if len(absorbed) == 0 {
 			continue
 		}
 
-		// Record which candidates were absorbed so they are not also reported as added.
-		for index, c := range candidates {
-			if matchedCandidate[index] {
-				continue
-			}
-			if contains(expanded, rect(c.left, c.top, c.right, c.bottom)) {
-				matchedCandidate[index] = true
-			}
-		}
 		usedPrevious[previousIndex] = true
-
-		movedCandidate := candidate{
-			left:      union.Min.X,
-			top:       union.Min.Y,
-			right:     union.Max.X,
-			bottom:    union.Max.Y,
-			magnitude: meanOf(absorbedMagnitudes),
+		previousBounds := boundsOf(previousRect, current)
+		for _, index := range absorbed {
+			matchedCandidate[index] = true
+			regions = append(regions, d.regionFor(delta.ClassMoved, candidates[index], &previousBounds, current))
 		}
-		previousBounds := boundsOf(pixelRectOf(state.bounds, current), current)
-		regions = append(regions, d.regionFor(delta.ClassMoved, movedCandidate, &previousBounds, current))
 	}
 
 	// Pass three: what is left is new, or replaces something of a different size.
@@ -132,7 +120,9 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 				continue
 			}
 			previousRect := pixelRectOf(state.bounds, current)
-			if coveredFraction(previousRect, rect(c.left, c.top, c.right, c.bottom)) >= 0.5 {
+			// How much of the previous element the new area covers, not the other way
+			// round: the question is whether the element that was there is gone.
+			if coveredFraction(rect(c.left, c.top, c.right, c.bottom), previousRect) >= 0.5 {
 				replaced = previousIndex
 				break
 			}
@@ -153,24 +143,10 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 		regions = append(regions, d.regionFor(delta.ClassAdded, c, nil, current))
 	}
 
-	// Anything the previous frame had that nothing accounts for is reported as removed,
-	// because its footprint is gone from this frame's changed areas.
-	for previousIndex, state := range d.previous {
-		if usedPrevious[previousIndex] {
-			continue
-		}
-		previousRect := pixelRectOf(state.bounds, current)
-		previousBounds := boundsOf(previousRect, current)
-		removedCandidate := candidate{
-			left:      previousRect.Min.X,
-			top:       previousRect.Min.Y,
-			right:     previousRect.Max.X,
-			bottom:    previousRect.Max.Y,
-			magnitude: regionMagnitude(previous, current, previousRect),
-		}
-		regions = append(regions, d.regionFor(delta.ClassRemoved, removedCandidate, &previousBounds, current))
-	}
-
+	// There is deliberately no pass that reports every unmatched previous element as
+	// removed. An element whose pixels did not change is still on the screen; it is simply
+	// absent from the delta, and calling it removed would invent a disappearance out of a
+	// frame pair that only differs by noise.
 	d.remember(regions, current)
 	sortRegions(regions)
 	return regions
@@ -306,15 +282,4 @@ func clampMagnitude(value float64) float64 {
 		return 1
 	}
 	return value
-}
-
-func meanOf(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	sum := 0.0
-	for _, value := range values {
-		sum += value
-	}
-	return sum / float64(len(values))
 }
