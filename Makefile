@@ -4,7 +4,7 @@ GO ?= go
 BIN := bin/screendelta
 BENCH_ENV := GOMAXPROCS=1
 
-.PHONY: help all check check-strict trace trace-strict build cross test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
+.PHONY: help all check check-report check-strict trace trace-strict build cross test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
 
 help: ## List available targets
 	@echo "Available targets:"
@@ -12,15 +12,18 @@ help: ## List available targets
 
 all: fmt-check vet test check ## Run everything a commit must pass
 
-check: trace ## Run every automated check
+check: trace check-report ## Run every automated check
 
-check-strict: trace-strict ## Run every check, failing while no specification exists
+check-strict: trace-strict check-report ## Run every check, failing while no specification exists
 
 trace: ## Fail when requirement traceability is incomplete
 	$(PYTHON) scripts/check_traceability.py
 
 trace-strict: ## Fail when traceability is incomplete or no specification exists
 	$(PYTHON) scripts/check_traceability.py --require-specs
+
+check-report: ## Check every claim in the report and the README against the repository
+	$(PYTHON) scripts/check_report.py
 
 build: ## Build the CLI into bin/
 	$(GO) build -o $(BIN) ./cmd/screendelta

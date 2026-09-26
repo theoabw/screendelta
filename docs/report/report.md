@@ -112,7 +112,7 @@ project did not write implementation code that way. The specification-driven wor
 
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: 90 commits, 6,153 lines of Go and
+is graded on what the process produced rather than on how long it took: 96 commits, 6,153 lines of Go and
 5,813 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
@@ -559,7 +559,7 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 90 commits in two days, 6,153 lines of Go against 5,813 lines
+Leverage, quantified rather than asserted: 96 commits in two days, 6,153 lines of Go against 5,813 lines
 of test and 4,436 lines of specification, plan and process documents, 53 planned tasks of which 21 are
 complete, 33 requirements of which 29 are verified, and 46 recorded findings of which 45 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
