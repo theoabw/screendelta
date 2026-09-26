@@ -128,7 +128,7 @@ func (m *Map) RetireByID(id uint64) {
 // The question cannot be answered from one frame pair, so the answer is evidence rather than proof. The
 // area must overlap something currently tracked, look unlike it, and look like an element the engine has
 // retired. Where any of those is missing the answer is no, and the caller reports an ordinary change.
-func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, frameHeight int, sequence uint64) ReturnDecision {
+func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, frameHeight int, sequence uint64, gone map[uint64]bool) ReturnDecision {
 	if signature == nil {
 		return ReturnDecision{}
 	}
@@ -140,6 +140,13 @@ func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, fram
 	}
 	live := &m.elements[liveIndex]
 	if !live.SignatureSet {
+		return ReturnDecision{}
+	}
+	// A return says that what is on the screen where the live element was is no longer that element. That
+	// is a statement about the element's own pixels, not about the area that changed, and only the caller
+	// can measure it: without this, repainting the inside of a small part of a cover was read as evidence
+	// that the whole cover had gone.
+	if gone != nil && !gone[live.ID] {
 		return ReturnDecision{}
 	}
 	// The comparison is relative rather than against an absolute allowance. A returning element whose
@@ -630,12 +637,11 @@ func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature
 			continue
 		}
 		candidate := pixelRect(element.Bounds, frameWidth, frameHeight)
-		// The area has to reach where the element was: either it is close to it, or it covers most of
-		// where it stood, which is what a returning element looks like when the area that changed is
-		// larger than the element itself.
-		withinReachOfPlace := withinTolerance(candidate, rect, m.motionTolerancePixels) ||
-			coveredFraction(rect, candidate) >= coverInteriorFraction
-		if !withinReachOfPlace {
+		// Eligibility first, so that a candidate which cannot be a return never wins the ranking:
+		// ranking before filtering let a perfectly matching element be discarded because a worse
+		// fitting one was ranked above it.
+		if !withinTolerance(candidate, rect, m.motionTolerancePixels) &&
+			coveredFraction(rect, candidate) < coverInteriorFraction {
 			continue
 		}
 		score := intersectionOverUnion(candidate, rect)
@@ -644,6 +650,16 @@ func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature
 		}
 		if score < minimumOverlap {
 			continue
+		}
+		// A caller that measures appearance gets the appearance rule; a caller that does not keeps the
+		// geometry-only behaviour, which is what the package promised before appearance existed.
+		if signature != nil {
+			if !element.SignatureSet {
+				continue
+			}
+			if signature.Distance(element.Signature) > returnAppearanceCeiling*SignatureCells {
+				continue
+			}
 		}
 
 		distance := 0

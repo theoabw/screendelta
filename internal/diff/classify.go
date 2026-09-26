@@ -82,6 +82,16 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	// The elements the engine is tracking, read from the layer that owns them.
 	d.liveElements = d.identities.LiveElements()
 	usedPrevious := make([]bool, len(d.liveElements))
+
+	// Which tracked elements had their own pixels change is a fact about the frame rather than about any one
+	// changed area, so it is measured once. Measuring it per area instead cost the large-change profile
+	// twenty milliseconds a frame.
+	goneElements := make(map[uint64]bool, len(d.liveElements))
+	for _, live := range d.liveElements {
+		if d.changedFraction(live.Bounds, current) >= coverInteriorFraction {
+			goneElements[live.ID] = true
+		}
+	}
 	regions := make([]delta.Region, 0, len(candidates)+len(d.liveElements))
 
 	matchedCandidate := make([]bool, len(candidates))
@@ -93,39 +103,57 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			continue
 		}
 		c := candidates[index]
-		covered := 0
 
-		// A return comes first, because it is the case where the area looks like something the engine
-		// has retired. A cover is the case where it looks like nothing it knows.
-		if decision := d.identities.Return(boundsOf(rect(c.left, c.top, c.right, c.bottom), current),
-			c.signature(), current.Width, current.Height, current.Sequence); decision.IsReturn {
-			matchedCandidate[index] = true
-			where := decision.CoveredBounds
-			regions = append(regions, d.regionRemoved(decision.CoveredID, where, previous, current))
-			regions = append(regions, d.regionWithAssignment(delta.ClassAdded, c, decision.Assignment, nil, current))
-			continue
-		}
-
-		// An area that contains a tracked element and reaches past it is where something bigger arrived.
-		// Which of those elements have really gone depends on whether their own pixels changed, and the
-		// pixel mask is here rather than in the identity layer, so the question is asked here.
+		// Which live elements this area has taken the place of: those it contains and reaches past, whose
+		// own pixels changed. The pixel question is asked here because the mask is here.
 		area := boundsOf(rect(c.left, c.top, c.right, c.bottom), current)
+
+		taken := make([]identity.CoveredElement, 0, 2)
 		for _, enclosed := range d.identities.Enclosed(area, current.Width, current.Height) {
-			if d.changedFraction(enclosed.Bounds, current) < coverInteriorFraction {
+			if !goneElements[enclosed.ID] {
 				// The element is still there and only its edge moved: this is growth, not a cover.
 				continue
 			}
-			d.identities.RetireByID(enclosed.ID)
-			if index := d.snapshotIndex(enclosed.ID); index >= 0 {
+			taken = append(taken, enclosed)
+		}
+
+		// A return is the case where the area looks more like something the engine retired than like what
+		// is on the screen, and the element it overlaps is one whose own pixels changed.
+		returned := identity.ReturnDecision{}
+		if len(goneElements) > 0 {
+			returned = d.identities.Return(area, c.signature(), current.Width, current.Height, current.Sequence, goneElements)
+		}
+
+		if len(taken) == 0 && !returned.IsReturn {
+			// Nothing has taken anything's place, so the ordinary passes decide.
+			continue
+		}
+
+		// Every element the area took the place of is retired and named, whether the return identified one
+		// of them or not: leaving one live would hand a consumer a handle that later identifies something
+		// unrelated.
+		for _, element := range taken {
+			if returned.IsReturn && element.ID == returned.CoveredID {
+				continue
+			}
+			d.identities.RetireByID(element.ID)
+			if index := d.snapshotIndex(element.ID); index >= 0 {
 				usedPrevious[index] = true
 			}
-			regions = append(regions, d.regionRemoved(enclosed.ID, enclosed.Bounds, previous, current))
-			covered++
+			regions = append(regions, d.regionRemoved(element.ID, element.Bounds, previous, current))
 		}
-		if covered > 0 {
-			matchedCandidate[index] = true
+		if returned.IsReturn {
+			if index := d.snapshotIndex(returned.CoveredID); index >= 0 {
+				usedPrevious[index] = true
+			}
+			// The element the return displaced is named as removed, exactly as a cover names it: what is on
+			// the screen there is no longer that element, which is the whole reason the return was called.
+			regions = append(regions, d.regionRemoved(returned.CoveredID, returned.CoveredBounds, previous, current))
+			regions = append(regions, d.regionWithAssignment(delta.ClassAdded, c, returned.Assignment, nil, current))
+		} else {
 			regions = append(regions, d.regionFor(delta.ClassAdded, c, nil, current))
 		}
+		matchedCandidate[index] = true
 	}
 
 	// Pass one: unchanged footprints that changed content.
@@ -201,10 +229,17 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			previousRect := pixelRectOf(state.Bounds, current)
 			// How much of the previous element the new area covers, not the other way
 			// round: the question is whether the element that was there is gone.
-			if coveredFraction(rect(c.left, c.top, c.right, c.bottom), previousRect) >= 0.5 {
-				replaced = previousIndex
-				break
+			if coveredFraction(rect(c.left, c.top, c.right, c.bottom), previousRect) < 0.5 {
+				continue
 			}
+			// And the element's own pixels have to have changed. A bounding rectangle around a change
+			// is not evidence that everything inside it changed, and without this an element that grew
+			// outward was retired as though something had taken its place.
+			if !goneElements[state.ID] {
+				continue
+			}
+			replaced = previousIndex
+			break
 		}
 		if replaced >= 0 {
 			state := d.liveElements[replaced]
@@ -251,6 +286,14 @@ func (d *Differ) changedFraction(bounds delta.Bounds, current frame.Frame) float
 		return 1
 	}
 	r := pixelRectOf(bounds, current)
+	// The footprint an element is remembered with includes the growth margin every reported region gets, and
+	// that ring belongs to the background rather than to the element, so it never changes and would make an
+	// element that changed entirely look as though a tenth of it had stayed still. Measuring the element is
+	// measuring inside that margin.
+	inner := r.Inset(growthMargin)
+	if !inner.Empty() {
+		r = inner
+	}
 	if r.Empty() {
 		return 0
 	}

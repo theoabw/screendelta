@@ -284,10 +284,20 @@ failure mode hands a consumer a confident wrong match for content it has not see
 handle on an element that is still where it was and looks the same, the second retires a handle and
 allocates a new one.
 
-A third failure mode was found by a review after this section was written: a return whose content
-occupies only part of the changed area is not recognised, because the appearance compared is the
-appearance of the whole area rather than of the element's old footprint. That is recorded as an open
-defect with its fix, which is to measure the appearance of the footprint.
+A third failure mode was found by a review after this section was written and is now closed, though not by
+the means first proposed. A return whose content occupies only part of the changed area was not recognised,
+because the appearance compared was the appearance of the whole area, which is a mixture as soon as the
+content is smaller than the area. Measuring the appearance of the element's old footprint instead was the
+first proposal and it does not settle the question either: a partial return leaves that footprint a mixture
+too. What closed it is making the comparison relative rather than absolute. The engine no longer asks whether
+the area matches the element that left, which a mixture never does, but whether it looks more like that
+element than like the one on the screen, and requires the difference to be material.
+
+The remaining boundary is stated rather than hidden: when the mixture is genuinely closer to the element on
+the screen than to the one that left, the engine reports a change of the element on the screen. Two greys a
+few levels apart with a partial return between them are such a case. Distinguishing it needs sub-region
+matching rather than a summary of the area, which this section rejects on cost, so a planner that needs
+certainty there must supply a region of interest tight enough to exclude the surrounding content.
 
 **Alternatives rejected**: storing a pixel patch per element, which costs memory and buys no more
 discrimination than a coarse mean; comparing against the previous frame's changed areas, which is the

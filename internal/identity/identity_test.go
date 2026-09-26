@@ -955,14 +955,14 @@ func TestReturnNeedsEvidenceInBothDirections(t *testing.T) {
 
 	t.Run("no appearance to compare", func(t *testing.T) {
 		m, _, _ := build()
-		if decision := m.Return(bounds, nil, frameWidth, frameHeight, 4); decision.IsReturn {
+		if decision := m.Return(bounds, nil, frameWidth, frameHeight, 4, nil); decision.IsReturn {
 			t.Fatalf("a return was decided without an appearance: %+v", decision)
 		}
 	})
 
 	t.Run("nothing live overlaps", func(t *testing.T) {
 		m := identity.New(1, 8)
-		if decision := m.Return(bounds, ptrSignature(filledSignature(80)), frameWidth, frameHeight, 1); decision.IsReturn {
+		if decision := m.Return(bounds, ptrSignature(filledSignature(80)), frameWidth, frameHeight, 1, nil); decision.IsReturn {
 			t.Fatalf("a return was decided with nothing tracked: %+v", decision)
 		}
 	})
@@ -973,7 +973,7 @@ func TestReturnNeedsEvidenceInBothDirections(t *testing.T) {
 		m.Appear(bounds, frameWidth, frameHeight, 1, &appearance)
 		m.EndFrame(1, nil, frameWidth, frameHeight)
 		// A live element, and an area that looks just like it: that is a change, not a return.
-		if decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 2); decision.IsReturn {
+		if decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 2, nil); decision.IsReturn {
 			t.Fatalf("an area that looks like what is on screen was called a return: %+v", decision)
 		}
 	})
@@ -982,7 +982,7 @@ func TestReturnNeedsEvidenceInBothDirections(t *testing.T) {
 		m, _, _ := build()
 		// Far from where the retired element was, and looking nothing like either element.
 		elsewhere := boundsOf(10, 10, 60, 40)
-		if decision := m.Return(elsewhere, ptrSignature(filledSignature(200)), frameWidth, frameHeight, 4); decision.IsReturn {
+		if decision := m.Return(elsewhere, ptrSignature(filledSignature(200)), frameWidth, frameHeight, 4, nil); decision.IsReturn {
 			t.Fatalf("a return was decided away from every retired element: %+v", decision)
 		}
 	})
@@ -991,7 +991,7 @@ func TestReturnNeedsEvidenceInBothDirections(t *testing.T) {
 		m, _, _ := build()
 		// Overlaps the retired element's place, but looks nothing like it and nothing like anything
 		// else either, so the engine has no reason to prefer the retired one.
-		if decision := m.Return(bounds, ptrSignature(filledSignature(200)), frameWidth, frameHeight, 4); decision.IsReturn {
+		if decision := m.Return(bounds, ptrSignature(filledSignature(200)), frameWidth, frameHeight, 4, nil); decision.IsReturn {
 			t.Fatalf("a return was decided on geometry alone: %+v", decision)
 		}
 	})
@@ -1005,7 +1005,7 @@ func TestReturnNeedsEvidenceInBothDirections(t *testing.T) {
 		liveElement := m.Appear(cover, frameWidth, frameHeight, 4, ptrSignature(filledSignature(200)))
 		m.EndFrame(4, []delta.Bounds{cover}, frameWidth, frameHeight)
 
-		decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 5)
+		decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 5, nil)
 		if !decision.IsReturn {
 			t.Fatalf("a returning element was not recognised: %+v", decision)
 		}
