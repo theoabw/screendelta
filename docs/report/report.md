@@ -452,14 +452,20 @@ or measurement that verifies it. What it shows in summary:
 | Class | Count | What the class contained |
 |---|---|---|
 | Logical | 27 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
-| Compliance | 7 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, and three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation |
+| Compliance | 7 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation, a corpus generator that made every accuracy number irreproducible, a sample size overstated five times over, and a suite that failed while being read as a pass |
 | Maintainability | 1 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
 | Security | 0 | Stated as a result rather than an omission. The engine reads local files, writes only to a path it is given and never opens a socket; the nearest item is a decoder that accepts documents missing required fields, classified as compliance because the schema is the contract being broken |
 
-The pattern worth naming is that the compliance class is the one the process had to grow a defence for. The
-defence is now a rule: a measurement is not finished until an attempt to pass it with a deliberately wrong
-implementation has failed. Four of the 35 recorded defects were found that way, and none of them by
-reading the code.
+The pattern worth naming is that the compliance class is the one the process had to grow a defence for, and
+the defence is not one rule but three. A measurement is not finished until an attempt to pass it with a
+deliberately wrong implementation has failed, which is how four of the 35 defects were found. The number a
+measurement prints is not evidence until the code that prints it has been read, which is how the sample size
+turned out to be five times too large. And the exit code is the result, not the output, which is how a failing
+suite was read as a pass in the last round of this project.
+
+The three defects in that last family all came from running the final verification carefully, and each had
+survived every earlier round because the number it produced was, in isolation, believable: F1 1.0000 is a
+perfect score whether the material is different on every run or not.
 
 ### 5.3 Test Execution Results
 
