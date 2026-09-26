@@ -358,31 +358,48 @@ func TestScenario8UnusableInputFailsLoudly(t *testing.T) {
 	}
 }
 
-// Scenario 9: output is deterministic across thread counts.
+// Scenario 9: output is deterministic across thread counts and scheduling.
+//
+// The requirement says byte-identical output, independent of host, thread count and scheduling. Two of the
+// three are testable here, and they are tested four ways rather than one: two thread counts, which is the
+// wording of the criterion, and two garbage collector settings, because when the collector runs is exactly
+// the kind of scheduling difference that would show up if any part of the engine depended on a map's
+// iteration order or on a goroutine's progress. Another host is not testable from here and the matrix says so
+// rather than counting this as the whole requirement.
 func TestScenario9OutputIsDeterministicAcrossThreads(t *testing.T) {
 	dir, _ := frames(t, "sweep", corpus.Options{Width: 320, Height: 240, Frames: 8, Seed: 20260926})
-	one := filepath.Join(t.TempDir(), "one.ndjson")
-	four := filepath.Join(t.TempDir(), "four.ndjson")
 
-	if got := run(t, []string{"GOMAXPROCS=1"}, "stream", "--source", dir, "--out", one); got.code != 0 {
-		t.Fatalf("exit code %d: %s", got.code, got.stderr)
-	}
-	if got := run(t, []string{"GOMAXPROCS=4"}, "stream", "--source", dir, "--out", four); got.code != 0 {
-		t.Fatalf("exit code %d: %s", got.code, got.stderr)
+	runs := []struct {
+		name string
+		env  []string
+	}{
+		{name: "one thread", env: []string{"GOMAXPROCS=1"}},
+		{name: "four threads", env: []string{"GOMAXPROCS=4"}},
+		{name: "frequent collection", env: []string{"GOMAXPROCS=2", "GOGC=10"}},
+		{name: "collection off", env: []string{"GOMAXPROCS=2", "GOGC=off"}},
 	}
 
-	firstBytes, err := os.ReadFile(one)
-	if err != nil {
-		t.Fatalf("cannot read the first output: %v", err)
-	}
-	secondBytes, err := os.ReadFile(four)
-	if err != nil {
-		t.Fatalf("cannot read the second output: %v", err)
-	}
-	if !bytes.Equal(firstBytes, secondBytes) {
-		t.Fatalf("two runs over identical input differ: %d bytes against %d", len(firstBytes), len(secondBytes))
-	}
-	if len(firstBytes) == 0 {
-		t.Fatal("the stream wrote nothing")
+	var reference []byte
+	referenceName := ""
+	for _, configuration := range runs {
+		output := filepath.Join(t.TempDir(), "stream.ndjson")
+		if got := run(t, configuration.env, "stream", "--source", dir, "--out", output); got.code != 0 {
+			t.Fatalf("%s: exit code %d: %s", configuration.name, got.code, got.stderr)
+		}
+		body, err := os.ReadFile(output)
+		if err != nil {
+			t.Fatalf("%s: cannot read the output: %v", configuration.name, err)
+		}
+		if len(body) == 0 {
+			t.Fatalf("%s: the stream wrote nothing", configuration.name)
+		}
+		if reference == nil {
+			reference, referenceName = body, configuration.name
+			continue
+		}
+		if !bytes.Equal(reference, body) {
+			t.Fatalf("%s produced different output from %s: %d bytes against %d",
+				configuration.name, referenceName, len(body), len(reference))
+		}
 	}
 }

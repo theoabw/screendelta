@@ -1,0 +1,74 @@
+Identity verification, 2026-09-27.
+Commands: go test ./internal/identity/... ./internal/diff/... -v, make accuracy
+
+This file is the evidence for FR-006 and FR-007, the two requirements about element identity. It records
+what is claimed, what carries the claim, and where the claim stops, because identity is the part of this
+engine that is an inference rather than an observation and the two must not be presented as though they were
+the same thing.
+
+## What is claimed, and by which test
+
+| Claim | Requirement | Test |
+|---|---|---|
+| A newly reported element is given an identity, and its confidence is 1 because there is no competing interpretation | FR-006 | `TestFirstAppearanceAllocatesACertainIdentity` |
+| An element that moves keeps one identity across frames | FR-006 | `TestAMovingElementKeepsOneIdentity`, `TestATrackedElementKeepsOneIdentityAcrossFrames`, `TestContinuityOfAnIdentity` |
+| Its remembered footprint follows the movement without lagging behind | FR-006 | `TestAMovingFootprintFollowsWithoutLag` |
+| An element inside another element keeps its own identity, and the answer does not depend on allocation order | FR-006 | `TestASmallElementInsideALargeOneKeepsItsOwnIdentity` |
+| A change covering only part of an element does not shrink or reset the element | FR-006 | `TestAPartialChangeKeepsOneIdentity`, `TestAPartialChangeLeavesTheFootprintIntact` |
+| An element hidden for longer than the occlusion window is retired, and its return is a new, uncertain identity | FR-007 | `TestReappearanceAfterOcclusionIsNewAndUncertain`, `TestAnElementHiddenWithinTheWindowKeepsItsIdentity` |
+| Identifiers are never reused inside a session, including after a reset, a rules change and a viewport change | FR-006 | `TestIdentifiersAreNeverReused`, `TestResetEndsEveryComparisonAndEveryIdentity`, `TestSetRulesChangesTheWindowWithoutLosingIdentities`, `TestAViewportChangeEndsEveryIdentity`, `TestRetireAllEndsEveryElementWithoutReissuingNumbers`, `TestVanishWithNothingToRetireAllocatesAName` |
+| A removal retires the identity it names | FR-006 | `TestRemovedElementRetiresItsIdentity` |
+| Retired identities are bounded, so the table does not grow with the session | NFR-003 | `TestRetiredEntriesAreBoundedByTheRetentionWindow` |
+| An element that sits still is not retired as occluded | FR-006 | `TestAnElementThatSitsStillIsNotRetired` |
+| An area that contains a live element and reaches past it, whose own pixels changed, is reported as that element removed and something added | FR-007 | `TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities`, `TestCoverNeedsAnAreaBiggerThanTheElement` |
+| Every element one such area covers is retired, not only the one it contains most completely | FR-007 | `TestOneCoveringAreaRetiresEveryElementItCovers` |
+| Growth is not a cover: an element that extends outward with its interior intact keeps its identity, wherever it sits | FR-007 | `TestAGrowingElementIsNotReportedAsACover`, `TestGrowthWithoutAnInteriorRepaintIsNotACover`, `TestGrowthAtTheFrameEdgeIsNotACover` |
+| A repaint confined to the inside of an element that is mostly still there does not retire that element | FR-007 | `TestRepaintingInsideACoverDoesNotRetireTheCover` |
+| A returning element whose content occupies only part of the changed area is reported as an addition with a new identity marked uncertain | FR-007 | `TestAResizedReturnIsRecognisedAsUncertain`, `TestAReturnAfterACoverIsAddedUncertain` |
+| A return neither reuses the retired handle nor assigns its identity to another change in the same frame | FR-006, FR-007 | `TestAReturnDoesNotAssignItsIdentityToAnotherChange` |
+| Evidence in one direction is not enough: appearance and geometry both have to agree | FR-007 | `TestReturnNeedsEvidenceInBothDirections` |
+| The same sequence produces the same identities, and the identity rules are deterministic | NFR-004 | `TestTheSameSequenceProducesTheSameIdentities`, `TestFootprintEvolutionIsDeterministic` |
+
+## Where the claim stops
+
+Two boundaries are stated in `specs/001-frame-delta-engine/spec.md` under the second acceptance scenario of
+user story 2, which makes them part of the requirement rather than gaps in it. They were written into the
+specification in commit `416cad9`, before FR-006 and FR-007 were marked verified, so that the requirement and
+the engine say the same thing.
+
+1. **An area the same size as the element it replaces.** A cover whose area equals the covered element's
+   footprint leaves no margin to exceed it, and there is no appearance evidence that separates "this element
+   was repainted" from "this element was replaced in place". The engine reports a change of that element.
+   `TestASameFootprintDisappearanceIsReportedAsChanged` pins it.
+
+2. **A partial return whose mixture favours the element on screen.** A returning element that occupies only
+   part of the changed area is recognised by comparing what the area looks like against both the element that
+   left and the element that is there. Where that comparison genuinely favours the element on screen, which
+   happens when the two are only a few levels apart in appearance, the change is reported against that
+   element. Distinguishing it needs matching against parts of the area rather than a summary of it, which
+   `research.md` R17 rejects on cost.
+
+Both are the same kind of statement: the engine reports what the pixels support and does not invent the rest.
+A consumer that needs certainty in either case supplies a region of interest tight enough to exclude the
+surrounding content, which the contract allows.
+
+## What the measurement adds
+
+`make accuracy` scores the four corpus cases and asserts the class of every region in the three cases where
+what happened is unambiguous. Relevant to identity:
+
+- the occluded case: 3 pairs, every region's class asserted, F1 1.0000
+- the moving case: 11 pairs, every region's class asserted, F1 1.0000
+- the noise case: 119 pairs, nothing reported on any of them, which is where a false removal would show
+
+Zero false removals across all four cases, which is NFR-005 and the reason the two boundaries above are
+tolerated rather than traded away: refusing a removal costs a missed cover, and making one costs a handle
+that vanishes from under a consumer.
+
+## What this file does not show
+
+The identity rules are scored through generated cases and unit tests, not against a real application with a
+real element inventory. `docs/vv/evidence/demo-2026-09-27.txt` records the engine's output on real rendered
+screen pixels, where it isolated a text field's digits, a status line's words and a clock's seconds as
+separate regions with stable handles across frames, but that is a sanity check rather than a scored result:
+the fixture provides no ground truth for identity.

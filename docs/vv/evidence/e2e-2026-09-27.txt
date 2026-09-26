@@ -22,8 +22,15 @@ Quickstart scenarios, each with the test that runs it against the built binary:
               TestScenario7RegionsOfInterestRestrict
   scenario 8  unusable input fails loudly, with exit codes 1 and 2, and writes nothing to standard output
               TestScenario8UnusableInputFailsLoudly
-  scenario 9  two runs with different thread counts produce byte-identical output
+  scenario 9  four runs produce byte-identical output: two thread counts, a frequent garbage collector and
+              the collector switched off entirely
               TestScenario9OutputIsDeterministicAcrossThreads
+
+              The fourth run is the one worth pointing at. When the collector runs is exactly the kind of
+              scheduling difference that would expose any dependence on a map's iteration order or on a
+              goroutine's progress, and the requirement names scheduling as well as thread count. Another host
+              and another Go version are still untested, which is why NFR-004 is recorded as in progress
+              rather than verified: two of its three named conditions are demonstrated, not all three.
 
 Scenario 5 of the quickstart (an occluded element reported as uncertain rather than matched) is exercised
 by TestAReturnAfterACoverIsAddedUncertain and TestACoverIsReportedAsRemovedAndAddedWithDistinctIdentities in
