@@ -277,10 +277,17 @@ extra piece of state per element and the fields the contract already has for rec
 instead of proof: `identityUncertain` and `identityConfidence`.
 
 **Residual ambiguity, recorded rather than papered over**: a cover whose footprint equals the
-element's leaves no margin to exceed, so it stays `changed`; and a growth that repaints its interior
-is reported as removed and added, which costs an identity on that frame. Both failure modes produce
-churn and a retired handle, never a confident wrong match, because a return is always uncertain and an
-identifier is never reused.
+element's leaves no margin to exceed, so it stays `changed` and the covered element keeps its identity,
+which is the boundary stated in the interface contract rather than a safety property. A growth that
+repaints its interior is reported as removed and added, which costs an identity on that frame. Neither
+failure mode hands a consumer a confident wrong match for content it has not seen: the first keeps a
+handle on an element that is still where it was and looks the same, the second retires a handle and
+allocates a new one.
+
+A third failure mode was found by a review after this section was written: a return whose content
+occupies only part of the changed area is not recognised, because the appearance compared is the
+appearance of the whole area rather than of the element's old footprint. That is recorded as an open
+defect with its fix, which is to measure the appearance of the footprint.
 
 **Alternatives rejected**: storing a pixel patch per element, which costs memory and buys no more
 discrimination than a coarse mean; comparing against the previous frame's changed areas, which is the
@@ -316,8 +323,9 @@ distinguish, rather than as one it cannot:
    covered identifier is never reused.
 2. **Return**: given the covering area later showing the covered element's content again, the covering
    element is reported as `removed` and the returning content as `added` with a newly allocated
-   identifier whose `identityUncertain` is true and whose `identityConfidence` lies strictly between
-   zero and one.
+   identifier whose `identityUncertain` is true and whose `identityConfidence` is greater than zero. The
+   number measures the evidence and the flag carries the claim: a perfect appearance match over a perfect
+   overlap is still not proof of identity.
 
 **Rationale**: the original wording asked for something a pixel-only stage cannot know, which is why
 the first implementation could not satisfy it and the review could falsify the claim. A scenario that

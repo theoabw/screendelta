@@ -57,13 +57,10 @@ type Element struct {
 	pendingSet bool
 }
 
-// CoverDecision says whether a changed area has covered a tracked element.
-type CoverDecision struct {
-	// IsCover is true when the area contains most of a tracked element and extends past its footprint.
-	IsCover bool
-	// CoveredID is the identity of the element that is gone, and CoveredBounds is where it was.
-	CoveredID     uint64
-	CoveredBounds delta.Bounds
+// CoveredElement is a tracked element whose place a changed area has taken.
+type CoveredElement struct {
+	ID     uint64
+	Bounds delta.Bounds
 }
 
 // ReturnDecision says whether a changed area is a retired element coming back rather than a change of
@@ -79,45 +76,51 @@ type ReturnDecision struct {
 	Assignment Assignment
 }
 
-// Cover reports whether a changed area has taken the place of a tracked element.
+// Enclosed returns the live elements whose footprint a changed area contains and reaches past.
 //
-// The test is that the area contains nearly all of the element and reaches past its footprint. A change
-// inside an element does neither, and an element that grows into new ground does not contain itself plus
-// margin without also containing whatever the growth covered, which is the case this rule exists for.
-func (m *Map) Cover(bounds delta.Bounds, frameWidth, frameHeight int) CoverDecision {
+// It returns every one of them rather than a single best, because one area can cover several elements
+// and each of their handles is gone. Returning only the best containment left the others live, and a
+// consumer following one of those handles would later find it attached to something unrelated.
+//
+// The caller decides which of them have really gone, because that depends on which of their pixels
+// changed, and the layer that has the pixel mask is the one that can answer it.
+func (m *Map) Enclosed(bounds delta.Bounds, frameWidth, frameHeight int) []CoveredElement {
 	rect := pixelRect(bounds, frameWidth, frameHeight)
+	if rect.Empty() {
+		return nil
+	}
 
-	best := -1
-	bestContained := 0.0
+	covered := make([]CoveredElement, 0, 2)
 	for index := range m.elements {
 		element := &m.elements[index]
 		if element.State != Live {
 			continue
 		}
 		footprint := pixelRect(element.Bounds, frameWidth, frameHeight)
-		if footprint.Empty() {
+		if footprint.Empty() || !exceedsBy(rect, footprint, coverExceedancePixels) {
 			continue
 		}
-		if !exceedsBy(rect, footprint, coverExceedancePixels) {
+		if coveredFraction(rect, footprint) < coverInteriorFraction {
 			continue
 		}
-		contained := coveredFraction(rect, footprint)
-		if contained < coverInteriorFraction {
-			continue
-		}
-		if contained > bestContained {
-			best, bestContained = index, contained
-		}
+		covered = append(covered, CoveredElement{ID: element.ID, Bounds: element.Bounds})
 	}
-	if best < 0 {
-		return CoverDecision{}
-	}
+	return covered
+}
 
-	element := &m.elements[best]
-	element.pendingSet = false
-	element.State = Retired
-	element.Confidence = 0
-	return CoverDecision{IsCover: true, CoveredID: element.ID, CoveredBounds: element.Bounds}
+// RetireByID ends one element, which is what the caller does once it has decided that the element's own
+// pixels changed and something bigger is where it was.
+func (m *Map) RetireByID(id uint64) {
+	for index := range m.elements {
+		element := &m.elements[index]
+		if element.ID != id {
+			continue
+		}
+		element.pendingSet = false
+		element.State = Retired
+		element.Confidence = 0
+		return
+	}
 }
 
 // Return reports whether a changed area is a retired element coming back.
@@ -148,7 +151,7 @@ func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, fram
 		return ReturnDecision{}
 	}
 	retired := &m.elements[retiredIndex]
-	if !retired.SignatureSet || !signature.Close(retired.Signature) {
+	if !retired.SignatureSet {
 		return ReturnDecision{}
 	}
 	retiredDistance := signature.Distance(retired.Signature)
@@ -604,12 +607,15 @@ func (m *Map) bestLive(rect rectangle, frameWidth, frameHeight int) (int, float6
 	return best, bestScore
 }
 
-// bestRetired returns the retired element whose last position explains a rectangle, and the score of
-// that explanation.
+// bestRetired returns the retired element that best explains a rectangle, and the score of that
+// explanation.
 //
-// Geometry opens the question and appearance settles it. Where two retired elements occupied the same
-// place, the one that looks like the returning content is the candidate, and picking the older one
-// instead would decide a question about appearance by allocation order.
+// Appearance filters before geometry ranks. A candidate whose appearance is incompatible with the
+// content is not a candidate at all, however well it overlaps: ranking geometry first let a
+// badly-fitting element that happened to sit closer win, and the element that actually matched was never
+// considered, so a genuine return was reported as a confident change of what covered it. Among the
+// candidates that pass the filter, the closest appearance wins and overlap breaks the tie, because the
+// question being asked is whether this is the element that left.
 func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature *Signature) (int, float64) {
 	best, bestScore, bestDistance := -1, 0.0, 0
 	for index := range m.elements {
@@ -618,23 +624,35 @@ func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature
 			continue
 		}
 		candidate := pixelRect(element.Bounds, frameWidth, frameHeight)
-		if !withinTolerance(candidate, rect, m.motionTolerancePixels) {
+		// The area has to reach where the element was: either it is close to it, or it covers most of
+		// where it stood, which is what a returning element looks like when the area that changed is
+		// larger than the element itself.
+		withinReachOfPlace := withinTolerance(candidate, rect, m.motionTolerancePixels) ||
+			coveredFraction(rect, candidate) >= coverInteriorFraction
+		if !withinReachOfPlace {
 			continue
 		}
 		score := intersectionOverUnion(candidate, rect)
+		if score < minimumOverlap {
+			score = coveredFraction(rect, candidate)
+		}
 		if score < minimumOverlap {
 			continue
 		}
 
 		distance := 0
 		if signature != nil && element.SignatureSet {
+			if !signature.Close(element.Signature) {
+				// The content is not this element, whatever the geometry says.
+				continue
+			}
 			distance = signature.Distance(element.Signature)
 		}
 
 		better := best < 0 ||
-			score > bestScore ||
-			(score == bestScore && (signature != nil && element.SignatureSet) && distance < bestDistance) ||
-			(score == bestScore && distance == bestDistance && element.ID < m.elements[best].ID)
+			distance < bestDistance ||
+			(distance == bestDistance && score > bestScore) ||
+			(distance == bestDistance && score == bestScore && element.ID < m.elements[best].ID)
 		if better {
 			best, bestScore, bestDistance = index, score, distance
 		}

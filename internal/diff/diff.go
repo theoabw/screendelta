@@ -22,6 +22,12 @@ import (
 	"github.com/theoabw/screendelta/internal/identity"
 )
 
+// coverInteriorFraction is how much of a tracked element has to have changed, and how much of it a
+// changed area has to contain, before the engine treats the area as having taken the element's place.
+// Nine tenths allows the element's own edge pixels to differ along with everything else. The identity
+// layer holds the same value for the geometry half of the question.
+const coverInteriorFraction = 0.90
+
 // wordBytes is how much of a row the comparison skips at a time once it knows the row changed.
 const wordBytes = 8
 

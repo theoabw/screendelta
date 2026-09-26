@@ -93,23 +93,37 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			continue
 		}
 		c := candidates[index]
+		covered := 0
 
 		// A return comes first, because it is the case where the area looks like something the engine
 		// has retired. A cover is the case where it looks like nothing it knows.
 		if decision := d.identities.Return(boundsOf(rect(c.left, c.top, c.right, c.bottom), current),
 			c.signature(), current.Width, current.Height, current.Sequence); decision.IsReturn {
 			matchedCandidate[index] = true
-			covered := decision.CoveredBounds
-			regions = append(regions, d.regionRemoved(decision.CoveredID, covered, previous, current))
+			where := decision.CoveredBounds
+			regions = append(regions, d.regionRemoved(decision.CoveredID, where, previous, current))
 			regions = append(regions, d.regionWithAssignment(delta.ClassAdded, c, decision.Assignment, nil, current))
 			continue
 		}
 
-		if decision := d.identities.Cover(boundsOf(rect(c.left, c.top, c.right, c.bottom), current),
-			current.Width, current.Height); decision.IsCover {
+		// An area that contains a tracked element and reaches past it is where something bigger arrived.
+		// Which of those elements have really gone depends on whether their own pixels changed, and the
+		// pixel mask is here rather than in the identity layer, so the question is asked here.
+		area := boundsOf(rect(c.left, c.top, c.right, c.bottom), current)
+		for _, enclosed := range d.identities.Enclosed(area, current.Width, current.Height) {
+			if d.changedFraction(enclosed.Bounds, current) < coverInteriorFraction {
+				// The element is still there and only its edge moved: this is growth, not a cover.
+				continue
+			}
+			d.identities.RetireByID(enclosed.ID)
+			if index := d.snapshotIndex(enclosed.ID); index >= 0 {
+				usedPrevious[index] = true
+			}
+			regions = append(regions, d.regionRemoved(enclosed.ID, enclosed.Bounds, previous, current))
+			covered++
+		}
+		if covered > 0 {
 			matchedCandidate[index] = true
-			covered := decision.CoveredBounds
-			regions = append(regions, d.regionRemoved(decision.CoveredID, covered, previous, current))
 			regions = append(regions, d.regionFor(delta.ClassAdded, c, nil, current))
 		}
 	}
@@ -225,6 +239,54 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 	}
 	sortRegions(regions)
 	return regions
+}
+
+// changedFraction is how much of a footprint's pixels changed this frame. The mask marks every pixel
+// that differed by more than the noise floor, so it answers the question a bounding rectangle cannot:
+// whether the element itself changed or only the ground around it.
+func (d *Differ) changedFraction(bounds delta.Bounds, current frame.Frame) float64 {
+	// Without a mask there is no pixel question to ask, so the geometry decides and the answer is one.
+	// That happens when a caller drives the classifier directly rather than through a comparison.
+	if len(d.mask) < current.Width*current.Height {
+		return 1
+	}
+	r := pixelRectOf(bounds, current)
+	if r.Empty() {
+		return 0
+	}
+	left := max(r.Min.X, 0)
+	top := max(r.Min.Y, 0)
+	right := min(r.Max.X, current.Width)
+	bottom := min(r.Max.Y, current.Height)
+	if right <= left || bottom <= top {
+		return 0
+	}
+
+	changed, total := 0, 0
+	for y := top; y < bottom; y++ {
+		row := y * current.Width
+		for x := left; x < right; x++ {
+			total++
+			if d.mask[row+x] != 0 {
+				changed++
+			}
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return float64(changed) / float64(total)
+}
+
+// snapshotIndex finds an element in the snapshot the passes iterate, so the caller can mark it used and
+// keep the later passes from matching geometry that is already gone.
+func (d *Differ) snapshotIndex(id uint64) int {
+	for index, element := range d.liveElements {
+		if element.ID == id {
+			return index
+		}
+	}
+	return -1
 }
 
 // regionRemoved builds a region for an element the engine has retired, naming the identity it held.

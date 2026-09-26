@@ -69,8 +69,10 @@ When a larger area covers a tracked element, the element is reported as `removed
 identifier and the covering area as `added` under a new one, so a consumer learns that the handle it
 held is gone rather than watching it move to something else. When the covered content shows again, it
 is reported as `added` with a newly allocated identifier whose `identityUncertain` is true and whose
-`identityConfidence` is strictly between zero and one: the engine has evidence that this is the element
-that left, and not enough to claim it, so it reports the evidence and lets the consumer decide.
+`identityConfidence` is greater than zero: the engine has evidence that this is the element that left, and
+not enough to claim it, so it reports the evidence and lets the consumer decide. The number measures the
+evidence, and a value of one means a perfect appearance match over a perfect overlap, which is still not
+proof; the flag is the part that says so.
 
 Three boundaries are stated rather than left to be discovered:
 

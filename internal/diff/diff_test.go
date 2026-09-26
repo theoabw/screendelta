@@ -869,3 +869,130 @@ func TestAGrowingElementIsNotReportedAsACover(t *testing.T) {
 		}
 	}
 }
+
+// TestOneCoveringAreaRetiresEveryElementItCovers is a review finding: retiring only the best containment
+// left the other handles live, and a consumer following one of them would later find it attached to
+// something unrelated.
+func TestOneCoveringAreaRetiresEveryElementItCovers(t *testing.T) {
+	width, height := 320, 240
+	left := panel{x: 60, y: 100, w: 40, h: 40, value: panelValue}
+	right := panel{x: 160, y: 100, w: 40, h: 40, value: panelValue}
+	overlay := panel{x: 40, y: 80, w: 180, h: 80, value: 220}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, []panel{left, right}),
+		buildFrame(2, width, height, []panel{
+			{x: left.x, y: left.y, w: left.w, h: left.h, value: panelAlt},
+			{x: right.x, y: right.y, w: right.w, h: right.h, value: panelAlt},
+		}),
+		buildFrame(3, width, height, []panel{overlay}),
+	}
+
+	differ := New()
+	regions, _, err := differ.Compare(frames[0], frames[1], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	tracked := map[uint64]bool{}
+	for _, region := range regions {
+		tracked[region.Identity] = true
+	}
+	if len(tracked) != 2 {
+		t.Fatalf("expected two tracked elements, got %d: %+v", len(tracked), regions)
+	}
+
+	regions, _, err = differ.Compare(frames[1], frames[2], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	removed := map[uint64]bool{}
+	for _, region := range regions {
+		if region.Class == delta.ClassRemoved {
+			removed[region.Identity] = true
+		}
+	}
+	for id := range tracked {
+		if !removed[id] {
+			t.Fatalf("identity %d was covered but not reported as removed: %+v", id, regions)
+		}
+	}
+}
+
+// TestGrowthWithoutAnInteriorRepaintIsNotACover is a review finding: growing a uniform panel outward
+// puts the old footprint inside the changed area's bounding box, but the element's own pixels did not
+// change, so the element is still there and simply bigger.
+func TestGrowthWithoutAnInteriorRepaintIsNotACover(t *testing.T) {
+	width, height := 320, 240
+	small := panel{x: 120, y: 100, w: 60, h: 40, value: panelValue}
+	grown := panel{x: 110, y: 90, w: 80, h: 60, value: panelValue}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{small}),
+		buildFrame(3, width, height, []panel{grown}),
+	}
+
+	differ := New()
+	if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	regions, _, err := differ.Compare(frames[1], frames[2], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	for _, region := range regions {
+		if region.Class == delta.ClassRemoved {
+			t.Fatalf("an element that grew outward without its interior changing was reported as covered: %+v", region)
+		}
+	}
+}
+
+// TestAResizedReturnIsNotYetRecognised pins what the engine cannot do, so that improving it has to be
+// deliberate.
+//
+// A review found that a returning element whose size differs from the retired one is reported as a
+// confident change of the element that covered it, and the same is true here. The reason is that the
+// appearance the rules compare is the appearance of the whole changed area, and when the returning
+// content occupies only part of that area the signature is a mixture of the content and the background.
+// The fix is to measure the appearance of the element's own old footprint instead, which needs the frame's
+// luma plane next to the retired element's bounds rather than next to the changed area. Until then the
+// outcome is a missed reacquisition rather than a wrong handle: the covered element was already retired,
+// and the region carries the identity of the cover, which is what is still on the screen as far as the
+// pixels show.
+func TestAResizedReturnIsNotYetRecognised(t *testing.T) {
+	width, height := 320, 240
+	original := panel{x: 120, y: 100, w: 60, h: 40, value: panelValue}
+	cover := panel{x: 110, y: 90, w: 80, h: 60, value: 220}
+	smaller := panel{x: 130, y: 105, w: 40, h: 30, value: panelValue}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{{x: original.x, y: original.y, w: original.w, h: original.h, value: panelAlt}}),
+		buildFrame(3, width, height, []panel{cover}),
+		buildFrame(4, width, height, []panel{smaller}),
+	}
+
+	differ := New()
+	if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if _, _, err := differ.Compare(frames[1], frames[2], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	regions, _, err := differ.Compare(frames[2], frames[3], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the return produced no regions")
+	}
+	for _, region := range regions {
+		if region.IdentityUncertain {
+			t.Fatalf("the engine now recognises a resized return, so this test and AUD-022 need updating: %+v", region)
+		}
+		if region.Class == delta.ClassRemoved {
+			t.Fatalf("the covering element was reported as removed, which is the other half of the fix: %+v", region)
+		}
+	}
+	t.Log("a resized return is reported as a change of the covering element; recorded as AUD-022")
+}

@@ -859,28 +859,60 @@ func TestCoverNeedsAnAreaBiggerThanTheElement(t *testing.T) {
 	live := m.Appear(element, frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
-	// A change inside the element does not cover it.
-	if decision := m.Cover(boundsOf(110, 110, 20, 10), frameWidth, frameHeight); decision.IsCover {
-		t.Fatalf("a change inside the element was called a cover: %+v", decision)
+	// A change inside the element does not enclose it.
+	if enclosed := m.Enclosed(boundsOf(110, 110, 20, 10), frameWidth, frameHeight); len(enclosed) != 0 {
+		t.Fatalf("a change inside the element enclosed it: %+v", enclosed)
 	}
-	// An area exactly the element's size does not cover it either: there is no margin past it.
-	if decision := m.Cover(element, frameWidth, frameHeight); decision.IsCover {
-		t.Fatalf("an area the size of the element was called a cover: %+v", decision)
+	// An area exactly the element's size does not either: there is no margin past it.
+	if enclosed := m.Enclosed(element, frameWidth, frameHeight); len(enclosed) != 0 {
+		t.Fatalf("an area the size of the element enclosed it: %+v", enclosed)
 	}
 	if state := stateOf(m, live.ID); state != identity.Live {
-		t.Fatalf("the element is %s after an area that does not cover it", state)
+		t.Fatalf("the element is %s after an area that does not enclose it", state)
 	}
 
 	// An area that contains the element and reaches past it does.
-	decision := m.Cover(boundsOf(90, 90, 80, 60), frameWidth, frameHeight)
-	if !decision.IsCover {
-		t.Fatal("an area containing the element and exceeding it was not called a cover")
+	enclosed := m.Enclosed(boundsOf(90, 90, 80, 60), frameWidth, frameHeight)
+	if len(enclosed) != 1 {
+		t.Fatalf("an area containing the element and exceeding it enclosed %d elements", len(enclosed))
 	}
-	if decision.CoveredID != live.ID {
-		t.Fatalf("the cover named identity %d instead of %d", decision.CoveredID, live.ID)
+	if enclosed[0].ID != live.ID {
+		t.Fatalf("the area named identity %d instead of %d", enclosed[0].ID, live.ID)
 	}
+	m.RetireByID(enclosed[0].ID)
 	if state := stateOf(m, live.ID); state != identity.Retired {
 		t.Fatalf("the covered element is %s, want retired", state)
+	}
+}
+
+// TestOneAreaCanEncloseSeveralElements is the case the review found: a single covering area took the
+// place of two elements, and retiring only the closest containment left the other handle live, so a
+// consumer following it would later find it attached to something unrelated.
+func TestOneAreaCanEncloseSeveralElements(t *testing.T) {
+	m := identity.New(2, 8)
+	first := m.Appear(boundsOf(60, 100, 40, 40), frameWidth, frameHeight, 1, nil)
+	second := m.Appear(boundsOf(160, 100, 40, 40), frameWidth, frameHeight, 1, nil)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	enclosed := m.Enclosed(boundsOf(40, 80, 180, 80), frameWidth, frameHeight)
+	if len(enclosed) != 2 {
+		t.Fatalf("an area covering two elements enclosed %d of them", len(enclosed))
+	}
+	ids := map[uint64]bool{}
+	for _, element := range enclosed {
+		ids[element.ID] = true
+	}
+	if !ids[first.ID] || !ids[second.ID] {
+		t.Fatalf("the enclosed set is %+v, want both %d and %d", enclosed, first.ID, second.ID)
+	}
+
+	for _, element := range enclosed {
+		m.RetireByID(element.ID)
+	}
+	for _, id := range []uint64{first.ID, second.ID} {
+		if state := stateOf(m, id); state != identity.Retired {
+			t.Fatalf("identity %d is %s after the area covered it", id, state)
+		}
 	}
 }
 
@@ -895,14 +927,14 @@ func TestCoverIgnoresRetiredElementsAndEmptyAreas(t *testing.T) {
 		t.Fatalf("the element is %s, want retired for the test", state)
 	}
 
-	if decision := m.Cover(boundsOf(90, 90, 80, 60), frameWidth, frameHeight); decision.IsCover {
-		t.Fatalf("a cover named a retired element: %+v", decision)
+	if enclosed := m.Enclosed(boundsOf(90, 90, 80, 60), frameWidth, frameHeight); len(enclosed) != 0 {
+		t.Fatalf("a retired element was enclosed: %+v", enclosed)
 	}
-	if decision := m.Cover(boundsOf(0, 0, 0, 0), frameWidth, frameHeight); decision.IsCover {
-		t.Fatalf("an empty area was called a cover: %+v", decision)
+	if enclosed := m.Enclosed(boundsOf(0, 0, 0, 0), frameWidth, frameHeight); len(enclosed) != 0 {
+		t.Fatalf("an empty area enclosed something: %+v", enclosed)
 	}
-	if decision := m.Cover(boundsOf(300, 200, 30, 30), frameWidth, frameHeight); decision.IsCover {
-		t.Fatalf("an area nowhere near an element was called a cover: %+v", decision)
+	if enclosed := m.Enclosed(boundsOf(300, 200, 30, 30), frameWidth, frameHeight); len(enclosed) != 0 {
+		t.Fatalf("an area nowhere near an element enclosed something: %+v", enclosed)
 	}
 }
 

@@ -48,7 +48,7 @@ uncertain rather than silently matched.
 **Acceptance Scenarios**:
 
 1. **Given** a sequence of frames in which one region moves by a few pixels per frame, **When** the stream is processed, **Then** that region keeps one identifier throughout and the identifier is never assigned to another region.
-2. **Given** an element that is covered by a larger one and later shows its content again, **When** the stream is processed, **Then** the covered element is reported as removed naming its identifier, the covering area as added naming a different one, and the returning content as added with a newly allocated identifier marked uncertain and a confidence strictly between zero and one. A cover whose area equals the covered element's footprint leaves no margin to exceed it and is reported as a change, which is recorded as a boundary of the stage rather than a defect.
+2. **Given** an element that is covered by a larger one and later shows its content again, **When** the stream is processed, **Then** the covered element is reported as removed naming its identifier, the covering area as added naming a different one, and the returning content as added with a newly allocated identifier marked uncertain and a confidence greater than zero, where the flag rather than the number is what says the engine is not claiming the match. A cover whose area equals the covered element's footprint leaves no margin to exceed it and is reported as a change, which is recorded as a boundary of the stage rather than a defect.
 3. **Given** a stream of one thousand frames in which a region appears and disappears repeatedly, **When** the stream is processed, **Then** no identifier is reused and memory does not grow with stream length.
 
 ---

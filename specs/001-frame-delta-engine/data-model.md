@@ -89,7 +89,13 @@ frames.
   `added`, with different identifiers.
 - A changed area that overlaps a tracked element, looks unlike it, and looks like an element the engine
   has retired is a return: the tracked element is reported as `removed` and the area as `added` with a
-  newly allocated identity marked uncertain.
+  newly allocated identity marked uncertain whose confidence is the margin between the two appearances
+  tempered by how much of the retired element the area covers, so it measures the evidence rather than
+  the overlap alone.
+- An element whose footprint a changed area contains and reaches past is reported as `removed` only when
+  its own pixels changed. An element that merely grew, leaving its interior untouched, is still there and
+  is reported as a change or a movement, because a bounding rectangle around a change is not evidence
+  that everything inside it changed.
 - A region that reappears after retirement receives a **new** identity with
   `uncertain` set, because the engine will not claim a match it cannot support.
 - A retired identity never returns to `live` and its `id` is never reissued.
