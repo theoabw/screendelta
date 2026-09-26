@@ -127,9 +127,10 @@ type Document struct {
 // total order while the comparison had three keys, so the claim was false for exactly the case the order
 // exists to settle.
 //
-// Class and area follow the published five as tie-breakers. The contract names the first five, so these only
-// ever decide between two regions that agree on all of them, and they exist so that no pair at all is left to
-// the order the classifier discovered them in.
+// Every remaining field of a region follows as a tie-breaker, so that no pair at all is left to the order the
+// classifier discovered them in rather than merely no pair the differ happens to produce today. Two reviews
+// found this claim false twice before, the first time with three keys and the second with seven, which is why
+// the comparison now covers the whole structure.
 func SortRegions(regions []Region) {
 	sort.SliceStable(regions, func(i, j int) bool {
 		return regionLess(regions[i], regions[j])
@@ -169,7 +170,37 @@ func regionLess(a, b Region) bool {
 	if a.Class != b.Class {
 		return a.Class < b.Class
 	}
-	return a.AreaPixels < b.AreaPixels
+	if a.AreaPixels != b.AreaPixels {
+		return a.AreaPixels < b.AreaPixels
+	}
+	if a.Magnitude != b.Magnitude {
+		return a.Magnitude < b.Magnitude
+	}
+	if a.IdentityConfidence != b.IdentityConfidence {
+		return a.IdentityConfidence < b.IdentityConfidence
+	}
+	if a.IdentityUncertain != b.IdentityUncertain {
+		return !a.IdentityUncertain
+	}
+	return boundsLess(a.PreviousBounds, b.PreviousBounds)
+}
+
+// boundsLess orders an optional rectangle, so that the last of the region's fields is a key too. An absent
+// rectangle sorts before a present one.
+func boundsLess(a, b *Bounds) bool {
+	if a == nil || b == nil {
+		return a == nil && b != nil
+	}
+	if a.Y != b.Y {
+		return a.Y < b.Y
+	}
+	if a.X != b.X {
+		return a.X < b.X
+	}
+	if a.W != b.W {
+		return a.W < b.W
+	}
+	return a.H < b.H
 }
 
 // SortConditions puts conditions in their canonical order and removes duplicates,
@@ -194,8 +225,10 @@ func SortConditions(conditions []Condition) []Condition {
 	return unique
 }
 
-// Validate checks the invariants a JSON Schema cannot express, and the ones it can,
-// so an invalid document cannot be encoded.
+// Validate checks the invariants a JSON Schema cannot express, and the ones it can, so that a document the
+// contract calls invalid is refused. It is not quite the same as "an invalid document cannot be encoded":
+// Encode canonicalises the region order and the conditions before it validates, so a document built in any
+// order is written in the contract's order rather than refused.
 func (d Document) Validate() error {
 	if d.SchemaVersion != SchemaVersion {
 		return &FieldError{
@@ -233,7 +266,7 @@ func (d Document) Validate() error {
 					Op:      "delta.Validate",
 					Subject: "document",
 					Field:   "regions[" + itoa(index) + "]",
-					Problem: "is out of the contract's order: regions sort by top edge, left edge, identity, width, then height",
+					Problem: "is out of the contract's order: regions sort by top edge, left edge, identity, width, height, then the remaining fields",
 				}
 			}
 		}

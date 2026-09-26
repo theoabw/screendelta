@@ -12,8 +12,13 @@ import (
 // engine always writes them, but Decode is also the library's entry point for a document written by
 // something else, and a consumer that trusts it should be reading a document the schema accepts.
 //
-// The check is deliberately separate from Validate. Validate reasons about values and runs on every encode
-// as well, which has no raw JSON to inspect; presence can only be answered before the struct is built.
+// The check is deliberately separate from Validate. Validate reasons about values and runs on every encode as
+// well, which has no raw JSON to inspect; presence can only be answered before the struct is built.
+//
+// It enforces the required fields and the objects the schema types as objects. It does not enforce
+// additionalProperties, which the encoder tolerates on purpose so that adding an optional field stays within a
+// schema generation, and the claim is therefore the narrower one: a consumer that trusts this decoder is not
+// reading a document with a missing required field or a null where an object belongs.
 
 // boundsPresence is the schema's bounds object, which requires all four members.
 type boundsPresence struct {
@@ -151,6 +156,9 @@ func checkRequiredFields(raw []byte) error {
 		// Previous bounds are required for a moved or removed region, and when they are there their members are
 		// required too. Which classes require the object is a value rule and lives in the validator; this only
 		// checks the object's own completeness.
+		//
+		// A null is not an object, so the schema rejects it wherever it appears, and the pointer cannot tell a
+		// null from an absent object: the raw presence of the key is what distinguishes them.
 		if region.PreviousBounds != nil {
 			for _, member := range []struct {
 				name string
@@ -169,6 +177,58 @@ func checkRequiredFields(raw []byte) error {
 	}
 	if err := present("conditions", document.Conditions); err != nil {
 		return err
+	}
+	return nil
+}
+
+// checkNullObjects rejects the objects the schema types as objects when they are present but null.
+//
+// A pointer field cannot see this: unmarshalling the JSON literal null into a pointer sets it to nil, which is
+// exactly what an absent key produces, so a struct-shaped check cannot tell "previousBounds": null from a
+// document that never mentions previousBounds. The raw maps keep the distinction, because a map value holds the
+// literal bytes of whatever was written there.
+func checkNullObjects(raw json.RawMessage) error {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &top); err != nil {
+		return nil
+	}
+
+	object := func(field string, value json.RawMessage) error {
+		if isNull(value) {
+			return &FieldError{
+				Op:      "delta.Decode",
+				Subject: "document",
+				Field:   field,
+				Problem: "is null, and the schema requires an object here",
+			}
+		}
+		return nil
+	}
+
+	for _, field := range []string{"frame", "fingerprint"} {
+		if value, present := top[field]; present {
+			if err := object(field, value); err != nil {
+				return err
+			}
+		}
+	}
+
+	regions, present := top["regions"]
+	if !present || isNull(regions) {
+		return nil
+	}
+	var entries []map[string]json.RawMessage
+	if err := json.Unmarshal(regions, &entries); err != nil {
+		return nil
+	}
+	for index, entry := range entries {
+		for _, field := range []string{"bounds", "previousBounds"} {
+			if value, present := entry[field]; present {
+				if err := object("regions["+itoa(index)+"]."+field, value); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return nil
 }

@@ -571,3 +571,89 @@ func TestValidateEnforcesTheRegionOrder(t *testing.T) {
 		t.Fatalf("the encoder's output does not decode: %v", err)
 	}
 }
+
+// TestTheRegionOrderSettlesEveryFieldPair is the third attempt at this test, and the two earlier ones are the
+// reason it now covers every field.
+//
+// The first version had three keys and left two regions of one element to discovery order, which a fuzz target
+// found. The second added class and area, and a review found the same gap one field further on: two regions
+// agreeing on all seven compared keys were still tied. The comparison now covers every field of a region, and
+// each pair below differs in exactly one of the fields that were missing.
+func TestTheRegionOrderSettlesEveryFieldPair(t *testing.T) {
+	base := Region{
+		Identity:           4,
+		Class:              ClassChanged,
+		Bounds:             Bounds{X: 0.25, Y: 0.25, W: 0.1, H: 0.1},
+		Magnitude:          0.5,
+		AreaPixels:         900,
+		IdentityConfidence: 1,
+	}
+	pairs := []struct {
+		name  string
+		other func(Region) Region
+	}{
+		{name: "differing only in magnitude", other: func(r Region) Region { r.Magnitude = 0.9; return r }},
+		{name: "differing only in confidence", other: func(r Region) Region { r.IdentityConfidence = 0.4; return r }},
+		{name: "differing only in the uncertainty flag", other: func(r Region) Region { r.IdentityUncertain = true; return r }},
+		{name: "differing only in previous bounds", other: func(r Region) Region {
+			previous := Bounds{X: 0.1, Y: 0.1, W: 0.05, H: 0.05}
+			r.PreviousBounds = &previous
+			return r
+		}},
+	}
+	for _, tc := range pairs {
+		t.Run(tc.name, func(t *testing.T) {
+			other := tc.other(base)
+			if other == base {
+				t.Fatal("the pair is identical, so this test would prove nothing")
+			}
+			forward := []Region{base, other}
+			backward := []Region{other, base}
+			SortRegions(forward)
+			SortRegions(backward)
+			if !reflect.DeepEqual(forward, backward) {
+				t.Fatalf("the order depends on discovery order for a pair differing in one field:\n%+v\n%+v", forward, backward)
+			}
+			if !Ordered(forward) {
+				t.Fatalf("the sorted pair is not in the contract's order: %+v", forward)
+			}
+		})
+	}
+}
+
+// TestDecodeRejectsNullObjects covers the objects the schema types as objects: a null there is not an object, and
+// a pointer into a struct cannot tell it from an absent key.
+func TestDecodeRejectsNullObjects(t *testing.T) {
+	cells := make([]string, 64)
+	for index := range cells {
+		cells[index] = "0"
+	}
+	head := `{"schemaVersion":"1.0","frame":{"sequence":2,"width":100,"height":100,"scaleFactor":1},` +
+		`"fingerprint":{"algorithm":"grid-luma-1","gridSize":8,"cells":[` + strings.Join(cells, ",") + `],"strictHash":"0123456789abcdef"},`
+	region := `{"identity":1,"class":"changed","bounds":{"x":0,"y":0,"w":0.2,"h":0.5},"magnitude":0.5,"areaPixels":1000,"identityConfidence":1,"identityUncertain":false}`
+
+	cases := []struct {
+		name  string
+		body  string
+		field string
+	}{
+		{name: "a null frame", field: "frame", body: `{"schemaVersion":"1.0","frame":null,"fingerprint":{},"regions":[],"conditions":[]}`},
+		{name: "a null bounds object", field: "regions[0].bounds",
+			body: head + `"regions":[{"identity":1,"class":"changed","bounds":null,"magnitude":0.5,"areaPixels":1000,"identityConfidence":1,"identityUncertain":false}],"conditions":[]}`},
+		{name: "a null previous bounds object", field: "regions[0].previousBounds",
+			body: head + `"regions":[{"identity":1,"class":"changed","bounds":{"x":0,"y":0,"w":0.2,"h":0.5},"previousBounds":null,"magnitude":0.5,"areaPixels":1000,"identityConfidence":1,"identityUncertain":false}],"conditions":[]}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Decode(strings.NewReader(tc.body)); err == nil {
+				t.Fatalf("%s was accepted", tc.name)
+			} else if !strings.Contains(err.Error(), tc.field) {
+				t.Fatalf("the error does not name %s: %v", tc.field, err)
+			}
+		})
+	}
+
+	if _, err := Decode(strings.NewReader(head + `"regions":[` + region + `],"conditions":[]}`)); err != nil {
+		t.Fatalf("a complete document was rejected: %v", err)
+	}
+}

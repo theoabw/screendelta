@@ -63,12 +63,17 @@ func FuzzDecode(f *testing.F) {
 //
 // A review measured the other target and found that its round trip was reached by one input in a million: random
 // bytes almost never form a valid document, so the property was effectively the seed corpus. This target builds a
-// document from structured input instead, so every execution exercises encoding, decoding and the validator.
+// document from structured input instead.
 //
-// The property is that anything the engine can be asked to write, it can read back, and that the fields survive
-// the round trip unchanged. The first version of the document-level check could not see a missing nested bounds
-// member, because value validation catches a missing width and not a missing coordinate; this one cannot see that
-// either, and saying so is the point: it checks the round trip, and the presence rule has its own tests.
+// A second review measured this one and found its comment wider than its behaviour, so the numbers are here
+// rather than a claim: of about a million executions, roughly nine percent reach the decode, seventy four percent
+// return because the validator refused the document, and eighteen percent skip on geometry the API rejects. One
+// execution in eleven is not "every execution", and the comment says which it is.
+//
+// The property is that anything the engine can be asked to write, it can read back, with the region's fields
+// unchanged. The assertions cover every field of the region, which the first version did not: it checked the
+// frame, the class and the identity, and an identity of one cannot fail because the validator requires at least
+// one and one is the only value written.
 func FuzzEncodeDecodeRoundTrip(f *testing.F) {
 	f.Add(uint64(1), 64, 48, 1.0, uint8(0), 0.25, 0.1, 0.5, 0.2, 1.0, 4096, true)
 	f.Add(uint64(7), 1920, 1080, 2.0, uint8(1), 0.0, 0.0, 1.0, 1.0, 0.0, 1, false)
@@ -125,8 +130,26 @@ func FuzzEncodeDecodeRoundTrip(f *testing.F) {
 		if len(decoded.Regions) != 1 {
 			t.Fatalf("the round trip produced %d regions", len(decoded.Regions))
 		}
-		if decoded.Regions[0].Class != class || decoded.Regions[0].Identity != 1 {
-			t.Fatalf("the region survived the round trip changed: %+v", decoded.Regions[0])
+		back := decoded.Regions[0]
+		if back.Class != class || back.Identity != 1 {
+			t.Fatalf("the region survived the round trip changed: %+v", back)
+		}
+		if back.Bounds != region.Bounds {
+			t.Fatalf("the bounds survived the round trip changed: %+v became %+v", region.Bounds, back.Bounds)
+		}
+		if back.AreaPixels != region.AreaPixels || back.Magnitude != region.Magnitude {
+			t.Fatalf("the area or magnitude survived the round trip changed: %+v", back)
+		}
+		if back.IdentityConfidence != region.IdentityConfidence || back.IdentityUncertain != region.IdentityUncertain {
+			t.Fatalf("the identity evidence survived the round trip changed: %+v", back)
+		}
+		switch {
+		case region.PreviousBounds == nil && back.PreviousBounds != nil:
+			t.Fatalf("previous bounds appeared in the round trip: %+v", back)
+		case region.PreviousBounds != nil && back.PreviousBounds == nil:
+			t.Fatalf("previous bounds were lost in the round trip: %+v", back)
+		case region.PreviousBounds != nil && *back.PreviousBounds != *region.PreviousBounds:
+			t.Fatalf("previous bounds survived the round trip changed: %+v", back.PreviousBounds)
 		}
 	})
 }
