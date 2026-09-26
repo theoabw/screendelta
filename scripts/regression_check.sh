@@ -47,7 +47,7 @@ cases=(
   "AUD-027|internal/diff/classify.go|if !goneElements[state.ID] {|if false {|TestGrowthAtTheFrameEdgeIsNotACover"
   "AUD-032|internal/diff/classify.go|if d.changedFraction(live.Bounds, current) >= coverInteriorFraction {|if true {|TestRepaintingInsideACoverDoesNotRetireTheCover"
   "AUD-028|internal/identity/identity.go|if gone != nil && !gone[live.ID] {|if false {|TestAReturnNeedsTheOverlappedElementsOwnPixels"
-  "AUD-032|internal/diff/classify.go|if !inner.Empty() {|if false {|TestAResizedReturnIsRecognisedAsUncertain"
+  "AUD-032|internal/diff/classify.go|if !inner.Empty() {|if false {|TestThePixelEvidenceIgnoresTheGrowthRing"
 )
 
 # Reversions that change nothing observable, because the behaviour is defended by a second rule as well. The
