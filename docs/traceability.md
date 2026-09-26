@@ -90,7 +90,7 @@ been removed now that the first specification defines real requirements.
 
 | ID | Requirement | Spec | User story | Task | Test | Evidence | Status |
 |---|---|---|---|---|---|---|---|
-| FR-001 | Accept two frames as files or raw buffers with declared dimensions and format | specs/001-frame-delta-engine/spec.md | US1 | T005 |  |  | planned |
+| FR-001 | Accept two frames as files or raw buffers with declared dimensions and format | specs/001-frame-delta-engine/spec.md | US1 | T005 | `internal/frame/frame_test.go::TestNewRawAcceptsAValidFrame` | | in-progress |
 | FR-002 | Report changed regions with normalized bounds | specs/001-frame-delta-engine/spec.md | US1 | T014 |  |  | planned |
 | FR-003 | Classify regions as added, changed, removed or moved | specs/001-frame-delta-engine/spec.md | US1 | T018 |  |  | planned |
 | FR-004 | Report change magnitude per region with a configurable reporting floor | specs/001-frame-delta-engine/spec.md | US1 | T016 |  |  | planned |
@@ -104,7 +104,7 @@ been removed now that the first specification defines real requirements.
 | FR-012 | Accept a validated configuration document with documented defaults | specs/001-frame-delta-engine/spec.md | US1 | T009 |  |  | planned |
 | FR-013 | Expose the same capabilities through CLI and library interfaces | specs/001-frame-delta-engine/spec.md | US1 | T010 |  |  | planned |
 | FR-014 | Declare a schema version in every emitted document | specs/001-frame-delta-engine/spec.md | US3 | T008 |  |  | planned |
-| FR-015 | Fail explicitly without partial output on unusable input | specs/001-frame-delta-engine/spec.md | US1 | T006 |  |  | planned |
+| FR-015 | Fail explicitly without partial output on unusable input | specs/001-frame-delta-engine/spec.md | US1 | T006 | `internal/frame/frame_test.go::TestDecodePNGRejectsGarbage` |  | in-progress |
 | FR-016 | Operate without network access and write only to the declared output path | specs/001-frame-delta-engine/spec.md | US1 | T044 |  |  | planned |
 | NFR-001 | p95 delta latency at or below 12 ms per 1080p frame pair on one CPU core | specs/001-frame-delta-engine/spec.md | US1 | T040 |  |  | planned |
 | NFR-002 | At least 30 frames per second sustained at 1080p on one CPU core | specs/001-frame-delta-engine/spec.md | US2 | T033 |  |  | planned |
