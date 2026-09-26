@@ -1,0 +1,54 @@
+<!doctype html>
+<!--
+  A fixture that imitates a legacy desktop form, used as a capture source for the pipeline demonstration.
+
+  It is deliberately dated: a table-based layout, a raised title bar, fixed-width fields and a status line
+  that shows a clock. Rendering it in a real browser produces real screen pixels, with antialiased text and
+  real widget edges, which is the material the demonstration needs. It is not a line of business
+  application, and the demonstration says so rather than implying otherwise.
+
+  The state is chosen with ?state=N, and every state advances the clock, so every captured frame carries
+  something a planner would decide on.
+-->
+<html>
+<head><meta charset="utf-8"><title>Legacy Ledger</title></head>
+<body style="margin:0;background:#3a3f44;font:14px 'DejaVu Sans',Arial,sans-serif;color:#1c1c1c">
+<div style="height:26px;background:linear-gradient(#6d757d,#4d545b);color:#f2f2f2;font-weight:bold;padding:4px 8px;box-sizing:border-box">
+  Legacy Ledger 4.2  -  Accounts Receivable
+</div>
+<table cellpadding="6" cellspacing="0" style="margin:10px;background:#c9cdd2;border:2px outset #e6e8ea;width:620px">
+  <tr><td style="width:140px">Account</td><td><input id="account" value="100234" size="14" style="font:inherit;border:2px inset #9aa0a6;background:#fff"></td></tr>
+  <tr><td>Amount</td><td><input id="amount" value="0.00" size="14" style="font:inherit;border:2px inset #9aa0a6;background:#fff"></td></tr>
+  <tr><td>Posting date</td><td><input id="date" value="2026-09-27" size="14" style="font:inherit;border:2px inset #9aa0a6;background:#fff"></td></tr>
+  <tr><td colspan="2" align="right">
+    <button style="font:inherit;padding:2px 14px">Post</button>
+    <button style="font:inherit;padding:2px 14px">Cancel</button>
+  </td></tr>
+</table>
+<table cellpadding="4" cellspacing="0" style="margin:10px;background:#e8eaec;border:2px inset #9aa0a6;width:900px">
+  <tr style="background:#b7bcc2;font-weight:bold"><td style="width:120px">Account</td><td style="width:120px">Amount</td><td>Reference</td></tr>
+  <tr><td>100233</td><td>124.50</td><td>Invoice 8841</td></tr>
+  <tr><td>100234</td><td>76.00</td><td>Invoice 8842</td></tr>
+  <tbody id="rows"></tbody>
+</table>
+<div style="position:absolute;bottom:0;left:0;right:0;height:24px;background:#c9cdd2;border-top:2px groove #e6e8ea;padding:3px 8px;box-sizing:border-box">
+  <span id="status">Ready</span>
+  <span style="float:right" id="clock">00:00:00</span>
+</div>
+<script>
+  const state = Number(new URLSearchParams(location.search).get('state') || 0);
+  // Every state advances the clock, so every captured frame has a change to find.
+  document.getElementById('clock').textContent = '09:41:' + String(state).padStart(2, '0');
+  if (state % 3 === 1) {
+    document.getElementById('amount').value = (state * 13.75).toFixed(2);
+  }
+  if (state % 4 === 2) {
+    document.getElementById('status').textContent = 'Posting entry ' + state;
+  }
+  if (state >= 5) {
+    document.getElementById('rows').innerHTML =
+      '<tr><td>10023' + state + '</td><td>' + (state * 21.4).toFixed(2) + '</td><td>Invoice 88' + (40 + state) + '</td></tr>';
+  }
+</script>
+</body>
+</html>

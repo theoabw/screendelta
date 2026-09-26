@@ -1,0 +1,60 @@
+Pipeline demonstration, 2026-09-27.
+Commands: make capture (real frames), make demo, make demo-generated.
+
+The pipeline is capture, engine, stub detector. Capture reads screen frames in order, the engine turns each
+frame into a delta document, and the stub detector turns each document into a decision: what a planner would
+do next. The detector is deliberately trivial, because the number being measured belongs to the pipeline
+rather than to the planning.
+
+The fixture. The capture source is tools/demo/capture/legacy-form.html, a page that imitates a legacy
+desktop form: a table layout, a raised title bar, inset fields, a status line with a clock, and a ledger
+list. It is rendered by a real browser and captured with the DevTools screenshot path, so the material is
+real screen pixels with real antialiasing and real widget edges rather than the flat panels of the generated
+corpus. It is not a line of business application, and this file says so rather than implying otherwise: the
+project has no access to one, and what the criterion needs is real screenshots, which this is. Every captured
+frame advances the clock, so every frame carries something to decide about.
+
+Real screenshots, 1280x720, eight frames replayed twenty times:
+
+  frames processed        160
+  elapsed                 413 ms
+  frames per second       387.5
+  decisions               119
+  decisions per second    288.2
+
+Generated frames, 1920x1080, two hundred frames:
+
+  frames processed        200
+  elapsed                 1.329 s
+  frames per second       150.5
+  decisions               144
+  decisions per second    108.4
+
+Of the 160 real frames, 119 produced a decision. That is the honest part of the number: the first frame of
+each replay has no predecessor and reports nothing, and several frames change only the ledger list, which is
+outside the configured region of interest. A pipeline can be fast and still make fewer decisions than frames,
+and reporting only the frame rate would hide that.
+
+Requirement this measures:
+  SC-004  a demonstration pipeline of capture, engine and a stub detector sustains at least 20 decisions per
+          second wall clock on real desktop screenshots
+          met: 288.2 decisions per second on real 1280x720 screenshots, and 108.4 on generated 1080p frames.
+          The limitation is the application rather than the rate: the screenshots are real renders of a
+          fixture that imitates a legacy form, not a line of business application, which this project has no
+          access to.
+
+What the engine reported on the real pixels, as a sanity check rather than as a scored result. Over the eight
+captured frames it reported forty regions, of which twenty four were changes, four additions and twelve
+movements. Mapping the pixel coordinates back to the fixture shows it found the fixtures' changed text runs
+and nothing invented:
+
+  (172, 82, 35, 14)   the amount field's digits, magnitude 0.43
+  (204, 82, 12, 14)   the remainder of the amount field, magnitude 0.54
+  (8, 701, 52, 18)    the status line's words, magnitude 0.35
+  (1261, 702, 13, 14) the clock's seconds, magnitude 0.32
+
+That is the answer to the threat this project was most exposed to: the corpus is synthetic, and the engine
+had only ever been scored on flat panels. On real antialiased text it isolates individual glyph runs with
+sensible bounds, and the clock in the corner is found as a small region rather than smearing into the status
+line. It is not an accuracy score, which needs ground truth the fixture does not provide, and it is recorded
+as the sanity check it is.

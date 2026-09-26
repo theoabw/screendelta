@@ -54,6 +54,28 @@ bench: ## Report per-operation cost for the parts of the comparison (T040)
 	$(BENCH_ENV) $(GO) test -p 1 -run '^$$' -bench . -benchmem -count 3 ./internal/diff/... ./internal/perf/... | tee bench.txt
 	@echo "compare against a previous run with: benchstat bench.txt"
 
+CAPTURE_DIR ?= corpus/real
+CHROME ?= $(shell ls -d $$HOME/.cache/ms-playwright/chromium-*/chrome-linux64/chrome 2>/dev/null | tail -1)
+
+capture: ## Capture real screen frames for the pipeline demonstration (needs a headless Chromium)
+	@if [ -z "$(CHROME)" ]; then echo "capture: no headless Chromium found; set CHROME=/path/to/chrome" >&2; exit 1; fi
+	@mkdir -p $(CAPTURE_DIR)
+	@rm -f $(CAPTURE_DIR)/*.png
+	@i=0; while [ $$i -lt 8 ]; do \
+		state=$$(printf '%03d' $$i); \
+		$(CHROME) --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=1280,720 \
+			--screenshot=$(CAPTURE_DIR)/$$state.png \
+			"file://$(CURDIR)/tools/demo/capture/legacy-form.html?state=$$i" >/dev/null 2>&1; \
+		i=$$((i+1)); \
+	done
+	@ls -1 $(CAPTURE_DIR)/*.png | wc -l | xargs echo "capture: frames written:"
+
+demo: capture ## Run the pipeline demonstration on real captured frames and assert the decision rate
+	$(GO) run ./tools/demo --source $(CAPTURE_DIR) --passes 20 --assert-rate 20
+
+demo-generated: ## Run the pipeline demonstration on generated frames, which needs no capture
+	$(GO) run ./tools/demo --generate 200 --passes 1 --assert-rate 20
+
 corpus: ## Generate the ground-truth corpus
 	$(GO) run ./tools/corpusgen --out corpus
 

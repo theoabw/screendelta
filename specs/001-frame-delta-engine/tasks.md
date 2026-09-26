@@ -67,7 +67,7 @@
 - [x] T044 Verify the no-network and no-stray-write behaviours by test (`internal/stream`) (FR-016)
 - [ ] T045 Add the Windows cross-build check and platform smoke test (`.gitlab-ci.yml`) (NFR-008)
 - [ ] T046 Add coverage reporting for the geometry and identity packages (`Makefile`) (NFR-009)
-- [ ] T047 Add the pipeline demonstration: capture, engine, stub detector, decision rate (`tools/demo`) (SC-004)
+- [x] T047 Add the pipeline demonstration: capture, engine, stub detector, decision rate (`tools/demo`) (SC-004)
 - [x] T048 Write an independent second consumer against the schema alone (`tools/consumer`) (SC-006, FR-013)
 - [ ] T049 Add the CLI usability pass: help text, error wording, README quickstart (`cmd/screendelta`, `README.md`) (NFR-007, SC-005)
 - [ ] T050 Report benchmark, coverage and memory results into the V&V record (`docs/vv/results.md`) (SC-001, SC-002, SC-003)
