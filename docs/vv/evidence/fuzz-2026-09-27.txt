@@ -1,0 +1,52 @@
+Fuzzing, 2026-09-27.
+Commands: go test ./internal/delta/ -fuzz FuzzDecode -fuzztime 40s
+          go test ./internal/frame/ -fuzz FuzzDecodePNG -fuzztime 60s
+          go test ./internal/diff/ -fuzz FuzzCompare -fuzztime 90s
+
+Fuzzing is a verification level the unit tests cannot provide, because they check the cases someone thought
+of. It is aimed at the place where untrusted input arrives and at the invariant a consumer depends on, and it
+is recorded here because one of the three targets found a real defect.
+
+## FuzzDecode, the document decoder
+
+  executions   2,695,794 in 40 seconds
+  findings     none
+
+Two properties, both of which held for every input tried: no input panics, and any input that decodes
+survives the validator and re-encodes into something that decodes again. The second is the strong one. A
+document the engine accepts but cannot reproduce is a document that would break a consumer, and it is the
+property that FR-015's "fail explicitly rather than emit a partial document" turns into a test.
+
+## FuzzDecodePNG, the frame decoder
+
+  executions   6,387,734 in 60 seconds
+  findings     none
+
+The riskier target, because it parses a compressed format. Every input either produced an error or produced a
+frame whose geometry and pixel buffer agree, which is what the rest of the engine assumes. No panic, so
+malformed input fails the way FR-015 says it should.
+
+## FuzzCompare, the comparison
+
+  executions   3,230,922 in 90 seconds
+  findings     one real defect, AUD-036
+
+The property it checks is the one the contract's order claim exists to provide: the sorted region order must
+not depend on the order the regions were discovered in. It failed on its own seed corpus within a second.
+
+Two regions came back with the same top edge, the same left edge and the same identity but different widths,
+and the comparison that sorts them used only those three keys. The contract published to consumers promised
+four, the comment in the code claimed the order was "total and not merely mostly defined", and the validator
+did not check the order at all, so nothing anywhere enforced the claim. The order for those two regions came
+out as whatever the classifier happened to discover first.
+
+Fixed by making the comparison total, by exporting the rule so the validator and the sort cannot drift apart,
+and by having the decoder reject a document that arrives out of order. The fuzzer's failing input is kept as
+a regression case under `internal/diff/testdata/fuzz/FuzzCompare/`, and it is part of the seed corpus every
+time the package is tested, so the case cannot come back.
+
+## What this measures
+
+  FR-015    unusable input fails explicitly rather than panicking, on 12.3 million inputs across three decoders
+  NFR-004   the region order does not depend on discovery order, checked on 3.2 million inputs
+  NFR-011   the decoders hold no socket and start no process; the fuzz targets run them offline

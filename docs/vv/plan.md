@@ -98,11 +98,12 @@ findings in `docs/vv/results.md`.
 | AUD-033 | logical | Final verification | The corpus generator was non-deterministic: the same seed produced different frames on each run, so every accuracy number was irreproducible | The chosen cells are drawn in sorted order rather than in map order, because each drawn panel consumes a shade from the random source | `TestTheGeneratorIsDeterministic`, `TestEveryCaseIsDeterministic` |
 | AUD-034 | compliance | Final verification | The sample size was overstated by a factor of five: the summary called expected regions frame pairs | Pairs and regions are counted separately, and the gate reads the pair count | `make accuracy`, and the corrected claims in the report |
 
+| AUD-036 | logical | Fuzzing | The region order was not total: two regions sharing a position and an identity came out in discovery order, while the published contract promised a total order and the comment claimed one | The comparison is total, the rule is exported so the sort and the validator cannot drift apart, and the decoder rejects a document that arrives out of order | `FuzzCompare` and its committed regression case, `TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder`, `TestDecodeRejectsRegionsOutOfOrder` |
 | AUD-035 | compliance | Final verification | The suite failed under load and the failure was read as a pass; two contention rules failed to recognise a loaded machine | The tail assertion is opt-in and make perf, which runs one package at a time, owns it | `go test ./...` exits zero, `make perf` asserts and passes |
 
 ### Reading the log
 
-Of 35 recorded findings plus the 11 from round 1: 34 are fixed, and one is documented as inherent with its
+Of 36 recorded findings plus the 11 from round 1: 35 are fixed, and one is documented as inherent with its
 reason. Nothing is open. The classes are 27 logical, 7 compliance and
 1 maintainability, and none security. The compliance entries are the ones worth
 reading, because they are all cases where the evidence said something the code did not do, which is the

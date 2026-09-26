@@ -139,3 +139,4 @@ enforces once this file exists.
 | SC-004 | T047 |
 | SC-005 | T049, T051 |
 | SC-006 | T048 |
+- [x] T054 Add fuzz targets for the document decoder, the frame decoder and the comparison (`internal/*/fuzz_test.go`) (FR-015, NFR-004)
