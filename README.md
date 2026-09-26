@@ -22,13 +22,22 @@ so a strong report cannot compensate for an empty git history.
 
 | Name | Student ID | Role in the project | Contribution |
 |---|---|---|---|
-| Theo Wilenius | 2202234 | Specifier and prompt engineer, repository owner | TBD |
-| TBD | TBD | Verifier: test pipeline, coverage, security linting | TBD |
-| TBD | TBD | Auditor: requirements quality, traceability, report | TBD |
+| Theo Wilenius | 2202234 | All roles, rotated per phase: specifier, prompt engineer, verifier, auditor, repository owner | 100 percent |
 
-The course recommends teams of three and warns against working alone. The
-membership and the role split are recorded here and in
-`docs/report/report.md` as soon as the team is settled.
+This project is done solo. The course recommends teams of three and warns against
+working alone, so the report states that explicitly and compensates:
+
+1. **Independent review.** Every merge request gets a self-review pass and a
+   read-only review by a coding agent given a fresh context and an adversarial
+   brief: falsify the change rather than re-read it. Findings and resolutions go
+   into `docs/prompt-log/` and the audit log in `docs/vv/plan.md`.
+2. **Role rotation.** The work moves through the four roles in
+   `docs/report/report.md`, one phase at a time, so that specification, prompt
+   engineering, verification and auditing are separate activities even though one
+   person performs them.
+3. **External testers.** User acceptance testing needs people who are not the
+   author, so the chosen system must be one that classmates can test within a
+   week. This is a selection criterion in `docs/ideas.md`.
 
 ## Repository layout
 
@@ -45,6 +54,7 @@ membership and the role split are recorded here and in
 | `docs/adr/` | Architecture decision records, including every deviation from an approved plan. |
 | `docs/traceability.md` | Requirement to task to test to evidence matrix. |
 | `docs/course-context.md` | What the course requires, captured from Moodle. |
+| `docs/ideas.md` | Candidate systems, scored against what the report grades. |
 | `.github/`, `.opencode/`, `.dsh/` | The same Spec Kit commands rendered for Copilot in VS Code, opencode and dsh. |
 | `scripts/check_traceability.py` | Fails when a requirement is not traced: a row marked in-progress or verified must name a real task, and a verified row must name existing files. |
 
@@ -105,12 +115,14 @@ fails instead of passing quietly.
 
 ## Open decisions
 
-1. **Which system to build.** Not yet chosen. The course lets each team pick its
-   own system, so this is the first decision to record in
-   `specs/001-<slug>/spec.md`.
+1. **Which system to build.** Candidate systems are scored in `docs/ideas.md`.
+   Once chosen, record it as `docs/adr/0002-<system>.md` and write the first
+   specification, `specs/001-<slug>/spec.md`.
 2. **Technology stack.** Follows from the system. The choice and its
    justification go into section 2.4 of the report.
-3. **Team members two and three**, with their roles and contribution split.
+3. **External testers for user acceptance.** Two or three people who are not the
+   author, identified before implementation starts, because section 5.1 grades
+   validation against stakeholders rather than tests alone.
 
 ## Secrets and personal data
 

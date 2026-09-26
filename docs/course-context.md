@@ -34,7 +34,10 @@ Grade bands: no grade below 25 points or below 50 percent in either task, then
 | Project meeting 3 of 3 | Listed as 2026-10-02, 12:30, which contradicts the order of the meetings. Confirm with the lecturer. |
 
 Both submissions are made for Group A. The group choice activity lists Group A
-with a single member, so the second and third members are still to be added.
+with a single member: this project is done solo, which the course discourages.
+The consequences are recorded in `README.md` and section 6.2 of the report, and
+the compensating controls are independent agent review, role rotation per phase,
+and external testers for user acceptance.
 
 ## What the course requires of the project
 

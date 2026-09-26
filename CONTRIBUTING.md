@@ -66,11 +66,26 @@ Between steps 7 and 8, every requirement identifier must appear in
 - One branch per feature, named exactly like the spec directory: `001-<slug>`.
 - Merge through a GitLab merge request, not by pushing to `main`. The repository
   default branch carries only reviewed work.
-- At least one other member reviews every merge request. Record what was
-  reviewed, and any AI review findings, in the report's code audit log
-  (`docs/vv/plan.md` links the audit evidence).
-- Keep the merge request small enough that the reviewer reads the spec
+- This project is solo, so no second human reviews a merge request. Each merge
+  request therefore carries two recorded reviews instead:
+  1. a **self-review** against the checklist below, written into the merge request;
+  2. an **independent agent review** in a fresh context, briefed to falsify the
+     change rather than to re-read it, with the findings and their resolutions
+     recorded in `docs/prompt-log/` and in the audit log in `docs/vv/plan.md`.
+- Record what was reviewed. Section 5.2 of the report is graded on flaws caught in
+  review of generated code, so an unrecorded review is worth nothing.
+- Keep the merge request small enough that both reviews can read the specification
   difference and the code difference together.
+
+Self-review checklist:
+
+1. Does every changed behaviour trace to a requirement identifier, and is
+   `docs/traceability.md` updated in the same merge request?
+2. Does any file, dependency or configuration change exceed what the specification
+   asked for?
+3. Are the tests derived from `spec.md` rather than from the implementation?
+4. Was any secret, credential or real personal data introduced?
+5. Does `make check` pass, and did the test suite actually run?
 
 ## Commit convention
 

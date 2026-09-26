@@ -8,9 +8,12 @@ report can be assembled from the repository rather than from memory.
 
 | Student Name | Student ID | Role in the project | Contribution (%) |
 |---|---|---|---|
-| Theo Wilenius | 2202234 | Specifier and prompt engineer, repository owner | TBD |
-| TBD | TBD | Verifier: test pipeline, coverage, security linting | TBD |
-| TBD | TBD | Auditor: requirements quality, traceability, report | TBD |
+| Theo Wilenius | 2202234 | All four roles, rotated per phase: specifier, prompt engineer, verifier, auditor | 100 |
+
+The project is done solo, against the course recommendation of teams of three.
+State that plainly here and, in section 6.2, how the four roles were separated in
+time and how independent review and external user acceptance testing substituted
+for a second and third member.
 
 ## Executive Summary
 
@@ -170,7 +173,13 @@ counts of commits carrying `Spec:` and `Req:` trailers, for example.
 ### 6.2 Team Contribution Breakdown
 
 How human work shifted from coding to specifying, prompting, auditing and
-orchestrating. Name each member, their contribution, and the git evidence for it.
+orchestrating. For each member, name the contribution and the git evidence for it.
+Working solo, this section instead shows how the four roles were separated in
+time, why each phase was finished before the next started, and how the missing
+second and third reviewers were replaced: independent agent review in a fresh
+context, self-review against `CONTRIBUTING.md`, and external testers for user
+acceptance. Cite the review records in `docs/prompt-log/` and the audit log in
+`docs/vv/plan.md`.
 
 ## 7. Reflections on Specification-Driven Development (5 points)
 
