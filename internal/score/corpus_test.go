@@ -16,13 +16,11 @@ import (
 
 // caseScore is everything one case contributes to the measurement.
 type caseScore struct {
-	Counts          score.Counts
-	Pairs           int
-	ClassChecked    int
-	ClassMismatch   []string
-	Regions         int
-	Changes         int
-	ClassesDeclared bool
+	Counts        score.Counts
+	Pairs         int
+	ClassChecked  int
+	ClassMismatch []string
+	Regions       int
 }
 
 // runCase renders a case in memory, runs the real engine over every frame, and scores every
@@ -75,11 +73,9 @@ func runCase(t *testing.T, name string, opts corpus.Options) caseScore {
 		// Where the case states the classes it expects, the region that answered for each
 		// rectangle has to carry the right one. Without this the suite scores localisation
 		// only, and an engine that calls every change "changed" scores 1.0000.
-		result.Changes += len(expectation.Changes)
 		if len(expectation.Classes) == 0 {
 			continue
 		}
-		result.ClassesDeclared = true
 		if len(expectation.Classes) != len(expectation.Changes) {
 			t.Fatalf("%s transition %d states %d classes for %d rectangles",
 				name, index, len(expectation.Classes), len(expectation.Changes))
