@@ -36,7 +36,7 @@ rather than to read, and produced six rounds and 46 findings.
 Verification is measurement rather than assertion, and every measurement was first defeated deliberately: F1
 1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.65 ms per 1080p frame pair on
 one CPU core against a 12 ms target, 79.2 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
-against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 28 of 32
+against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
 requirements verified with a committed test and recorded output. Thirty-five defects were found and recorded;
 34 are fixed and one is documented as inherent to a pixel-only stage.
 

@@ -7,7 +7,7 @@ Specification-Driven Development (SDD) with [GitHub Spec Kit](https://github.com
 
 **Status**: implemented and measured. ScreenDelta, a deterministic frame delta and
 element identity engine, is specified in `specs/001-frame-delta-engine/spec.md` with
-32 traced requirements, of which 28 are verified with a passing test and recorded
+33 traced requirements, of which 29 are verified with a passing test and recorded
 output. The plan, tasks, contracts, quickstart, evidence and report are in the
 repository. What remains is in [Open work](#open-work).
 
