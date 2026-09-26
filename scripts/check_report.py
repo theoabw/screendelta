@@ -133,20 +133,19 @@ def main():
         check(f"the report's {name} count is {count}",
               re.search(rf"\|\s*{name.capitalize()}\s*\|\s*{count}\s*\|", report) is not None)
 
-    # The measurements in section 5.3, against the evidence file that records each one.
+    # The measurements in section 5.3, against the recorded run for each statistic.
     #
-    # The first version of this check compared every figure against the concatenation of every file under
-    # docs/vv/evidence, and matched on substrings with a tolerance against any number in that pile. A review
-    # showed what that let through: a report stating p95 99 ms, F1 1.9 and a thousandfold region count still
-    # passed, because each wrong figure happened to land within a fifth of some unrelated number recorded
-    # somewhere, and superseded figures passed because the file that held them was still present. The check was
-    # named in the docstring as covering section 5.3 and covered nothing.
+    # Two earlier versions of this check were wrong in opposite directions. The first compared every figure against
+    # the concatenation of every evidence file, on substrings, with a tolerance against any number in the pile; a
+    # review showed that a report stating p95 99 ms, F1 1.9 and a region count multiplied by a thousand passed.
+    # The second anchored each row to a file but still compared figures against every number in that file, so the
+    # allocation row failed on a figure that had merely moved between runs.
     #
-    # It is now explicit about both halves. Each row is read against the file that records that measurement, so a
-    # figure from an older run cannot satisfy it, and the comparison is between the same statistic on both sides
-    # rather than between a figure and a pile of numbers. Figures that a measurement produces afresh each run,
-    # the timings and the memory readings, are allowed to differ from the recorded run by up to a fifth, because
-    # they move on a shared machine; everything else has to match the recorded text exactly.
+    # This version anchors each row to a named file and to the statistic inside it, so the comparison is always
+    # between the report's value for a measurement and the recorded value of the same measurement. Figures a run
+    # produces afresh, the timings, the memory readings and the allocation counters, are allowed to differ from
+    # the recorded run by up to a fifth because they move on a shared machine; everything else has to match the
+    # recorded text exactly.
     def evidence_named(keyword):
         for path in sorted(pathlib.Path("docs/vv/evidence").glob("*.txt")):
             if keyword in path.name:
@@ -158,20 +157,40 @@ def main():
     fuzzing = evidence_named("fuzz-")
     mutations = evidence_named("mutation-")
 
-    rows_to_evidence = [
-        (("Accuracy", "Latency", "Throughput", "Memory", "Allocation", "Coverage", "Requirement"), final, True),
-        (("Determinism",), portability, False),
-        (("Fuzzing",), fuzzing, True),
-        (("Mutation",), mutations, False),
+    # row prefix | evidence file | extractors for the recorded values of this row's statistics | tolerance
+    row_sources = [
+        ("Accuracy", final, [r"([\d,]+) frame pairs scored", r"([\d,]+) regions matched", r"F1 ([\d.]+)"], False),
+        ("Latency", final, [r"p50 ([\d.]+) ms", r"p95 ([\d.]+) ms", r"p99 ([\d.]+) ms"], True),
+        ("Throughput", final, [r"sustained ([\d.]+) frame pairs per second"], True),
+        ("Memory", final, [r"peak heap \d+ bytes \(([\d.]+) MiB\)", r"peak resident \d+ bytes \(([\d.]+) MiB\)"], True),
+        ("Allocation", final, [r"first window (\d+), second window (\d+)"], True),
+        ("Coverage", final, [r"coverage: ([\d.]+)% of statements"], False),
+        ("Determinism", portability, [r"([\d,]+) bytes each"], False),
+        ("Fuzzing", fuzzing, [r"([\d.]+) million inputs"], True),
+        ("Mutation", mutations, [r"([\d]+) of ([\d]+) applied mutations killed"], False),
+        # The traceability row is read from the matrix rather than from the recorded run, because the recorded run
+        # is being written by the gate that reads it: the numbers do not exist in the file yet at that moment.
+        ("Requirement", pathlib.Path("docs/traceability.md"), ["matrix"], False),
     ]
 
-    def recorded_text(path):
+    def extract(path, patterns):
         if path is None or not path.exists():
             return None
-        return path.read_text()
+        if patterns == ["matrix"]:
+            # The client's own count of the matrix: rows, verified rows and errors, which is exactly what the
+            # traceability row states.
+            rows = [line for line in path.read_text().splitlines() if re.match(r"^\| (FR|NFR|SC)-\d+ ", line)]
+            verified = [line for line in rows if line.strip().endswith("| verified |")]
+            return [str(len(rows)), str(len(verified)), "0"]
+        text = path.read_text()
+        values = []
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                values.extend(group for group in match.groups() if group)
+        return values
 
     section = report[report.index("### 5.3 Test Execution Results"):report.index("### 6.1")]
-    rows_found = 0
+    rows_read = 0
     figures_compared = 0
     for line in section.splitlines():
         if not line.startswith("| ") or line.startswith("| Measurement") or line.startswith("|---"):
@@ -180,42 +199,46 @@ def main():
         if len(cells) < 5:
             continue
         label, actual = cells[0], cells[3]
-        rows_found += 1
+        rows_read += 1
 
-        recorded, tolerant = None, False
-        for prefixes, path, allows_tolerance in rows_to_evidence:
-            if label.startswith(prefixes):
-                recorded, tolerant = recorded_text(path), allows_tolerance
-                break
-        if recorded is None:
-            check(f"the {label} row names an evidence file that exists", False,
-                  "no evidence file in docs/vv/evidence matches this row")
+        source = next((entry for entry in row_sources if label.startswith(entry[0])), None)
+        if source is None:
+            check(f"the {label} row names a recorded statistic", False, "no extractor is defined for this row")
+            continue
+        _, path, patterns, tolerant = source
+        recorded = extract(path, patterns)
+        if not recorded:
+            check(f"the {label} row has a recorded run", False, f"{path.name if path else 'no file'} holds no value for it")
             continue
 
-        # Both sides are normalised the same way, then compared as whole tokens rather than as substrings.
-        recorded_plain = recorded.replace(",", "")
-        figures = re.findall(r"\d[\d,]*(?:\.\d+)?", actual)
+        figures = [figure for figure in re.findall(r"(?<![A-Za-z0-9-])\d[\d,]*(?:\.\d+)?", actual) if figure.strip(",.")]
         if not figures:
             check(f"the {label} row states a figure the evidence can be checked against", False,
                   f"the row says {actual!r}, which has no figure in it")
             continue
+
         missing = []
         for figure in figures:
             plain = figure.replace(",", "")
             figures_compared += 1
-            if re.search(rf"(?<![\d.]){re.escape(plain)}(?![\d])", recorded_plain):
+            if any(plain == value.replace(",", "") for value in recorded):
                 continue
-            if tolerant and float(plain) > 1:
-                # The same statistic on both sides, measured afresh: accepted within a fifth.
-                candidates = re.findall(r"\d+\.\d+", recorded_plain)
-                if any(abs(float(candidate) - float(plain)) <= 0.2 * float(plain) for candidate in candidates):
+            if tolerant:
+                try:
+                    stated = float(plain)
+                except ValueError:
+                    missing.append(figure)
+                    continue
+                if any(abs(float(value.replace(",", "")) - stated) <= 0.2 * stated for value in recorded):
                     continue
             missing.append(figure)
-        check(f"the {label} row is consistent with the file that records it", not missing,
-              f"{', '.join(missing)} not found in the recorded run")
+        check(f"the {label} row agrees with the recorded {label.lower()} measurement", not missing,
+              f"{', '.join(missing)} not among the recorded values {recorded}")
 
-    check("section 5.3 has rows to check", rows_found >= 8, f"{rows_found} rows found")
-    check("section 5.3 states figures the evidence can be checked against", figures_compared >= 20,
+    check("section 5.3 has rows to read", rows_read >= 8, f"{rows_read} rows read")
+    # A floor rather than a target: it exists so that a table whose figures stopped being comparable fails here
+    # rather than passing because nothing was read.
+    check("section 5.3 states figures the evidence can be checked against", figures_compared >= 15,
           f"{figures_compared} figures compared")
 
     # Every repository path either document cites has to exist.

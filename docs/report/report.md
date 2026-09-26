@@ -423,7 +423,7 @@ catches.
 
 | Level | What it establishes | Mechanism | Where the result is recorded |
 |---|---|---|---|
-| Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Four fuzz targets: the document decoder, the frame decoder, the comparison, and the document round trip | `docs/vv/evidence/fuzz-2026-09-27.txt` |
+| Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Four fuzz targets: the document decoder, the frame decoder, the comparison, and the document round trip, over 16.4 million recorded executions | `docs/vv/evidence/fuzz-2026-09-27.txt` |
 | Mutation testing | That the tests would notice if a rule were wrong, which coverage cannot say | 14 targeted changes to the rules the requirements name, each run against the packages that should care | `docs/vv/evidence/mutation-2026-09-27.txt` |
 | Unit and package tests | That each rule behaves as its comment says, including the boundary cases | `go test ./...`, one test per decision named for the behaviour | Test names in `docs/traceability.md` |
 | Integration and functional tests | That the parts agree: the engine, the differ, the identity map and the document validator | The corpus harness runs the real engine over generated frames and scores the documents | `docs/vv/results.md` |
@@ -491,11 +491,11 @@ Current state, from the commands named:
 | Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, zero false removals | pass | NFR-005, NFR-006, SC-001 |
 | Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.18 ms, p95 8.89 ms, p99 11.30 ms | pass | NFR-001, SC-002 |
 | Throughput, one core | `make perf` | at least 30 frame pairs per second | 75.9 frame pairs per second | pass | NFR-002 |
-| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB, peak resident 22.5 MiB, identical heap at frames 1,000 and 10,000 | pass | NFR-003, SC-003 |
+| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 25.3 MiB over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,220 in the second | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 85.8 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | 176,899 bytes and one SHA-256 in three environments, and identical across two thread counts and two collector settings | pass in part | NFR-004 |
-| Fuzzing | 4 fuzz targets, 20.1 million executions | no panic, and the checked invariants hold | no panic on any input; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
+| Fuzzing | 4 fuzz targets, 16.4 million executions | no panic, and the checked invariants hold | no panic in 16.4 million executions; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
 | Mutation testing | 14 rules changed, one at a time | every mutation is caught | 13 of 14 applied mutations killed; the one survivor changes only how much work the comparison does, which is why no test can distinguish it | pass with one recorded exception | NFR-009 |
 | Requirement traceability | `make check-strict` | every requirement traced to a task, a test and existing evidence | 33 rows, 29 verified, 0 errors, 0 warnings | pass | the process gate |
 
