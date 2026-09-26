@@ -95,9 +95,14 @@ findings in `docs/vv/results.md`.
 | AUD-025 | logical | Review, round 5 | A retired element with better overlap but incompatible appearance blocked the one that matched | Appearance filters retired candidates, then overlap ranks them | `TestReturnNeedsEvidenceInBothDirections` |
 | AUD-026 | logical | Review, round 5 | An element retired by the cover rule stayed in the classifier's snapshot, so a later pass reported a new element as having moved from its position | The retired element is marked used in the snapshot | `TestOneCoveringAreaRetiresEveryElementItCovers` |
 
+| AUD-033 | logical | Final verification | The corpus generator was non-deterministic: the same seed produced different frames on each run, so every accuracy number was irreproducible | The chosen cells are drawn in sorted order rather than in map order, because each drawn panel consumes a shade from the random source | `TestTheGeneratorIsDeterministic`, `TestEveryCaseIsDeterministic` |
+| AUD-034 | compliance | Final verification | The sample size was overstated by a factor of five: the summary called expected regions frame pairs | Pairs and regions are counted separately, and the gate reads the pair count | `make accuracy`, and the corrected claims in the report |
+
+| AUD-035 | compliance | Final verification | The suite failed under load and the failure was read as a pass; two contention rules failed to recognise a loaded machine | The tail assertion is opt-in and make perf, which runs one package at a time, owns it | `go test ./...` exits zero, `make perf` asserts and passes |
+
 ### Reading the log
 
-Of 32 recorded findings plus the 11 from round 1: 30 are fixed, one is documented as inherent with the
+Of 35 recorded findings plus the 11 from round 1: 33 are fixed, one is documented as inherent with the
 reason, and one is open with its fix identified. The classes are 30 logical, 5 compliance and 3
 maintainability, and none security. The compliance entries are the ones worth reading, because they are
 all cases where the evidence said something the code did not do, which is the failure mode this project

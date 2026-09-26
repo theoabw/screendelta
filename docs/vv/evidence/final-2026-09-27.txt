@@ -1,45 +1,56 @@
 Final verification, 2026-09-27.
-Every command below was run in this order against HEAD, with the working tree clean.
+Every command below was run against this commit with the working tree clean, and every exit code was read rather than inferred from the output.
+That last clause is a correction: an earlier version of this file recorded a run that had failed, because the number of package result lines was counted instead of the exit code. See AUD-035 in docs/vv/results.md.
 
-== make check-strict ==
-python3 scripts/check_traceability.py --require-specs
+== make check-strict (exit 0) ==
 traceability: 32 requirements in 1 spec(s), 32 matrix rows, 26 verified, 0 error(s), 0 warning(s)
+exit=0
 
 == go test ./... -count=1 ==
-ok  	github.com/theoabw/screendelta/cmd/screendelta	0.023s
-ok  	github.com/theoabw/screendelta/internal/config	0.011s
-ok  	github.com/theoabw/screendelta/internal/delta	0.005s
-ok  	github.com/theoabw/screendelta/internal/diff	0.162s
+ok  	github.com/theoabw/screendelta/cmd/screendelta	0.036s
+ok  	github.com/theoabw/screendelta/internal/config	0.010s
+ok  	github.com/theoabw/screendelta/internal/corpus	0.419s
+ok  	github.com/theoabw/screendelta/internal/delta	0.008s
+ok  	github.com/theoabw/screendelta/internal/diff	0.230s
 ok  	github.com/theoabw/screendelta/internal/fielderr	0.005s
 ok  	github.com/theoabw/screendelta/internal/fingerprint	0.004s
-ok  	github.com/theoabw/screendelta/internal/frame	0.006s
-ok  	github.com/theoabw/screendelta/internal/identity	0.011s
-ok  	github.com/theoabw/screendelta/internal/perf	17.357s
-ok  	github.com/theoabw/screendelta/internal/score	15.222s
-ok  	github.com/theoabw/screendelta/internal/stream	6.512s
-ok  	github.com/theoabw/screendelta/tests/e2e	2.727s
+ok  	github.com/theoabw/screendelta/internal/frame	0.005s
+ok  	github.com/theoabw/screendelta/internal/identity	0.010s
+ok  	github.com/theoabw/screendelta/internal/perf	17.673s
+ok  	github.com/theoabw/screendelta/internal/score	15.126s
+ok  	github.com/theoabw/screendelta/internal/stream	6.845s
+ok  	github.com/theoabw/screendelta/tests/e2e	2.757s
+exit=0
 
 == make accuracy ==
-    corpus_test.go:147: noise: 119 pairs, 0 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 0 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
-    corpus_test.go:147: sweep: 5000 pairs, 27058 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27058 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
-    corpus_test.go:179: every case together: 27203 pairs scored, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27083 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+1 pairs, 1 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 1 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+11 pairs, 22 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 22 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+3 pairs, 2 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 2 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+119 pairs, 0 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 0 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
+exit=0
 
-== make perf ==
-    perf_test.go:236: mean 8.30 ms, p50 8.31 ms, p90 8.76 ms, p95 8.97 ms, p99 10.24 ms, worst 12.62 ms
-    perf_test.go:276: 1920x1080, large change, one core: p50 38.00 ms, p95 40.86 ms, p99 44.37 ms
-    perf_test.go:301: sustained 77.8 frame pairs per second on one core (300 pairs in 3.855s)
+== make perf (asserts the tail, one package at a time) ==
+mean 8.48 ms, p50 8.44 ms, p90 9.21 ms, p95 9.65 ms, p99 10.37 ms, worst 11.68 ms, fastest 6.86 ms
+p50 37.63 ms, p95 42.32 ms, p99 45.32 ms
+sustained 79.2 frame pairs per second on one core (300 pairs in 3.788s)
+exit=0
 
 == make memcheck ==
-    memory_test.go:202: peak heap 25195176 bytes, engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 23560192 bytes
-    memory_test.go:208: heap at frame 1000: 25195176 bytes, at frame 10000: 25195176 bytes
+peak heap 25195176 bytes, engine buffers 16588800 bytes
+peak resident 23289856 bytes
+25195176 bytes
+exit=0
 
 == make cross ==
 cross: linux/amd64 and windows/amd64 both build
+exit=0
 
 == make demo ==
-frames per second 385.8, decisions 119, decisions per second 286.9
+frames per second 402.2, decisions 119, decisions per second 299.1
+exit=0
 
-== gofmt and vet ==
+== formatting and vet ==
 files needing formatting: 0
 vet diagnostics: 0
