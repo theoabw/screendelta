@@ -15,6 +15,14 @@ import (
 // The check is deliberately separate from Validate. Validate reasons about values and runs on every encode
 // as well, which has no raw JSON to inspect; presence can only be answered before the struct is built.
 
+// boundsPresence is the schema's bounds object, which requires all four members.
+type boundsPresence struct {
+	X *json.RawMessage `json:"x"`
+	Y *json.RawMessage `json:"y"`
+	W *json.RawMessage `json:"w"`
+	H *json.RawMessage `json:"h"`
+}
+
 // presence mirrors the schema's required fields as pointers, so nil means the key was absent.
 type presence struct {
 	SchemaVersion *json.RawMessage `json:"schemaVersion"`
@@ -33,7 +41,8 @@ type presence struct {
 	Regions *[]struct {
 		Identity           *json.RawMessage `json:"identity"`
 		Class              *json.RawMessage `json:"class"`
-		Bounds             *json.RawMessage `json:"bounds"`
+		Bounds             *boundsPresence  `json:"bounds"`
+		PreviousBounds     *boundsPresence  `json:"previousBounds"`
 		Magnitude          *json.RawMessage `json:"magnitude"`
 		AreaPixels         *json.RawMessage `json:"areaPixels"`
 		IdentityConfidence *json.RawMessage `json:"identityConfidence"`
@@ -114,7 +123,6 @@ func checkRequiredFields(raw []byte) error {
 		}{
 			{"identity", region.Identity},
 			{"class", region.Class},
-			{"bounds", region.Bounds},
 			{"magnitude", region.Magnitude},
 			{"areaPixels", region.AreaPixels},
 			{"identityConfidence", region.IdentityConfidence},
@@ -122,6 +130,40 @@ func checkRequiredFields(raw []byte) error {
 		} {
 			if err := present(prefix+field.name, field.raw); err != nil {
 				return err
+			}
+		}
+		if region.Bounds == nil {
+			return missing(prefix + "bounds")
+		}
+		for _, member := range []struct {
+			name string
+			raw  *json.RawMessage
+		}{
+			{"x", region.Bounds.X},
+			{"y", region.Bounds.Y},
+			{"w", region.Bounds.W},
+			{"h", region.Bounds.H},
+		} {
+			if err := present(prefix+"bounds."+member.name, member.raw); err != nil {
+				return err
+			}
+		}
+		// Previous bounds are required for a moved or removed region, and when they are there their members are
+		// required too. Which classes require the object is a value rule and lives in the validator; this only
+		// checks the object's own completeness.
+		if region.PreviousBounds != nil {
+			for _, member := range []struct {
+				name string
+				raw  *json.RawMessage
+			}{
+				{"x", region.PreviousBounds.X},
+				{"y", region.PreviousBounds.Y},
+				{"w", region.PreviousBounds.W},
+				{"h", region.PreviousBounds.H},
+			} {
+				if err := present(prefix+"previousBounds."+member.name, member.raw); err != nil {
+					return err
+				}
 			}
 		}
 	}

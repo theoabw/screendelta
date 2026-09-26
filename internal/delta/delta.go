@@ -125,29 +125,20 @@ type Document struct {
 // identity, because one element can be reported as more than one region, and a key of position and identity
 // alone leaves those two in whatever order they arrived in. A fuzz target found this: the comment claimed a
 // total order while the comparison had three keys, so the claim was false for exactly the case the order
-// exists to settle. Adding the size makes the comparison total, which is what makes the encoded document
-// independent of the order the classifier discovered its regions in.
+// exists to settle.
+//
+// Class and area follow the published five as tie-breakers. The contract names the first five, so these only
+// ever decide between two regions that agree on all of them, and they exist so that no pair at all is left to
+// the order the classifier discovered them in.
 func SortRegions(regions []Region) {
 	sort.SliceStable(regions, func(i, j int) bool {
-		a, b := regions[i], regions[j]
-		if a.Bounds.Y != b.Bounds.Y {
-			return a.Bounds.Y < b.Bounds.Y
-		}
-		if a.Bounds.X != b.Bounds.X {
-			return a.Bounds.X < b.Bounds.X
-		}
-		if a.Identity != b.Identity {
-			return a.Identity < b.Identity
-		}
-		if a.Bounds.W != b.Bounds.W {
-			return a.Bounds.W < b.Bounds.W
-		}
-		return a.Bounds.H < b.Bounds.H
+		return regionLess(regions[i], regions[j])
 	})
 }
 
-// Ordered reports whether regions are already in the contract's order. Validate uses it, so a document that
-// arrives out of order from somewhere else is rejected rather than accepted and re-ordered silently.
+// Ordered reports whether regions are already in the contract's order. The validator uses it, so a document
+// built in code and validated before being written elsewhere is held to the same rule the decoder applies to a
+// document that arrives as bytes.
 func Ordered(regions []Region) bool {
 	for index := 1; index < len(regions); index++ {
 		if regionLess(regions[index], regions[index-1]) {
@@ -157,8 +148,8 @@ func Ordered(regions []Region) bool {
 	return true
 }
 
-// regionLess is the contract's ordering as a predicate, so SortRegions, Ordered and the validator cannot
-// drift apart.
+// regionLess is the contract's ordering as a predicate, so SortRegions, Ordered and the decoder share one rule
+// rather than three copies that can drift apart.
 func regionLess(a, b Region) bool {
 	if a.Bounds.Y != b.Bounds.Y {
 		return a.Bounds.Y < b.Bounds.Y
@@ -172,7 +163,13 @@ func regionLess(a, b Region) bool {
 	if a.Bounds.W != b.Bounds.W {
 		return a.Bounds.W < b.Bounds.W
 	}
-	return a.Bounds.H < b.Bounds.H
+	if a.Bounds.H != b.Bounds.H {
+		return a.Bounds.H < b.Bounds.H
+	}
+	if a.Class != b.Class {
+		return a.Class < b.Class
+	}
+	return a.AreaPixels < b.AreaPixels
 }
 
 // SortConditions puts conditions in their canonical order and removes duplicates,
@@ -229,6 +226,19 @@ func (d Document) Validate() error {
 			return err
 		}
 	}
+	if !Ordered(d.Regions) {
+		for index := 1; index < len(d.Regions); index++ {
+			if regionLess(d.Regions[index], d.Regions[index-1]) {
+				return &FieldError{
+					Op:      "delta.Validate",
+					Subject: "document",
+					Field:   "regions[" + itoa(index) + "]",
+					Problem: "is out of the contract's order: regions sort by top edge, left edge, identity, width, then height",
+				}
+			}
+		}
+	}
+	seenConditions := make(map[Condition]bool, len(d.Conditions))
 	for _, condition := range d.Conditions {
 		if _, known := conditionRank[condition]; !known {
 			return &FieldError{
@@ -238,6 +248,17 @@ func (d Document) Validate() error {
 				Problem: "unknown condition " + quote(string(condition)),
 			}
 		}
+		// The schema sets uniqueItems on conditions, and the encoder deduplicates, so a duplicate means the
+		// document came from somewhere else and does not match the contract.
+		if seenConditions[condition] {
+			return &FieldError{
+				Op:      "delta.Validate",
+				Subject: "document",
+				Field:   "conditions",
+				Problem: "names " + quote(string(condition)) + " more than once",
+			}
+		}
+		seenConditions[condition] = true
 	}
 	return nil
 }

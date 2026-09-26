@@ -418,3 +418,116 @@ func TestDecodeRejectsRegionsOutOfOrder(t *testing.T) {
 		t.Fatalf("the error does not name the position: %v", err)
 	}
 }
+
+// TestDecodeRejectsBoundsMissingAMember is the case the first version of the presence check missed. It looked at
+// the bounds object itself but not inside it, so a document omitting x or y was accepted: zero is a legal
+// coordinate, which makes a missing one invisible to value validation. That is the same absent-versus-zero
+// problem the check exists to close, one level down.
+func TestDecodeRejectsBoundsMissingAMember(t *testing.T) {
+	cells := make([]string, 64)
+	for index := range cells {
+		cells[index] = "0"
+	}
+	wrap := func(region string) string {
+		return `{"schemaVersion":"1.0","frame":{"sequence":2,"width":100,"height":100,"scaleFactor":1},` +
+			`"fingerprint":{"algorithm":"grid-luma-1","gridSize":8,"cells":[` + strings.Join(cells, ",") + `],"strictHash":"0123456789abcdef"},` +
+			`"regions":[` + region + `],"conditions":[]}`
+	}
+	complete := `{"identity":1,"class":"changed","bounds":{"x":0,"y":0,"w":0.2,"h":0.5},"magnitude":0.5,"areaPixels":1000,"identityConfidence":1,"identityUncertain":false}`
+	if _, err := Decode(strings.NewReader(wrap(complete))); err != nil {
+		t.Fatalf("a complete document was rejected: %v", err)
+	}
+
+	for _, missing := range []string{"x", "y", "w", "h"} {
+		bounds := map[string]string{"x": "0", "y": "0", "w": "0.2", "h": "0.5"}
+		delete(bounds, missing)
+		body := `{"identity":1,"class":"changed","bounds":{`
+		first := true
+		for _, key := range []string{"x", "y", "w", "h"} {
+			if value, ok := bounds[key]; ok {
+				if !first {
+					body += ","
+				}
+				body += `"` + key + `":` + value
+				first = false
+			}
+		}
+		body += `},"magnitude":0.5,"areaPixels":1000,"identityConfidence":1,"identityUncertain":false}`
+
+		if _, err := Decode(strings.NewReader(wrap(body))); err == nil {
+			t.Fatalf("a document whose bounds omit %s was accepted", missing)
+		} else if !strings.Contains(err.Error(), "bounds."+missing) {
+			t.Fatalf("the error does not name bounds.%s: %v", missing, err)
+		}
+	}
+}
+
+// TestDecodeRejectsPreviousBoundsMissingAMember is the same rule one level into the optional object.
+func TestDecodeRejectsPreviousBoundsMissingAMember(t *testing.T) {
+	document := goldenDocument()
+	var encoded bytes.Buffer
+	if err := document.Encode(&encoded, true); err != nil {
+		t.Fatalf("encoding failed: %v", err)
+	}
+	body := encoded.String()
+	// The golden document's second region is moved, so it carries previous bounds. The object is emptied by
+	// replacing everything from its opening brace to its closing brace, which is more robust than matching the
+	// indentation the encoder happens to use.
+	start := strings.Index(body, `"previousBounds": {`)
+	if start < 0 {
+		t.Fatal("the golden document carries no previous bounds, so this test would prove nothing")
+	}
+	close := strings.Index(body[start:], "}")
+	if close < 0 {
+		t.Fatal("the previous bounds object is unterminated")
+	}
+	broken := body[:start] + `"previousBounds": {}` + body[start+close+1:]
+	if broken == body {
+		t.Fatal("the fixture did not change the document, so this test would prove nothing")
+	}
+	if _, err := Decode(strings.NewReader(broken)); err == nil {
+		t.Fatal("a document whose previous bounds omit x and y was accepted")
+	} else if !strings.Contains(err.Error(), "previousBounds.") {
+		t.Fatalf("the error does not name the missing member: %v", err)
+	}
+}
+
+// TestDecodeAndValidateRejectDuplicateConditions covers the schema's uniqueItems rule on conditions, which
+// value validation did not check: the encoder deduplicates, so a duplicate can only come from elsewhere.
+func TestDecodeAndValidateRejectDuplicateConditions(t *testing.T) {
+	document := goldenDocument()
+	document.Conditions = []Condition{ConditionViewportChanged, ConditionViewportChanged}
+	if err := document.Validate(); err == nil {
+		t.Fatal("a document naming a condition twice validated")
+	}
+
+	var encoded bytes.Buffer
+	if err := document.Encode(&encoded, false); err != nil {
+		t.Fatalf("the encoder rejected duplicate conditions instead of deduplicating them: %v", err)
+	}
+	if _, err := Decode(bytes.NewReader(encoded.Bytes())); err != nil {
+		t.Fatalf("the encoder's output does not decode: %v", err)
+	}
+}
+
+// TestValidateEnforcesTheRegionOrder closes the gap between the two entry points: the decoder rejected an
+// out-of-order document while the validator accepted the same content built in code, so a caller could validate
+// and then write JSON the engine cannot read back.
+func TestValidateEnforcesTheRegionOrder(t *testing.T) {
+	document := goldenDocument()
+	document.Regions[0], document.Regions[1] = document.Regions[1], document.Regions[0]
+	if err := document.Validate(); err == nil {
+		t.Fatal("a document whose regions are out of order validated")
+	} else if !strings.Contains(err.Error(), "regions[1]") {
+		t.Fatalf("the error does not name the position: %v", err)
+	}
+
+	// The encoder canonicalises, so the same document still encodes and reads back.
+	var encoded bytes.Buffer
+	if err := document.Encode(&encoded, false); err != nil {
+		t.Fatalf("the encoder rejected a document it should canonicalise: %v", err)
+	}
+	if _, err := Decode(bytes.NewReader(encoded.Bytes())); err != nil {
+		t.Fatalf("the encoder's output does not decode: %v", err)
+	}
+}

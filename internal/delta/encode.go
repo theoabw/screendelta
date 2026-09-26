@@ -18,10 +18,10 @@ type FieldError = fielderr.Error
 // not mutate the caller's document. Identical input therefore produces byte-identical
 // output, which is what NFR-004 requires and what the determinism test asserts.
 func (d Document) Encode(w io.Writer, pretty bool) error {
-	if err := d.Validate(); err != nil {
-		return err
-	}
-
+	// The document is canonicalised before it is validated, because the validator enforces the contract's
+	// region order and a caller may legitimately build a document in any order. Validating first made the
+	// encoder reject documents it is supposed to canonicalise, which a test caught: it builds the same
+	// document twice with the regions in opposite orders and requires identical bytes.
 	normalised := d
 	normalised.Regions = append([]Region(nil), d.Regions...)
 	SortRegions(normalised.Regions)
@@ -31,6 +31,9 @@ func (d Document) Encode(w io.Writer, pretty bool) error {
 	}
 	if normalised.Conditions == nil {
 		normalised.Conditions = []Condition{}
+	}
+	if err := normalised.Validate(); err != nil {
+		return err
 	}
 
 	encoder := json.NewEncoder(w)
