@@ -106,7 +106,7 @@ func regionMagnitude(previous, current frame.Frame, r image.Rectangle) float64 {
 		rowOffset := y * current.Width * 4
 		for x := left; x < right; x++ {
 			offset := rowOffset + x*4
-			sum += absInt(luma(current.Pixels[offset:]) - luma(previous.Pixels[offset:]))
+			sum += absInt(lumaOfPixel(current.Pixels[offset:]) - lumaOfPixel(previous.Pixels[offset:]))
 			count++
 		}
 	}

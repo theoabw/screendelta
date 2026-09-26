@@ -11,6 +11,7 @@
 package diff
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 
@@ -20,6 +21,9 @@ import (
 	"github.com/theoabw/screendelta/internal/frame"
 )
 
+// wordBytes is how much of a row the comparison skips at a time once it knows the row changed.
+const wordBytes = 8
+
 // growthMargin is how far a reported region is expanded beyond the pixels that changed, so
 // the bounds cover the element that produced the change rather than its inside. It is the one
 // place where the engine reports more than it measured, and the accuracy measurement scores
@@ -28,8 +32,11 @@ import (
 // keeps an intersection over union of 0.64, a sixty pixel one 0.86.
 const growthMargin = 2
 
-// luma weights are the integer BT.601 coefficients, used instead of floating point so the
-// same input produces the same numbers everywhere.
+// luma weights are the integer BT.601 coefficients, used instead of floating point so the same
+// input produces the same numbers everywhere, and pre-multiplied into tables so converting a
+// pixel costs three lookups rather than three multiplications. Converting every pixel of every
+// frame is the largest single cost in the engine, which is why it is done once per frame and
+// reused by both the comparison and the fingerprint.
 const (
 	lumaRed   = 299
 	lumaGreen = 587
@@ -37,12 +44,45 @@ const (
 	lumaScale = 1000
 )
 
+var (
+	lumaRedTable  [256]uint32
+	lumaGreenBlue [65536]uint32
+)
+
+func init() {
+	for value := 0; value < 256; value++ {
+		lumaRedTable[value] = uint32(lumaRed * value)
+	}
+	// Indexed by green in the high byte and blue in the low byte: one lookup covers both.
+	for green := 0; green < 256; green++ {
+		for blue := 0; blue < 256; blue++ {
+			lumaGreenBlue[green<<8|blue] = uint32(lumaGreen*green + lumaBlue*blue)
+		}
+	}
+}
+
+// lumaOfPixel converts one rgba8 pixel to the single channel the engine compares.
+
 // Differ compares consecutive frames of one stream.
+// Differ holds the two most recent luma planes. The engine asks for a frame's fingerprint and
+// then for the comparison against the frame before it, and both need the same conversion:
+// converting twice per frame was most of the engine's cost.
+//
+// A frame is identified by its sequence, which the engine requires to increase, so a cached
+// plane cannot be confused with a different frame.
 type Differ struct {
 	previous []regionState
 	mask     []byte
 	stack    []int
 	grid     []uint8
+
+	newest    []byte
+	newestSeq uint64
+	older     []byte
+	olderSeq  uint64
+
+	changedRows  []int
+	gridSequence uint64
 
 	hasPrevious  bool
 	nextIdentity uint64
@@ -59,6 +99,54 @@ type regionState struct {
 // New creates a differ for one stream.
 func New() *Differ {
 	return &Differ{}
+}
+
+// plane returns the luma plane for a frame, converting it only if it is not already held.
+//
+// The two slots hold the two most recent frames. A miss on a frame at least as recent as the
+// newest rotates the pair and reuses the buffer that just became the oldest, so a stream of
+// constant geometry allocates its planes once.
+func (d *Differ) plane(f frame.Frame, gridSize int) []byte {
+	if d.newest != nil && d.newestSeq == f.Sequence {
+		return d.newest
+	}
+	if d.older != nil && d.olderSeq == f.Sequence {
+		return d.older
+	}
+
+	needed := f.Width * f.Height
+	if needed <= 0 {
+		return nil
+	}
+
+	if f.Sequence >= d.newestSeq {
+		buffer := d.older
+		if cap(buffer) < needed {
+			buffer = make([]byte, needed)
+		}
+		buffer = buffer[:needed]
+		d.older, d.olderSeq = d.newest, d.newestSeq
+		d.newest, d.newestSeq = buffer, f.Sequence
+		d.fillPlane(buffer, f, gridSize)
+		return buffer
+	}
+
+	// A frame older than both slots: compute it into the older slot, the least recently used.
+	buffer := d.older
+	if cap(buffer) < needed {
+		buffer = make([]byte, needed)
+	}
+	buffer = buffer[:needed]
+	d.older, d.olderSeq = buffer, f.Sequence
+	d.fillPlane(buffer, f, gridSize)
+	return buffer
+}
+
+func (d *Differ) prepareCells(size int) {
+	needed := size * size
+	if len(d.grid) != needed {
+		d.grid = make([]uint8, needed)
+	}
 }
 
 // Compare returns the regions that differ between two frames.
@@ -94,106 +182,138 @@ type component struct {
 	magnitude                float64
 }
 
-// components finds the changed pixels and groups them into connected areas.
-//
-// A pixel counts as changed when its luma differs by more than the configured noise floor, and
-// areas are eight-connected, because a one pixel diagonal join between two parts of the same
-// glyph or icon is common. The whole frame is scanned once; an earlier version gated the scan
-// on a sixteen pixel tile grid, which was cheaper to merge but cut a genuine change at a tile
-// boundary whenever a tile's mean fell under the floor, reporting one change as two overlapping
-// regions.
 func (d *Differ) components(previous, current frame.Frame, cfg config.Config) []component {
 	width, height := current.Width, current.Height
 	needed := width * height
 	if needed <= 0 {
 		return nil
 	}
+
+	previousPlane := d.plane(previous, cfg.Fingerprint.GridSize)
+	currentPlane := d.plane(current, cfg.Fingerprint.GridSize)
+	if previousPlane == nil || currentPlane == nil {
+		return nil
+	}
+
 	if cap(d.mask) < needed {
 		d.mask = make([]byte, needed)
 	}
 	mask := d.mask[:needed]
 
-	threshold := cfg.NoiseFloor * 255
-	any := false
+	threshold := int(cfg.NoiseFloor*255 + 0.5)
+	d.changedRows = d.changedRows[:0]
+
 	for y := 0; y < height; y++ {
-		rowOffset := y * width * 4
-		for x := 0; x < width; x++ {
-			offset := rowOffset + x*4
-			difference := absInt(luma(current.Pixels[offset:]) - luma(previous.Pixels[offset:]))
-			if float64(difference) <= threshold {
-				mask[y*width+x] = 0
+		row := y * width
+		previousRow := previousPlane[row : row+width]
+		currentRow := currentPlane[row : row+width]
+		maskRow := mask[row : row+width]
+
+		// Identical rows are the common case in a desktop frame, and comparing a row whole costs a
+		// fraction of looking at every pixel in it.
+		if bytes.Equal(previousRow, currentRow) {
+			clear(maskRow)
+			continue
+		}
+
+		clear(maskRow)
+		d.changedRows = append(d.changedRows, y)
+		for x := 0; x < width; {
+			word := min(wordBytes, width-x)
+			if word == wordBytes && bytes.Equal(previousRow[x:x+word], currentRow[x:x+word]) {
+				x += word
 				continue
 			}
-			mask[y*width+x] = 1
-			any = true
+			for index := x; index < x+word; index++ {
+				difference := int(currentRow[index]) - int(previousRow[index])
+				if difference < 0 {
+					difference = -difference
+				}
+				if difference <= threshold {
+					continue
+				}
+				maskRow[index] = 1
+			}
+			x += word
 		}
 	}
-	if !any {
+	if len(d.changedRows) == 0 {
 		return nil
 	}
 
+	// Only the rows that changed are scanned for component starts. Walking the whole mask cost
+	// half a millisecond on a 1080p frame for the sake of a few thousand pixels.
 	var components []component
-	for start := 0; start < needed; start++ {
-		if mask[start] != 1 {
-			continue
-		}
-		d.stack = append(d.stack[:0], start)
-		mask[start] = 2
-
-		boxLeft, boxTop := width, height
-		boxRight, boxBottom := 0, 0
-		sum, count := 0, 0
-
-		for len(d.stack) > 0 {
-			index := d.stack[len(d.stack)-1]
-			d.stack = d.stack[:len(d.stack)-1]
-			x, y := index%width, index/width
-
-			if x < boxLeft {
-				boxLeft = x
+	for _, y := range d.changedRows {
+		rowStart := y * width
+		rowEnd := rowStart + width
+		for startIndex := rowStart; startIndex < rowEnd; startIndex++ {
+			if mask[startIndex] != 1 {
+				continue
 			}
-			if y < boxTop {
-				boxTop = y
-			}
-			if x+1 > boxRight {
-				boxRight = x + 1
-			}
-			if y+1 > boxBottom {
-				boxBottom = y + 1
-			}
-			offset := y*width*4 + x*4
-			sum += absInt(luma(current.Pixels[offset:]) - luma(previous.Pixels[offset:]))
-			count++
+			d.stack = append(d.stack[:0], startIndex)
+			mask[startIndex] = 2
 
-			for dy := -1; dy <= 1; dy++ {
-				for dx := -1; dx <= 1; dx++ {
-					if dx == 0 && dy == 0 {
+			boxLeft, boxTop := width, height
+			boxRight, boxBottom := 0, 0
+			sum, count := 0, 0
+
+			for len(d.stack) > 0 {
+				index := d.stack[len(d.stack)-1]
+				d.stack = d.stack[:len(d.stack)-1]
+				x, y := index%width, index/width
+
+				if x < boxLeft {
+					boxLeft = x
+				}
+				if y < boxTop {
+					boxTop = y
+				}
+				if x+1 > boxRight {
+					boxRight = x + 1
+				}
+				if y+1 > boxBottom {
+					boxBottom = y + 1
+				}
+				difference := int(currentPlane[index]) - int(previousPlane[index])
+				if difference < 0 {
+					difference = -difference
+				}
+				sum += difference
+				count++
+
+				for dy := -1; dy <= 1; dy++ {
+					neighbourY := y + dy
+					if neighbourY < 0 || neighbourY >= height {
 						continue
 					}
-					neighbourX, neighbourY := x+dx, y+dy
-					if neighbourX < 0 || neighbourY < 0 || neighbourX >= width || neighbourY >= height {
-						continue
+					neighbourRow := neighbourY * width
+					for dx := -1; dx <= 1; dx++ {
+						neighbourX := x + dx
+						if neighbourX < 0 || neighbourX >= width || (dx == 0 && dy == 0) {
+							continue
+						}
+						neighbour := neighbourRow + neighbourX
+						if mask[neighbour] != 1 {
+							continue
+						}
+						mask[neighbour] = 2
+						d.stack = append(d.stack, neighbour)
 					}
-					neighbour := neighbourY*width + neighbourX
-					if mask[neighbour] != 1 {
-						continue
-					}
-					mask[neighbour] = 2
-					d.stack = append(d.stack, neighbour)
 				}
 			}
-		}
 
-		if count == 0 {
-			continue
+			if count == 0 {
+				continue
+			}
+			components = append(components, component{
+				left:      boxLeft,
+				top:       boxTop,
+				right:     boxRight,
+				bottom:    boxBottom,
+				magnitude: float64(sum) / float64(count) / 255,
+			})
 		}
-		components = append(components, component{
-			left:      boxLeft,
-			top:       boxTop,
-			right:     boxRight,
-			bottom:    boxBottom,
-			magnitude: float64(sum) / float64(count) / 255,
-		})
 	}
 
 	// Deterministic order before any matching: top edge, then left edge.
@@ -202,6 +322,10 @@ func (d *Differ) components(previous, current frame.Frame, cfg config.Config) []
 }
 
 // Fingerprint summarises a frame as a grid of quantised luma cells.
+//
+// The grid is produced by the same pass that converts the frame for the comparison, so a frame is
+// walked once no matter how many things ask about it. The cells are only recomputed here when the
+// plane came from the cache, which happens when a caller asks twice about one frame.
 func (d *Differ) Fingerprint(current frame.Frame, cfg config.Config) (delta.Fingerprint, error) {
 	size := cfg.Fingerprint.GridSize
 	if size < 8 || size > 256 {
@@ -213,31 +337,28 @@ func (d *Differ) Fingerprint(current frame.Frame, cfg config.Config) (delta.Fing
 		}
 	}
 
-	needed := size * size
-	if len(d.grid) != needed {
-		d.grid = make([]uint8, needed)
+	plane := d.plane(current, size)
+	if plane == nil {
+		return delta.Fingerprint{}, &fielderr.Error{
+			Op:      "diff.Fingerprint",
+			Subject: "frame",
+			Field:   "geometry",
+			Problem: "must have a positive width and height",
+		}
 	}
 
-	for cellY := 0; cellY < size; cellY++ {
-		for cellX := 0; cellX < size; cellX++ {
-			left := cellX * current.Width / size
-			right := max((cellX+1)*current.Width/size, left+1)
-			top := cellY * current.Height / size
-			bottom := max((cellY+1)*current.Height/size, top+1)
+	d.prepareCells(size)
+	// The grid is always derived from the plane, whether the plane was just converted or already
+	// held from the comparison.
+	d.gridFrom(plane, current, size)
 
-			sum, count := 0, 0
-			for y := top; y < min(bottom, current.Height); y++ {
-				rowOffset := y * current.Width * 4
-				for x := left; x < min(right, current.Width); x++ {
-					sum += luma(current.Pixels[rowOffset+x*4:])
-					count++
-				}
-			}
-			if count == 0 {
-				d.grid[cellY*size+cellX] = 0
-				continue
-			}
-			d.grid[cellY*size+cellX] = uint8(sum / count)
+	needed := size * size
+	if len(d.grid) != needed {
+		return delta.Fingerprint{}, &fielderr.Error{
+			Op:      "diff.Fingerprint",
+			Subject: "frame",
+			Field:   "geometry",
+			Problem: "changed while the fingerprint was being taken",
 		}
 	}
 
@@ -255,6 +376,40 @@ func (d *Differ) Fingerprint(current frame.Frame, cfg config.Config) (delta.Fing
 	}, nil
 }
 
+func (d *Differ) gridFrom(plane []byte, f frame.Frame, size int) {
+	// A fingerprint is compared with tolerance, so a sample of each cell measures the same thing
+	// as its exact mean at a small fraction of the cost. Summing every pixel of every cell cost
+	// more than the comparison it helps.
+	stepX := max(1, f.Width/size/4)
+	stepY := max(1, f.Height/size/4)
+
+	for cellY := 0; cellY < size; cellY++ {
+		top := cellY * f.Height / size
+		bottom := max((cellY+1)*f.Height/size, top+1)
+
+		for cellX := 0; cellX < size; cellX++ {
+			left := cellX * f.Width / size
+			right := max((cellX+1)*f.Width/size, left+1)
+
+			sum, count := 0, 0
+			for y := top; y < min(bottom, f.Height); y += stepY {
+				row := y * f.Width
+				for x := left; x < min(right, f.Width); x += stepX {
+					sum += int(plane[row+x])
+					count++
+				}
+			}
+			cell := cellY*size + cellX
+			if count == 0 {
+				d.grid[cell] = 0
+				continue
+			}
+			d.grid[cell] = uint8(sum / count)
+		}
+	}
+	d.gridSequence = f.Sequence
+}
+
 func cellsToBytes(cells []uint8) []byte {
 	if len(cells) == 0 {
 		return nil
@@ -264,9 +419,28 @@ func cellsToBytes(cells []uint8) []byte {
 	return buffer
 }
 
-// luma converts one RGBA pixel to a single channel value.
-func luma(pixel []byte) int {
-	return (lumaRed*int(pixel[0]) + lumaGreen*int(pixel[1]) + lumaBlue*int(pixel[2])) / lumaScale
+// lumaOfPixel converts one rgba8 pixel to the single channel the engine compares.
+func lumaOfPixel(pixel []byte) int {
+	return int(lumaRedTable[pixel[0]]+lumaGreenBlue[uint16(pixel[1])<<8|uint16(pixel[2])]) / lumaScale
+}
+
+func (d *Differ) fillPlane(destination []byte, f frame.Frame, gridSize int) {
+	width, height := f.Width, f.Height
+	count := width * height
+	if count <= 0 || len(f.Pixels) < count*4 {
+		return
+	}
+
+	// Sliced to their exact lengths so the compiler can see that every index below is in range,
+	// which removes a bounds check from the hottest loop in the engine.
+	pixels := f.Pixels[: count*4 : count*4]
+	destination = destination[:count]
+
+	for index := 0; index < count; index++ {
+		offset := index * 4
+		destination[index] = byte((lumaRedTable[pixels[offset]] +
+			lumaGreenBlue[uint16(pixels[offset+1])<<8|uint16(pixels[offset+2])]) / lumaScale)
+	}
 }
 
 func absInt(value int) int {
