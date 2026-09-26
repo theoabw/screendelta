@@ -40,7 +40,7 @@ Verification is measurement rather than assertion, and every measurement was fir
 1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.65 ms per 1080p frame pair on
 one CPU core against a 12 ms target, 79.2 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
 against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
-requirements verified with a committed test and recorded output. 37 defects were found and recorded;
+requirements verified with a committed test and recorded output. 40 defects were found and recorded;
 34 are fixed and one is documented as inherent to a pixel-only stage.
 
 ## 1. Introduction and Paradigm Shift (3 points)
@@ -170,7 +170,7 @@ result.
 
 | ID | Attribute | Target | How measured | State |
 |---|---|---|---|---|
-| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 9.65 ms, p99 10.37 ms |
+| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 8.89 ms, p99 11.30 ms |
 | NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 78.2 per second |
 | NFR-003 | Memory | At most 128 MB over 10,000 frames, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 22.5 MiB peak resident |
 | NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Two runs encoded and compared; GOMAXPROCS 1 and 4 | met in part: identical across thread counts on this host; cross-host is untested |
@@ -178,7 +178,7 @@ result.
 | NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs | `make accuracy`, corpus with generated ground truth | met: 5,134 frame pairs, F1 1.0000 |
 | NFR-007 | Usability | A new user produces a delta from their own screenshots within two minutes, from the README alone | Task timing with an external tester | not yet measured; the acceptance script exists and is not run |
 | NFR-008 | Portability | CPU only, no GPU, no network at runtime, Linux and Windows | Cross-build in CI, no-network test | partly met: cross-build done, no-network test outstanding |
-| NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 81.9, identity 85.2 |
+| NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 81.9, identity 85.8 |
 | NFR-010 | Compatibility | Schema changes versioned, and a consumer can reject a version it does not understand | Decode-time rejection test, exit code 3 from the command line | met |
 | NFR-011 | Security | No network socket, no process execution, reads only the frames and configuration given, writes only to the declared output path | Two static checks over the syntax trees of every non-test file, and one dynamic check comparing the filesystem before and after a run | met: the checks fail when an import of `net/http` and a stray `os.WriteFile` are added, and pass again when they are removed |
 
@@ -309,7 +309,7 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 | "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 5,134 frame pairs scored at F1 1.0000 with every asserted class correct; 22.5 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
-attempt to pass it with a deliberately wrong implementation has failed. Three of the 37 recorded defects
+attempt to pass it with a deliberately wrong implementation has failed. Three of the 40 recorded defects
 were found by exactly that, and none of them by reading the code.
 
 ### 4.1 SDD Tool Kit
@@ -439,7 +439,7 @@ catches.
    measures localisation rather than usefulness to a planner.
 3. **Latency was measured on one machine**, an Intel i7-8700T virtual machine, one core, with the harness
    running alone. The tail on a loaded machine or a different microarchitecture is unknown, and
-   `make perf` refuses to report a contended run rather than reporting it as the engine's.
+   `make perf` reports a contended run as skipped rather than as the engine's, and asserts the tail only when it is told the machine is quiet.
 4. **The requirement is one number for a cost that follows the size of the change.** The asserted profile
    changes two elements per frame; a change covering half the screen costs about 40 ms and is reported
    separately. No single figure describes both.
@@ -459,14 +459,14 @@ or measurement that verifies it. What it shows in summary:
 
 | Class | Count | What the class contained |
 |---|---|---|
-| Logical | 28 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
-| Compliance | 8 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation, a corpus generator that made every accuracy number irreproducible, a sample size overstated five times over, and a suite that failed while being read as a pass |
+| Logical | 30 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
+| Compliance | 9 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation, a corpus generator that made every accuracy number irreproducible, a sample size overstated five times over, and a suite that failed while being read as a pass |
 | Maintainability | 1 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
 | Security | 0 | Stated as a result rather than an omission. The engine reads local files, writes only to a path it is given and never opens a socket; the nearest item is a decoder that accepts documents missing required fields, classified as compliance because the schema is the contract being broken |
 
 The pattern worth naming is that the compliance class is the one the process had to grow a defence for, and
 the defence is not one rule but three. A measurement is not finished until an attempt to pass it with a
-deliberately wrong implementation has failed, which is how four of the 37 defects were found. The number a
+deliberately wrong implementation has failed, which is how four of the 40 defects were found. The number a
 measurement prints is not evidence until the code that prints it has been read, which is how the sample size
 turned out to be five times too large. And the exit code is the result, not the output, which is how a failing
 suite was read as a pass in the last round of this project.
@@ -486,14 +486,14 @@ Current state, from the commands named:
 | Measurement | Command | Expected | Actual | Status | Requirement |
 |---|---|---|---|
 | Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, zero false removals | pass | NFR-005, NFR-006, SC-001 |
-| Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.44 ms, p95 9.65 ms, p99 10.37 ms | pass | NFR-001, SC-002 |
-| Throughput, one core | `make perf` | at least 30 frame pairs per second | 79.2 frame pairs per second | pass | NFR-002 |
-| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB, peak resident 22.2 MiB, identical heap at frames 1,000 and 10,000 | pass | NFR-003, SC-003 |
+| Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.18 ms, p95 8.89 ms, p99 11.30 ms | pass | NFR-001, SC-002 |
+| Throughput, one core | `make perf` | at least 30 frame pairs per second | 75.9 frame pairs per second | pass | NFR-002 |
+| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB, peak resident 22.5 MiB, identical heap at frames 1,000 and 10,000 | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | the two windows agree | pass | NFR-003 |
-| Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 85.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
+| Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 85.8 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | four runs encoded and compared | byte-identical output | identical across two thread counts and two collector settings | pass in part | NFR-004 |
 | Fuzzing | three fuzz targets, 12.3 million executions | no panic, and the checked invariant holds | no panic on any input; the region order invariant failed and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
-| Mutation testing | twelve rules changed, one at a time | every mutation is caught | ten of twelve killed; the two survivors are equivalent mutants that change nothing observable | pass with two recorded exceptions | NFR-009 |
+| Mutation testing | twelve rules changed, one at a time | every mutation is caught | ten of twelve killed; the one survivor changes only how much work the comparison does, and the two order tie-breakers are now killed by a test | pass with two recorded exceptions | NFR-009 |
 | Requirement traceability | `make check-strict` | every requirement traced to a task, a test and existing evidence | 33 rows, 29 verified, 0 errors, 0 warnings | pass | the process gate |
 
 29 of 33 requirements are verified, meaning a test passes and its output is committed. The rest are
@@ -569,7 +569,7 @@ people, and what replaced the missing second and third reviewers.
 
 Leverage, quantified rather than asserted: more than 100 commits in two days, 6,153 lines of Go against 5,813 lines
 of test and 4,661 lines of specification, plan and process documents, 54 planned tasks of which 53 are
-complete, 33 requirements of which 29 are verified, and 48 recorded findings of which 36 are fixed. The
+complete, 33 requirements of which 29 are verified, and 51 recorded findings of which 39 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
 Where the human was the bottleneck is the honest part of this section, and there are three places:
@@ -613,7 +613,7 @@ What worked, with the measurement or the artifact that shows it:
 How much time construction gained is hard to state honestly, so the report gives the count that can be
 verified instead: 6,153 lines of implementation and 5,899 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
-hour but defects per requirement: 48 recorded findings across 33 requirements, of which 36 are fixed, is a
+hour but defects per requirement: 51 recorded findings across 33 requirements, of which 39 are fixed, is a
 rate that only holds because the review was as cheap as it was.
 
 ### 7.2 Core Bottlenecks and Challenges
@@ -642,7 +642,7 @@ Each claim is attached to something in this project rather than to a general pri
    inference (this is the same element) produced the identity confidence and the uncertainty flag, which is
    the most defensible part of the contract. It also produced the honest no: a cover and a content change
    are the same rectangle, and the engine says so.
-3. **Try to defeat your own measurement before believing it.** Three of the 37 recorded defects were found
+3. **Try to defeat your own measurement before believing it.** Three of the 40 recorded defects were found
    this way, and none by reading code. The version of this rule that generalises: for every green result,
    construct the wrong implementation that would also produce it, and check that it fails.
 4. **One memory of one fact.** The classifier and the identity map both kept the element geometry, and the
