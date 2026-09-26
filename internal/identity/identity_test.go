@@ -2,6 +2,7 @@ package identity_test
 
 import (
 	"fmt"
+	"image"
 	"testing"
 
 	"github.com/theoabw/screendelta/internal/delta"
@@ -25,7 +26,7 @@ func boundsOf(x, y, w, h int) delta.Bounds {
 
 func TestFirstAppearanceAllocatesACertainIdentity(t *testing.T) {
 	m := identity.New(2, 8)
-	assignment := m.Appear(boundsOf(40, 60, 80, 30), frameWidth, frameHeight, 1)
+	assignment := m.Appear(boundsOf(40, 60, 80, 30), frameWidth, frameHeight, 1, nil)
 
 	if assignment.ID != 1 {
 		t.Fatalf("first identity is %d, want 1", assignment.ID)
@@ -40,14 +41,14 @@ func TestFirstAppearanceAllocatesACertainIdentity(t *testing.T) {
 
 func TestAMovingElementKeepsOneIdentity(t *testing.T) {
 	m := identity.New(2, 8)
-	first := m.Appear(boundsOf(100, 100, 60, 40), frameWidth, frameHeight, 1)
+	first := m.Appear(boundsOf(100, 100, 60, 40), frameWidth, frameHeight, 1, nil)
 
 	sequence := uint64(1)
 	id := first.ID
 	for step := 1; step <= 10; step++ {
 		sequence++
 		x := 100 + step*4
-		assignment := m.Carry(boundsOf(x, 100, 60, 40), boundsOf(x, 100, 60, 40), frameWidth, frameHeight, sequence)
+		assignment := m.Carry(boundsOf(x, 100, 60, 40), boundsOf(x, 100, 60, 40), frameWidth, frameHeight, sequence, nil)
 		if assignment.ID != id {
 			t.Fatalf("step %d: identity changed from %d to %d", step, id, assignment.ID)
 		}
@@ -65,11 +66,11 @@ func TestAMovingElementKeepsOneIdentity(t *testing.T) {
 
 func TestAnElementBeyondTheMotionToleranceIsNotMatched(t *testing.T) {
 	m := identity.New(2, 4)
-	first := m.Appear(boundsOf(20, 20, 40, 40), frameWidth, frameHeight, 1)
+	first := m.Appear(boundsOf(20, 20, 40, 40), frameWidth, frameHeight, 1, nil)
 
 	// Forty pixels away, far beyond the four pixel tolerance: the same rectangle shape, but not a
 	// candidate for the same element.
-	assignment := m.Carry(boundsOf(60, 20, 40, 40), boundsOf(60, 20, 40, 40), frameWidth, frameHeight, 2)
+	assignment := m.Carry(boundsOf(60, 20, 40, 40), boundsOf(60, 20, 40, 40), frameWidth, frameHeight, 2, nil)
 	if assignment.ID == first.ID {
 		t.Fatalf("an element forty pixels away was matched to identity %d", first.ID)
 	}
@@ -77,10 +78,10 @@ func TestAnElementBeyondTheMotionToleranceIsNotMatched(t *testing.T) {
 
 func TestAnElementThatChangesSizeTooMuchIsNotMatched(t *testing.T) {
 	m := identity.New(2, 64)
-	first := m.Appear(boundsOf(100, 100, 40, 40), frameWidth, frameHeight, 1)
+	first := m.Appear(boundsOf(100, 100, 40, 40), frameWidth, frameHeight, 1, nil)
 
 	// Four times the area in the same place: close enough by centre, but not the same element.
-	assignment := m.Carry(boundsOf(100, 100, 80, 80), boundsOf(100, 100, 80, 80), frameWidth, frameHeight, 2)
+	assignment := m.Carry(boundsOf(100, 100, 80, 80), boundsOf(100, 100, 80, 80), frameWidth, frameHeight, 2, nil)
 	if assignment.ID == first.ID {
 		t.Fatalf("an element that quadrupled in area kept identity %d", first.ID)
 	}
@@ -88,7 +89,7 @@ func TestAnElementThatChangesSizeTooMuchIsNotMatched(t *testing.T) {
 
 func TestRemovedElementRetiresItsIdentity(t *testing.T) {
 	m := identity.New(2, 8)
-	live := m.Appear(boundsOf(50, 50, 60, 40), frameWidth, frameHeight, 1)
+	live := m.Appear(boundsOf(50, 50, 60, 40), frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	gone := m.Vanish(boundsOf(50, 50, 60, 40), frameWidth, frameHeight, 2)
@@ -107,7 +108,7 @@ func TestReappearanceAfterOcclusionIsNewAndUncertain(t *testing.T) {
 	// One frame of tolerance: the element is hidden for two frames, which is longer than the window.
 	m := identity.New(1, 8)
 	bounds := boundsOf(100, 80, 60, 40)
-	original := m.Appear(bounds, frameWidth, frameHeight, 1)
+	original := m.Appear(bounds, frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	// Frames two and three: the element is covered, so what is reported is the cover, and the
@@ -124,7 +125,7 @@ func TestReappearanceAfterOcclusionIsNewAndUncertain(t *testing.T) {
 	}
 
 	// Frame four: it is visible again in the same place.
-	reappeared := m.Appear(bounds, frameWidth, frameHeight, 4)
+	reappeared := m.Appear(bounds, frameWidth, frameHeight, 4, nil)
 	if reappeared.ID == original.ID {
 		t.Fatalf("the returning element reused identity %d", original.ID)
 	}
@@ -140,14 +141,14 @@ func TestAnElementHiddenWithinTheWindowKeepsItsIdentity(t *testing.T) {
 	// Two frames of tolerance: hidden for one frame, which the window allows.
 	m := identity.New(2, 8)
 	bounds := boundsOf(100, 80, 60, 40)
-	original := m.Appear(bounds, frameWidth, frameHeight, 1)
+	original := m.Appear(bounds, frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	// Frame two: nothing is reported where the element is.
 	m.EndFrame(2, nil, frameWidth, frameHeight)
 
 	// Frame three: visible again. The element was never retired, so it is matched, not reacquired.
-	assignment := m.Carry(bounds, bounds, frameWidth, frameHeight, 3)
+	assignment := m.Carry(bounds, bounds, frameWidth, frameHeight, 3, nil)
 	if assignment.ID != original.ID {
 		t.Fatalf("an element hidden for one frame of a two frame window lost its identity: %d became %d",
 			original.ID, assignment.ID)
@@ -178,13 +179,13 @@ func TestIdentifiersAreNeverReused(t *testing.T) {
 		var assignment identity.Assignment
 		switch phase {
 		case 0:
-			assignment = m.Appear(bounds, frameWidth, frameHeight, sequence)
+			assignment = m.Appear(bounds, frameWidth, frameHeight, sequence, nil)
 			if retired[assignment.ID] {
 				t.Fatalf("frame %d issued identity %d, which had already been retired", sequence, assignment.ID)
 			}
 			issued[assignment.ID] = true
 		case 1:
-			assignment = m.Carry(bounds, bounds, frameWidth, frameHeight, sequence)
+			assignment = m.Carry(bounds, bounds, frameWidth, frameHeight, sequence, nil)
 			if retired[assignment.ID] {
 				t.Fatalf("frame %d revived retired identity %d", sequence, assignment.ID)
 			}
@@ -224,14 +225,14 @@ func TestMemoryDoesNotGrowWithStreamLength(t *testing.T) {
 	var firstFrame uint64
 	for sequence := uint64(1); sequence <= 1000; sequence++ {
 		if sequence%3 == 1 {
-			assignment := m.Appear(bounds, frameWidth, frameHeight, sequence)
+			assignment := m.Appear(bounds, frameWidth, frameHeight, sequence, nil)
 			if sequence == 1 {
 				firstFrame = assignment.ID
 			}
 		} else if sequence%3 == 0 {
 			m.Vanish(bounds, frameWidth, frameHeight, sequence)
 		} else {
-			m.Carry(bounds, bounds, frameWidth, frameHeight, sequence)
+			m.Carry(bounds, bounds, frameWidth, frameHeight, sequence, nil)
 		}
 		m.EndFrame(sequence, nil, frameWidth, frameHeight)
 	}
@@ -269,7 +270,7 @@ func TestTheSameSequenceProducesTheSameIdentities(t *testing.T) {
 				assignment := m.Vanish(bounds, frameWidth, frameHeight, sequence)
 				report += fmt.Sprintf("%d:vanish:%d ", sequence, assignment.ID)
 			default:
-				assignment := m.Carry(bounds, bounds, frameWidth, frameHeight, sequence)
+				assignment := m.Carry(bounds, bounds, frameWidth, frameHeight, sequence, nil)
 				report += fmt.Sprintf("%d:carry:%d:%v ", sequence, assignment.ID, assignment.Uncertain)
 			}
 			m.EndFrame(sequence, nil, frameWidth, frameHeight)
@@ -284,7 +285,7 @@ func TestTheSameSequenceProducesTheSameIdentities(t *testing.T) {
 func TestSortedReturnsEveryIdentityInAllocationOrder(t *testing.T) {
 	m := identity.New(1, 8)
 	for index := 0; index < 5; index++ {
-		m.Appear(boundsOf(10+index*50, 10, 30, 30), frameWidth, frameHeight, uint64(index+1))
+		m.Appear(boundsOf(10+index*50, 10, 30, 30), frameWidth, frameHeight, uint64(index+1), nil)
 		m.EndFrame(uint64(index+1), nil, frameWidth, frameHeight)
 	}
 
@@ -327,11 +328,11 @@ func TestVanishWithNothingToRetireAllocatesAName(t *testing.T) {
 
 func TestConfidenceFallsWhenAnElementOnlyPartlyOverlaps(t *testing.T) {
 	m := identity.New(2, 16)
-	first := m.Appear(boundsOf(100, 100, 60, 40), frameWidth, frameHeight, 1)
+	first := m.Appear(boundsOf(100, 100, 60, 40), frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	// Moved ten pixels along, so it overlaps its previous footprint by most but not all of itself.
-	assignment := m.Carry(boundsOf(110, 100, 60, 40), boundsOf(110, 100, 60, 40), frameWidth, frameHeight, 2)
+	assignment := m.Carry(boundsOf(110, 100, 60, 40), boundsOf(110, 100, 60, 40), frameWidth, frameHeight, 2, nil)
 	if assignment.ID != first.ID {
 		t.Fatalf("identity changed from %d to %d for a ten pixel move", first.ID, assignment.ID)
 	}
@@ -358,16 +359,16 @@ func TestConfidenceFallsWhenAnElementOnlyPartlyOverlaps(t *testing.T) {
 
 func TestZeroToleranceMatchesOnlyTheSamePlace(t *testing.T) {
 	m := identity.New(2, 0)
-	first := m.Appear(boundsOf(50, 50, 40, 30), frameWidth, frameHeight, 1)
+	first := m.Appear(boundsOf(50, 50, 40, 30), frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
-	same := m.Carry(boundsOf(50, 50, 40, 30), boundsOf(50, 50, 40, 30), frameWidth, frameHeight, 2)
+	same := m.Carry(boundsOf(50, 50, 40, 30), boundsOf(50, 50, 40, 30), frameWidth, frameHeight, 2, nil)
 	if same.ID != first.ID {
 		t.Fatalf("an unmoved element lost its identity with zero tolerance")
 	}
 	m.EndFrame(2, nil, frameWidth, frameHeight)
 
-	moved := m.Carry(boundsOf(52, 50, 40, 30), boundsOf(52, 50, 40, 30), frameWidth, frameHeight, 3)
+	moved := m.Carry(boundsOf(52, 50, 40, 30), boundsOf(52, 50, 40, 30), frameWidth, frameHeight, 3, nil)
 	if moved.ID == first.ID {
 		t.Fatalf("a two pixel move matched with zero tolerance")
 	}
@@ -378,7 +379,7 @@ func TestAnElementAtTheAreaRatioBoundaryIsMatched(t *testing.T) {
 	// chaining two growths tests the second growth against the first, not against the original.
 	build := func() (*identity.Map, uint64) {
 		m := identity.New(2, 8)
-		first := m.Appear(boundsOf(100, 100, 40, 40), frameWidth, frameHeight, 1)
+		first := m.Appear(boundsOf(100, 100, 40, 40), frameWidth, frameHeight, 1, nil)
 		m.EndFrame(1, nil, frameWidth, frameHeight)
 		return m, first.ID
 	}
@@ -386,7 +387,7 @@ func TestAnElementAtTheAreaRatioBoundaryIsMatched(t *testing.T) {
 	// Exactly twice the area, grown about the same centre so that only the size gate is under test.
 	// The boundary is inclusive by design, documented in the constants.
 	m, id := build()
-	doubled := m.Carry(boundsOf(100, 80, 40, 80), boundsOf(100, 80, 40, 80), frameWidth, frameHeight, 2)
+	doubled := m.Carry(boundsOf(100, 80, 40, 80), boundsOf(100, 80, 40, 80), frameWidth, frameHeight, 2, nil)
 	if doubled.ID != id {
 		t.Fatalf("an element that exactly doubled in area lost its identity")
 	}
@@ -394,7 +395,7 @@ func TestAnElementAtTheAreaRatioBoundaryIsMatched(t *testing.T) {
 	// Three times the area about the same centre: well inside the motion tolerance, and still not
 	// the same element.
 	m, id = build()
-	tripled := m.Carry(boundsOf(100, 60, 40, 120), boundsOf(100, 60, 40, 120), frameWidth, frameHeight, 2)
+	tripled := m.Carry(boundsOf(100, 60, 40, 120), boundsOf(100, 60, 40, 120), frameWidth, frameHeight, 2, nil)
 	if tripled.ID == id {
 		t.Fatalf("an element that tripled in area kept its identity")
 	}
@@ -405,11 +406,11 @@ func TestAnAreaInsideAnElementIsAttributedToIt(t *testing.T) {
 	// only a small area inside it. The area is not similar in size to the element, and its centre is
 	// far from the element's centre, so only containment can attribute it.
 	m := identity.New(2, 32)
-	element := m.Appear(boundsOf(100, 100, 200, 120), frameWidth, frameHeight, 1)
+	element := m.Appear(boundsOf(100, 100, 200, 120), frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	inside := boundsOf(110, 110, 20, 16)
-	assignment := m.Carry(inside, inside, frameWidth, frameHeight, 2)
+	assignment := m.Carry(inside, inside, frameWidth, frameHeight, 2, nil)
 	if assignment.ID != element.ID {
 		t.Fatalf("an area inside the element was given identity %d instead of %d", assignment.ID, element.ID)
 	}
@@ -424,7 +425,7 @@ func TestAnAreaInsideAnElementIsAttributedToIt(t *testing.T) {
 func TestSetRulesChangesTheWindowWithoutLosingIdentities(t *testing.T) {
 	m := identity.New(0, 2)
 	bounds := boundsOf(50, 50, 40, 30)
-	first := m.Appear(bounds, frameWidth, frameHeight, 1)
+	first := m.Appear(bounds, frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	// A window of zero retires an element the moment it is missed, which requires something to have
@@ -447,7 +448,7 @@ func TestSetRulesChangesTheWindowWithoutLosingIdentities(t *testing.T) {
 	}
 
 	// A second element tracked under the new rules is matched normally.
-	other := m.Appear(boundsOf(200, 150, 40, 30), frameWidth, frameHeight, 4)
+	other := m.Appear(boundsOf(200, 150, 40, 30), frameWidth, frameHeight, 4, nil)
 	m.EndFrame(4, nil, frameWidth, frameHeight)
 	m.EndFrame(5, nil, frameWidth, frameHeight)
 	if state := stateOf(m, other.ID); state != identity.Live {
@@ -457,8 +458,8 @@ func TestSetRulesChangesTheWindowWithoutLosingIdentities(t *testing.T) {
 
 func TestRetireAllEndsEveryElementWithoutReissuingNumbers(t *testing.T) {
 	m := identity.New(5, 8)
-	first := m.Appear(boundsOf(20, 20, 40, 30), frameWidth, frameHeight, 1)
-	second := m.Appear(boundsOf(200, 150, 40, 30), frameWidth, frameHeight, 1)
+	first := m.Appear(boundsOf(20, 20, 40, 30), frameWidth, frameHeight, 1, nil)
+	second := m.Appear(boundsOf(200, 150, 40, 30), frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	m.RetireAll()
@@ -470,7 +471,7 @@ func TestRetireAllEndsEveryElementWithoutReissuingNumbers(t *testing.T) {
 
 	// A new element continues the sequence instead of starting again, which is what keeps an
 	// identifier from meaning two different things in one session.
-	third := m.Appear(boundsOf(100, 100, 20, 20), frameWidth, frameHeight, 2)
+	third := m.Appear(boundsOf(100, 100, 20, 20), frameWidth, frameHeight, 2, nil)
 	if third.ID <= second.ID || third.ID <= first.ID {
 		t.Fatalf("identity %d was reissued after %d and %d", third.ID, first.ID, second.ID)
 	}
@@ -500,17 +501,17 @@ func TestASmallElementInsideALargeOneKeepsItsOwnIdentity(t *testing.T) {
 
 			var large, small identity.Assignment
 			if order == "large first" {
-				large = m.Appear(largeBounds, frameWidth, frameHeight, 1)
-				small = m.Appear(smallBounds, frameWidth, frameHeight, 1)
+				large = m.Appear(largeBounds, frameWidth, frameHeight, 1, nil)
+				small = m.Appear(smallBounds, frameWidth, frameHeight, 1, nil)
 			} else {
-				small = m.Appear(smallBounds, frameWidth, frameHeight, 1)
-				large = m.Appear(largeBounds, frameWidth, frameHeight, 1)
+				small = m.Appear(smallBounds, frameWidth, frameHeight, 1, nil)
+				large = m.Appear(largeBounds, frameWidth, frameHeight, 1, nil)
 			}
 			m.EndFrame(1, nil, frameWidth, frameHeight)
 
 			// The small element changes inside the large one. It must continue as itself, whichever
 			// order the two were allocated in.
-			carried := m.Carry(smallBounds, smallBounds, frameWidth, frameHeight, 2)
+			carried := m.Carry(smallBounds, smallBounds, frameWidth, frameHeight, 2, nil)
 			if carried.ID != small.ID {
 				t.Fatalf("%s: the small element's identity became %d instead of %d", order, carried.ID, small.ID)
 			}
@@ -520,7 +521,7 @@ func TestASmallElementInsideALargeOneKeepsItsOwnIdentity(t *testing.T) {
 
 			// And the large element's own change continues as itself.
 			largeEdge := boundsOf(40, 40, 100, 10)
-			largeCarried := m.Carry(largeEdge, largeEdge, frameWidth, frameHeight, 2)
+			largeCarried := m.Carry(largeEdge, largeEdge, frameWidth, frameHeight, 2, nil)
 			if largeCarried.ID != large.ID {
 				t.Fatalf("%s: the large element's identity became %d instead of %d", order, largeCarried.ID, large.ID)
 			}
@@ -533,7 +534,7 @@ func TestASmallElementInsideALargeOneKeepsItsOwnIdentity(t *testing.T) {
 func TestAnElementThatSitsStillIsNotRetired(t *testing.T) {
 	m := identity.New(1, 8)
 	bounds := boundsOf(60, 60, 40, 30)
-	original := m.Appear(bounds, frameWidth, frameHeight, 1)
+	original := m.Appear(bounds, frameWidth, frameHeight, 1, nil)
 	m.EndFrame(1, nil, frameWidth, frameHeight)
 
 	// Many frames pass with nothing reported anywhere, which is what a still screen looks like.
@@ -545,7 +546,7 @@ func TestAnElementThatSitsStillIsNotRetired(t *testing.T) {
 	}
 
 	// A change to it is still a change to the same element, not a reacquisition.
-	changed := m.Carry(bounds, bounds, frameWidth, frameHeight, 51)
+	changed := m.Carry(bounds, bounds, frameWidth, frameHeight, 51, nil)
 	if changed.ID != original.ID || changed.Uncertain {
 		t.Fatalf("a change to an element that never went away was reported as %+v", changed)
 	}
@@ -564,7 +565,7 @@ func TestRetiredEntriesAreBoundedByTheRetentionWindow(t *testing.T) {
 	run := func(cycles int) {
 		for cycle := 0; cycle < cycles; cycle++ {
 			sequence++
-			m.Appear(bounds, frameWidth, frameHeight, sequence)
+			m.Appear(bounds, frameWidth, frameHeight, sequence, nil)
 			m.EndFrame(sequence, nil, frameWidth, frameHeight)
 			for step := 0; step < 3; step++ {
 				sequence++
@@ -586,5 +587,266 @@ func TestRetiredEntriesAreBoundedByTheRetentionWindow(t *testing.T) {
 	}
 	if after400 > 120 {
 		t.Fatalf("the table holds %d entries, more than the retention window allows", after400)
+	}
+}
+
+// --- footprint evolution, the AUD-020 regression ---------------------------------------------
+
+func TestAMovingFootprintFollowsWithoutLag(t *testing.T) {
+	m := identity.New(2, 8)
+	bounds := boundsOf(100, 100, 60, 40)
+	first := m.Appear(bounds, frameWidth, frameHeight, 1, nil)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	// Thirty steps of four pixels. The element's footprint must follow it rather than accumulate the
+	// whole path: a footprint that lagged would eventually cover where the element has been.
+	previous := bounds
+	for step := 1; step <= 30; step++ {
+		x := 100 + step*4
+		current := boundsOf(x, 100, 60, 40)
+		assignment := m.Carry(previous, current, frameWidth, frameHeight, uint64(step+1), nil)
+		if assignment.ID != first.ID {
+			t.Fatalf("step %d: identity changed to %d", step, assignment.ID)
+		}
+		m.EndFrame(uint64(step+1), []delta.Bounds{current}, frameWidth, frameHeight)
+		previous = current
+	}
+
+	footprint := footprintOf(m, first.ID, frameWidth, frameHeight)
+	if footprint.Dx() > 80 {
+		t.Fatalf("the footprint is %d pixels wide for a 60 pixel element, so it kept the path", footprint.Dx())
+	}
+	if footprint.Min.X < 180 {
+		t.Fatalf("the footprint starts at %d, so it lagged behind the element", footprint.Min.X)
+	}
+}
+
+func TestAPartialChangeLeavesTheFootprintIntact(t *testing.T) {
+	// The defect the review found: a change along one edge shrank the element to that strip, so a
+	// change along the other edge in the next frame looked like a new element.
+	m := identity.New(2, 8)
+	whole := boundsOf(100, 100, 100, 100)
+	first := m.Appear(whole, frameWidth, frameHeight, 1, nil)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	leftStrip := boundsOf(100, 100, 10, 100)
+	if assignment := m.Carry(whole, leftStrip, frameWidth, frameHeight, 2, nil); assignment.ID != first.ID {
+		t.Fatalf("the left strip became a new element: %d instead of %d", assignment.ID, first.ID)
+	}
+	m.EndFrame(2, []delta.Bounds{leftStrip}, frameWidth, frameHeight)
+
+	rightStrip := boundsOf(190, 100, 10, 100)
+	assignment := m.Carry(rightStrip, rightStrip, frameWidth, frameHeight, 3, nil)
+	if assignment.ID != first.ID {
+		t.Fatalf("a change along the other edge became a new element: %d instead of %d", assignment.ID, first.ID)
+	}
+}
+
+func TestAGrowingElementExtendsAndAShrinkingOneKeepsItsFootprint(t *testing.T) {
+	m := identity.New(2, 8)
+	small := boundsOf(100, 100, 40, 40)
+	first := m.Appear(small, frameWidth, frameHeight, 1, nil)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+
+	// Grown by a strip on the right: new ground, so the footprint extends.
+	grown := boundsOf(100, 100, 60, 40)
+	if assignment := m.Carry(small, grown, frameWidth, frameHeight, 2, nil); assignment.ID != first.ID {
+		t.Fatalf("a grown element became a new element: %d", assignment.ID)
+	}
+	m.EndFrame(2, []delta.Bounds{grown}, frameWidth, frameHeight)
+	if footprint := footprintOf(m, first.ID, frameWidth, frameHeight); footprint.Dx() < 55 {
+		t.Fatalf("the footprint did not extend with the growth: %v", footprint)
+	}
+
+	// Shrunk by a strip on the right: the engine keeps what it believed, because an extent is only
+	// ever revealed by change and nothing here contradicts the left part.
+	shrunk := boundsOf(100, 100, 30, 40)
+	if assignment := m.Carry(grown, shrunk, frameWidth, frameHeight, 3, nil); assignment.ID != first.ID {
+		t.Fatalf("a shrunk element became a new element: %d", assignment.ID)
+	}
+	m.EndFrame(3, []delta.Bounds{shrunk}, frameWidth, frameHeight)
+	if footprint := footprintOf(m, first.ID, frameWidth, frameHeight); footprint.Dx() < 55 {
+		t.Fatalf("the footprint shrank to %v, which is what AUD-020 was", footprint)
+	}
+}
+
+func TestFootprintEvolutionIsDeterministic(t *testing.T) {
+	run := func() []int {
+		m := identity.New(2, 8)
+		whole := boundsOf(50, 50, 80, 60)
+		element := m.Appear(whole, frameWidth, frameHeight, 1, nil)
+		observed := []delta.Bounds{
+			boundsOf(50, 50, 10, 60),
+			boundsOf(120, 50, 10, 60),
+			boundsOf(54, 50, 20, 60),
+			boundsOf(50, 46, 80, 10),
+		}
+		positions := make([]int, 0, len(observed))
+		for index, bounds := range observed {
+			sequence := uint64(index + 2)
+			m.Carry(whole, bounds, frameWidth, frameHeight, sequence, nil)
+			m.EndFrame(sequence, []delta.Bounds{bounds}, frameWidth, frameHeight)
+			footprint := footprintOf(m, element.ID, frameWidth, frameHeight)
+			positions = append(positions, footprint.Min.X, footprint.Min.Y, footprint.Dx(), footprint.Dy())
+		}
+		return positions
+	}
+	first, second := run(), run()
+	if len(first) != len(second) {
+		t.Fatalf("two runs produced %d and %d measurements", len(first), len(second))
+	}
+	for index := range first {
+		if first[index] != second[index] {
+			t.Fatalf("two runs disagree at %d: %v against %v", index, first, second)
+		}
+	}
+}
+
+// footprintOf reads an element's footprint in pixels, for the tests above.
+func footprintOf(m *identity.Map, id uint64, width, height int) image.Rectangle {
+	for _, element := range m.Elements() {
+		if element.ID != id {
+			continue
+		}
+		left := int(element.Bounds.X*float64(width) + 0.5)
+		top := int(element.Bounds.Y*float64(height) + 0.5)
+		return image.Rect(left, top,
+			left+int(element.Bounds.W*float64(width)+0.5),
+			top+int(element.Bounds.H*float64(height)+0.5))
+	}
+	return image.Rectangle{}
+}
+
+// --- appearance as evidence -------------------------------------------------------------------
+
+func signatureOfCells(values ...uint8) identity.Signature {
+	var s identity.Signature
+	copy(s[:], values)
+	return s
+}
+
+func filledSignature(value uint8) identity.Signature {
+	var s identity.Signature
+	for index := range s {
+		s[index] = value
+	}
+	return s
+}
+
+func TestReacquisitionRequiresMoreThanGeometry(t *testing.T) {
+	// A shape is retired, and something that looks nothing like it later appears in the same place.
+	// Geometry alone would call that a reacquisition; appearance says it is a new element, and the
+	// uncertainty marker stays meaningful because it is not raised here.
+	m := identity.New(1, 8)
+	bounds := boundsOf(100, 80, 60, 40)
+	cover := []delta.Bounds{boundsOf(90, 70, 80, 60)}
+
+	dark := filledSignature(30)
+	bright := filledSignature(220)
+
+	original := m.Appear(bounds, frameWidth, frameHeight, 1, &dark)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+	m.EndFrame(2, cover, frameWidth, frameHeight)
+	m.EndFrame(3, cover, frameWidth, frameHeight)
+	if state := stateOf(m, original.ID); state != identity.Retired {
+		t.Fatalf("the element was not retired, so the test is not testing reacquisition: %s", state)
+	}
+
+	appearance := m.Appear(bounds, frameWidth, frameHeight, 4, &bright)
+	if appearance.Uncertain {
+		t.Fatal("an area that looks nothing like the retired element was marked as a reacquisition")
+	}
+	if appearance.ID == original.ID {
+		t.Fatal("the retired identity was reused")
+	}
+}
+
+func TestReacquisitionWithAMatchingAppearanceIsUncertain(t *testing.T) {
+	m := identity.New(1, 8)
+	bounds := boundsOf(100, 80, 60, 40)
+	cover := []delta.Bounds{boundsOf(90, 70, 80, 60)}
+	appearance := filledSignature(120)
+
+	original := m.Appear(bounds, frameWidth, frameHeight, 1, &appearance)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+	m.EndFrame(2, cover, frameWidth, frameHeight)
+	m.EndFrame(3, cover, frameWidth, frameHeight)
+	if state := stateOf(m, original.ID); state != identity.Retired {
+		t.Fatalf("the element was not retired: %s", state)
+	}
+
+	// The same content comes back, give or take capture noise.
+	noisy := filledSignature(126)
+	returned := m.Appear(bounds, frameWidth, frameHeight, 4, &noisy)
+	if !returned.Uncertain {
+		t.Fatal("content that matches the retired element was not marked uncertain")
+	}
+	if returned.ID == original.ID {
+		t.Fatal("the retired identity was reused")
+	}
+	if returned.Confidence <= 0 {
+		t.Fatalf("the reacquisition carries no evidence: confidence %v", returned.Confidence)
+	}
+}
+
+func TestClosestSignatureDecidesBetweenTwoCandidates(t *testing.T) {
+	// Two retired elements could explain the same place; the one that looks like the returning content
+	// is the one whose appearance the new element records against.
+	m := identity.New(1, 8)
+	place := boundsOf(100, 80, 60, 40)
+	cover := []delta.Bounds{boundsOf(90, 70, 80, 60)}
+
+	dark := filledSignature(20)
+	mid := filledSignature(120)
+	first := m.Appear(place, frameWidth, frameHeight, 1, &dark)
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+	second := m.Appear(place, frameWidth, frameHeight, 2, &mid)
+	m.EndFrame(2, cover, frameWidth, frameHeight)
+	m.EndFrame(3, cover, frameWidth, frameHeight)
+	// One more covered frame, because the second element was seen a frame later and ages a frame later.
+	m.EndFrame(4, cover, frameWidth, frameHeight)
+	for _, id := range []uint64{first.ID, second.ID} {
+		if state := stateOf(m, id); state != identity.Retired {
+			t.Fatalf("identity %d is %s, want retired", id, state)
+		}
+	}
+
+	closer := filledSignature(121)
+	returned := m.Appear(place, frameWidth, frameHeight, 5, &closer)
+	if !returned.Uncertain {
+		t.Fatal("the returning content was not marked uncertain")
+	}
+	if returned.ID == first.ID || returned.ID == second.ID {
+		t.Fatal("a retired identity was reused")
+	}
+}
+
+func TestSignatureDistanceAndTolerance(t *testing.T) {
+	base := filledSignature(100)
+
+	if distance := base.Distance(filledSignature(100)); distance != 0 {
+		t.Fatalf("identical signatures are %d apart", distance)
+	}
+	// The allowance is per cell on average, so one cell out by a lot is not a repaint and one cell
+	// out by a little is not a difference.
+	near := filledSignature(100)
+	near[0] = 100 + identity.SignatureTolerance
+	if !base.Close(near) {
+		t.Fatalf("signatures %d apart were not considered close", base.Distance(near))
+	}
+
+	// Every cell out by one level more than the allowance, which is the smallest difference the
+	// per-cell rule rejects. A single cell cannot carry the whole allowance in one byte.
+	far := filledSignature(100 + identity.SignatureTolerance + 1)
+	if base.Close(far) {
+		t.Fatalf("signatures %d apart were considered close", base.Distance(far))
+	}
+	if distance := base.Distance(far); distance != (identity.SignatureTolerance+1)*identity.SignatureCells {
+		t.Fatalf("distance is %d, want %d", distance, (identity.SignatureTolerance+1)*identity.SignatureCells)
+	}
+
+	closest, distance := base.ClosestTo([]identity.Signature{filledSignature(200), filledSignature(101)})
+	if closest != 1 || distance != identity.SignatureCells {
+		t.Fatalf("ClosestTo chose %d at distance %d, want 1 at %d", closest, distance, identity.SignatureCells)
 	}
 }

@@ -45,11 +45,46 @@ type Element struct {
 	State      State
 	Missed     int
 
+	// Signature is how the element looked when it was last seen, and SignatureSet says whether it
+	// was ever recorded. A caller that supplies no signature keeps the geometry-only behaviour.
+	Signature    Signature
+	SignatureSet bool
+
 	// pending is the element's footprint in the frame being resolved, accumulated from every
 	// region that named it, and pendingSet says whether it was seen at all. One element can be
 	// reported as more than one region, so its footprint is the union of them.
 	pending    delta.Bounds
 	pendingSet bool
+}
+
+// LiveElement is a snapshot of one tracked element, for the layer that decides what changed.
+//
+// The classifier needs to know where the engine believes the elements are, and it must ask the layer
+// that knows rather than keep its own copy of the same thing. Two copies is the defect that made a
+// change in one corner of a panel shrink the panel to that corner.
+type LiveElement struct {
+	ID           uint64
+	Bounds       delta.Bounds
+	Signature    Signature
+	SignatureSet bool
+}
+
+// LiveElements returns the tracked elements, ordered by identifier, so a caller that iterates them
+// produces the same result on every run.
+func (m *Map) LiveElements() []LiveElement {
+	elements := make([]LiveElement, 0, len(m.elements))
+	for _, element := range m.elements {
+		if element.State != Live {
+			continue
+		}
+		elements = append(elements, LiveElement{
+			ID:           element.ID,
+			Bounds:       element.Bounds,
+			Signature:    element.Signature,
+			SignatureSet: element.SignatureSet,
+		})
+	}
+	return elements
 }
 
 // Assignment is the identity decision for one reported region.
@@ -66,6 +101,8 @@ type Assignment struct {
 	PreviousBounds delta.Bounds
 	// Carried is true when PreviousBounds is meaningful.
 	Carried bool
+	// SignatureSet is true when the assignment recorded an appearance.
+	SignatureSet bool
 }
 
 // Map is the identity table of one stream.
@@ -149,7 +186,7 @@ func (m *Map) Elements() []Element {
 // have changed. A region that reaches here and matches nothing still gets an identity, because every
 // region in a document must carry one; it is a new identity with certain confidence, since the
 // engine has no competing interpretation for it.
-func (m *Map) Carry(lookup, current delta.Bounds, frameWidth, frameHeight int, sequence uint64) Assignment {
+func (m *Map) Carry(lookup, current delta.Bounds, frameWidth, frameHeight int, sequence uint64, signature *Signature) Assignment {
 	search := pixelRect(lookup, frameWidth, frameHeight)
 
 	if index, score := m.bestLive(search, frameWidth, frameHeight); index >= 0 {
@@ -159,10 +196,30 @@ func (m *Map) Carry(lookup, current delta.Bounds, frameWidth, frameHeight int, s
 		element.LastFrame = sequence
 		element.Confidence = score
 		element.Missed = 0
+		element.remember(signature)
 		return Assignment{ID: element.ID, Confidence: score, PreviousBounds: where, Carried: true}
 	}
 
-	return m.acquire(current, frameWidth, frameHeight, sequence)
+	return m.acquire(current, frameWidth, frameHeight, sequence, signature)
+}
+
+// remember records how the element looked, if the caller measured it.
+func (e *Element) remember(signature *Signature) {
+	if signature == nil {
+		return
+	}
+	e.Signature = *signature
+	e.SignatureSet = true
+}
+
+// SignatureOf returns the appearance the element was last seen with.
+func (m *Map) SignatureOf(id uint64) (Signature, bool) {
+	for index := range m.elements {
+		if m.elements[index].ID == id && m.elements[index].SignatureSet {
+			return m.elements[index].Signature, true
+		}
+	}
+	return Signature{}, false
 }
 
 // observe records the footprint a region gives the element in this frame, keeping the union when
@@ -182,19 +239,24 @@ func (e *Element) observe(bounds delta.Bounds) {
 // has evidence that something occupied that place before, but not enough to claim it is the same
 // element, so the identity is newly allocated and marked uncertain with the observed overlap as its
 // confidence. A consumer that needs a stable handle treats it as new, and can see why.
-func (m *Map) Appear(bounds delta.Bounds, frameWidth, frameHeight int, sequence uint64) Assignment {
-	return m.acquire(bounds, frameWidth, frameHeight, sequence)
+func (m *Map) Appear(bounds delta.Bounds, frameWidth, frameHeight int, sequence uint64, signature *Signature) Assignment {
+	return m.acquire(bounds, frameWidth, frameHeight, sequence, signature)
 }
 
 // acquire allocates a new identity, marked uncertain when a retired element explains the place.
-func (m *Map) acquire(bounds delta.Bounds, frameWidth, frameHeight int, sequence uint64) Assignment {
+func (m *Map) acquire(bounds delta.Bounds, frameWidth, frameHeight int, sequence uint64, signature *Signature) Assignment {
 	rect := pixelRect(bounds, frameWidth, frameHeight)
-	if _, score := m.bestRetired(rect, frameWidth, frameHeight); score > 0 {
-		assignment := m.allocate(bounds, sequence, score)
-		assignment.Uncertain = true
-		return assignment
+	if index, score := m.bestRetired(rect, frameWidth, frameHeight, signature); score > 0 {
+		// Geometry says something was here before. Appearance decides whether it is worth calling a
+		// reacquisition: an area that looks nothing like the element that left is a new element that
+		// happens to occupy the same place, and marking it uncertain would make the flag meaningless.
+		if signature == nil || !m.elements[index].SignatureSet || signature.Close(m.elements[index].Signature) {
+			assignment := m.allocate(bounds, sequence, score, signature)
+			assignment.Uncertain = true
+			return assignment
+		}
 	}
-	return m.allocate(bounds, sequence, 1)
+	return m.allocate(bounds, sequence, 1, signature)
 }
 
 // Vanish retires the identity of a region reported as removed and returns it, so the document can
@@ -222,7 +284,7 @@ func (m *Map) Vanish(bounds delta.Bounds, frameWidth, frameHeight int, sequence 
 		// element. It gets a fresh one, and that identity is retired immediately: a removal that
 		// named a live identity would tell a consumer that an element it has never seen is gone,
 		// while the engine kept matching it.
-		assignment := m.allocate(bounds, sequence, 1)
+		assignment := m.allocate(bounds, sequence, 1, nil)
 		for index := range m.elements {
 			if m.elements[index].ID == assignment.ID {
 				m.elements[index].State = Retired
@@ -245,17 +307,19 @@ func (m *Map) Vanish(bounds delta.Bounds, frameWidth, frameHeight int, sequence 
 
 // allocate creates a new identity. The counter only ever increases, which is what makes reuse
 // impossible even after retirement.
-func (m *Map) allocate(bounds delta.Bounds, sequence uint64, confidence float64) Assignment {
+func (m *Map) allocate(bounds delta.Bounds, sequence uint64, confidence float64, signature *Signature) Assignment {
 	m.next++
-	m.elements = append(m.elements, Element{
+	element := Element{
 		ID:         m.next,
 		Bounds:     bounds,
 		FirstFrame: sequence,
 		LastFrame:  sequence,
 		Confidence: confidence,
 		State:      Live,
-	})
-	return Assignment{ID: m.next, Confidence: confidence}
+	}
+	element.remember(signature)
+	m.elements = append(m.elements, element)
+	return Assignment{ID: m.next, Confidence: confidence, SignatureSet: signature != nil}
 }
 
 // Retire marks the identity of a region the engine reports as removed, and returns it. The caller
@@ -273,8 +337,9 @@ func (m *Map) Retire(id uint64, sequence uint64, bounds delta.Bounds) Assignment
 		return Assignment{ID: id, Confidence: 0}
 	}
 	// An identity the map does not know cannot be named, so the caller gets a fresh one rather than
-	// a borrowed identifier that means something else.
-	return m.allocate(bounds, sequence, 1)
+	// a borrowed identifier that means something else. A removal describes where something was, not
+	// how it looked, so no appearance is recorded for it.
+	return m.allocate(bounds, sequence, 1, nil)
 }
 
 // EndFrame ages the elements that were not matched in the given frame, and drops retired entries
@@ -292,7 +357,8 @@ func (m *Map) EndFrame(sequence uint64, changed []delta.Bounds, frameWidth, fram
 	for index := range m.elements {
 		element := &m.elements[index]
 		if element.pendingSet {
-			element.Bounds = element.pending
+			element.Bounds = boundsOf(evolveFootprint(pixelRect(element.Bounds, frameWidth, frameHeight),
+				pixelRect(element.pending, frameWidth, frameHeight), m.motionTolerancePixels), frameWidth, frameHeight)
 			element.pendingSet = false
 		}
 		if element.State != Live || element.LastFrame >= sequence {
@@ -407,9 +473,14 @@ func (m *Map) bestLive(rect rectangle, frameWidth, frameHeight int) (int, float6
 	return best, bestScore
 }
 
-// bestRetired returns the retired element whose last position explains a rectangle.
-func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int) (int, float64) {
-	best, bestScore := -1, 0.0
+// bestRetired returns the retired element whose last position explains a rectangle, and the score of
+// that explanation.
+//
+// Geometry opens the question and appearance settles it. Where two retired elements occupied the same
+// place, the one that looks like the returning content is the candidate, and picking the older one
+// instead would decide a question about appearance by allocation order.
+func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature *Signature) (int, float64) {
+	best, bestScore, bestDistance := -1, 0.0, 0
 	for index := range m.elements {
 		element := &m.elements[index]
 		if element.State != Retired {
@@ -423,8 +494,18 @@ func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int) (int, flo
 		if score < minimumOverlap {
 			continue
 		}
-		if score > bestScore || (score == bestScore && best >= 0 && element.ID < m.elements[best].ID) {
-			best, bestScore = index, score
+
+		distance := 0
+		if signature != nil && element.SignatureSet {
+			distance = signature.Distance(element.Signature)
+		}
+
+		better := best < 0 ||
+			score > bestScore ||
+			(score == bestScore && (signature != nil && element.SignatureSet) && distance < bestDistance) ||
+			(score == bestScore && distance == bestDistance && element.ID < m.elements[best].ID)
+		if better {
+			best, bestScore, bestDistance = index, score, distance
 		}
 	}
 	return best, bestScore
