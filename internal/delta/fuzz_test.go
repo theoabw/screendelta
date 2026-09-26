@@ -58,3 +58,75 @@ func FuzzDecode(f *testing.F) {
 		}
 	})
 }
+
+// FuzzEncodeDecodeRoundTrip is the round-trip property made reachable.
+//
+// A review measured the other target and found that its round trip was reached by one input in a million: random
+// bytes almost never form a valid document, so the property was effectively the seed corpus. This target builds a
+// document from structured input instead, so every execution exercises encoding, decoding and the validator.
+//
+// The property is that anything the engine can be asked to write, it can read back, and that the fields survive
+// the round trip unchanged. The first version of the document-level check could not see a missing nested bounds
+// member, because value validation catches a missing width and not a missing coordinate; this one cannot see that
+// either, and saying so is the point: it checks the round trip, and the presence rule has its own tests.
+func FuzzEncodeDecodeRoundTrip(f *testing.F) {
+	f.Add(uint64(1), 64, 48, 1.0, uint8(0), 0.25, 0.1, 0.5, 0.2, 1.0, 4096, true)
+	f.Add(uint64(7), 1920, 1080, 2.0, uint8(1), 0.0, 0.0, 1.0, 1.0, 0.0, 1, false)
+
+	f.Fuzz(func(t *testing.T, sequence uint64, width, height int, scale float64, classIndex uint8,
+		x, y, w, h, confidence float64, area int, uncertain bool) {
+		if width < 1 || height < 1 || width > 4096 || height > 4096 {
+			t.Skip()
+		}
+		if sequence < 1 {
+			t.Skip()
+		}
+		classes := []RegionClass{ClassChanged, ClassAdded, ClassMoved, ClassRemoved}
+		class := classes[int(classIndex)%len(classes)]
+
+		region := Region{
+			Identity:           1,
+			Class:              class,
+			Bounds:             Bounds{X: x, Y: y, W: w, H: h},
+			Magnitude:          0.5,
+			AreaPixels:         area,
+			IdentityConfidence: confidence,
+			IdentityUncertain:  uncertain,
+		}
+		if class == ClassMoved || class == ClassRemoved {
+			previous := Bounds{X: 0.1, Y: 0.1, W: 0.1, H: 0.1}
+			region.PreviousBounds = &previous
+		}
+
+		document := Document{
+			SchemaVersion: SchemaVersion,
+			Frame:         FrameRef{Sequence: sequence, Width: width, Height: height, ScaleFactor: scale},
+			Fingerprint: Fingerprint{
+				Algorithm:  "grid-luma-1",
+				GridSize:   8,
+				Cells:      make([]int, 64),
+				StrictHash: "0123456789abcdef",
+			},
+			Regions: []Region{region},
+		}
+
+		var encoded bytes.Buffer
+		if err := document.Encode(&encoded, false); err != nil {
+			// A document the validator rejects is a legitimate outcome of arbitrary input.
+			return
+		}
+		decoded, err := Decode(bytes.NewReader(encoded.Bytes()))
+		if err != nil {
+			t.Fatalf("the engine's own output does not decode: %v\noutput: %s", err, encoded.String())
+		}
+		if decoded.Frame.Sequence != sequence || decoded.Frame.Width != width || decoded.Frame.Height != height {
+			t.Fatalf("the frame survived the round trip changed: %+v", decoded.Frame)
+		}
+		if len(decoded.Regions) != 1 {
+			t.Fatalf("the round trip produced %d regions", len(decoded.Regions))
+		}
+		if decoded.Regions[0].Class != class || decoded.Regions[0].Identity != 1 {
+			t.Fatalf("the region survived the round trip changed: %+v", decoded.Regions[0])
+		}
+	})
+}

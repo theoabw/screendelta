@@ -199,9 +199,9 @@ func TestMemoryCeiling(t *testing.T) {
 	}
 
 	t.Logf("streamed %d frames at %dx%d in %s", frames, width, height, time.Since(started).Round(time.Millisecond))
-	t.Logf("peak heap %d bytes, engine buffers %d bytes", peakAlloc, engine.BufferBytes())
+	t.Logf("peak heap %d bytes (%.1f MiB), engine buffers %d bytes", peakAlloc, float64(peakAlloc)/(1<<20), engine.BufferBytes())
 	if residentAvailable {
-		t.Logf("peak resident %d bytes", peakResident)
+		t.Logf("peak resident %d bytes (%.1f MiB)", peakResident, float64(peakResident)/(1<<20))
 	} else {
 		t.Logf("resident memory could not be read on this platform, so only the heap is claimed")
 	}

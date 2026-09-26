@@ -6,6 +6,12 @@ import (
 )
 
 // FuzzDecodePNG feeds arbitrary bytes to the frame decoder, which is the other place untrusted input arrives.
+//
+// The property is that no input panics: every byte string either produces an error or produces a frame the rest
+// of the engine can use. A review pointed out that the two assertions this target used to make could not fail by
+// construction, because the decoder rejects empty geometry and an RGBA image over non-empty bounds always
+// allocates pixels. They are kept as documentation of what the decoder guarantees, and the honest statement of
+// what the target is for is the absence of a panic.
 func FuzzDecodePNG(f *testing.F) {
 	// A real one pixel PNG, so the fuzzer starts from something the decoder understands.
 	f.Add([]byte{
@@ -18,15 +24,14 @@ func FuzzDecodePNG(f *testing.F) {
 	f.Add([]byte{})
 
 	f.Fuzz(func(t *testing.T, body []byte) {
-		frame, err := DecodePNG(1, 1, bytes.NewReader(body))
+		decoded, err := DecodePNG(1, 1, bytes.NewReader(body))
 		if err != nil {
 			return
 		}
-		// Whatever came back has to describe the pixels it carries.
-		if frame.Width <= 0 || frame.Height <= 0 {
-			t.Fatalf("a decoded frame has geometry %dx%d", frame.Width, frame.Height)
+		if decoded.Width <= 0 || decoded.Height <= 0 {
+			t.Fatalf("a decoded frame has geometry %dx%d", decoded.Width, decoded.Height)
 		}
-		if len(frame.Pixels) == 0 {
+		if len(decoded.Pixels) == 0 {
 			t.Fatal("a decoded frame carries no pixels")
 		}
 	})
