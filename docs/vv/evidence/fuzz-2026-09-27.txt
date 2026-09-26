@@ -45,8 +45,25 @@ and by having the decoder reject a document that arrives out of order. The fuzze
 a regression case under `internal/diff/testdata/fuzz/FuzzCompare/`, and it is part of the seed corpus every
 time the package is tested, so the case cannot come back.
 
+## FuzzEncodeDecodeRoundTrip, the document round trip
+
+  executions   3,708,000 in 45 seconds, then 3,978,668 in 60 seconds after the assertions were widened
+  findings     none
+
+This target exists because a review measured the document decoder's round trip and found it was reached by one
+input in a million: random bytes almost never form a valid document, so the property was the seed corpus wearing a
+fuzzer's clothes. This one builds a document from structured input, and a second review then measured this target
+too: of about a million executions, roughly nine percent reach the decode, seventy four percent return because the
+validator refused the document, and eighteen percent skip on geometry the API rejects. One execution in eleven is
+not every execution, and the comment in the target says which it is rather than the other.
+
+Its assertions were widened after that review as well. The first version checked the frame, the class and the
+identity, and the identity assertion could not fail, because the validator requires at least one and one is the
+only value written. Every field of the region is asserted now, including the bounds, the area, the magnitude, the
+confidence, the uncertainty flag and the optional previous bounds.
+
 ## What this measures
 
-  FR-015    unusable input fails explicitly rather than panicking, on 12.3 million inputs across three decoders
+  FR-015    unusable input fails explicitly rather than panicking, on 16.4 million inputs across three targets
   NFR-004   the region order does not depend on discovery order, checked on 3.2 million inputs
   NFR-011   the decoders hold no socket and start no process; the fuzz targets run them offline

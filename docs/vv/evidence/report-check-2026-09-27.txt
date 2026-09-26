@@ -1,0 +1,30 @@
+Falsification of the report check, 2026-09-27.
+Command: python3 scripts/check_report.py, applied to seven deliberately wrong figures
+
+A check that has never failed is a check nobody has tested, which this project applies to measurements and now to
+its own tooling. A review demonstrated that the first version of the report check passed a report stating
+p95 99 ms, F1 1.9 and a region count multiplied by a thousand, because it compared every figure against the
+concatenation of every evidence file with a tolerance against any number in that pile. The check is rewritten, and
+this file records the attempt to defeat it.
+
+Seven wrong figures, each introduced into a copy of the repository one at a time, and the check's verdict:
+
+  p95 8.89 ms -> 99 ms                                  caught
+  F1 1.0000 -> 1.9                                      caught
+  27,094 regions -> 27,094,000 regions                  caught
+  75.9 -> 175.9 frame pairs per second                  caught
+  8,220 and 8,220 bytes per frame -> 8,220 and 99,000   caught
+  13 of 14 mutations killed -> 14 of 14                 caught
+  176,899 bytes -> 999,999 bytes                        caught
+
+Seven of seven. The two halves of the old vacuity are gone: each row is read against the file that records that
+measurement rather than against every file at once, so a superseded figure cannot satisfy it, and the comparison
+is between the same statistic on both sides rather than between a figure and a pile of numbers.
+
+Two further properties were checked at the same time. A row whose actual result contains no figure is now a
+failure rather than a row that is skipped, which is why the mutation and determinism rows state numbers; and an
+unmodified copy of the repository passes, which is what makes the seven catches above mean something.
+
+One observation from the harness rather than from the check: a copy without a git checkout fails the check,
+because the commit count cannot be read. That is the intended behaviour, since a count that cannot be read is not a
+count, and the message names the command that failed.

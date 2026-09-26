@@ -103,10 +103,12 @@ accuracy: ## Score the engine against the generated corpus
 		echo "accuracy: the corpus scoring test does not exist yet (task T023), so there is nothing to measure" >&2; exit 1; fi
 	$(GO) test ./internal/score/... -run TestCorpus -count=1 -v
 
-memcheck: ## Stream 10,000 frames and report peak resident memory
+memcheck: ## Stream 10,000 frames and report peak memory, and check that allocations are steady
 	@if ! $(GO) test ./internal/stream/... -list 'TestMemoryCeiling' 2>/dev/null | grep -q '^TestMemoryCeiling$$'; then \
 		echo "memcheck: the memory ceiling test does not exist yet (task T042), so there is nothing to measure" >&2; exit 1; fi
-	$(GO) test ./internal/stream/... -run TestMemoryCeiling -count=1 -v
+	@if ! $(GO) test ./internal/stream/... -list 'TestAllocationsDoNotGrowWithStreamLength' 2>/dev/null | grep -q '^TestAllocationsDoNotGrowWithStreamLength$$'; then \
+		echo "memcheck: the allocation guard does not exist, so the steady state the report cites is unmeasured" >&2; exit 1; fi
+	$(GO) test ./internal/stream/... -run 'TestMemoryCeiling|TestAllocationsDoNotGrowWithStreamLength' -count=1 -v
 
 clean: ## Remove build and benchmark output
 	rm -rf bin coverage.txt coverage.html bench.txt

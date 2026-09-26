@@ -143,6 +143,25 @@ done
 echo "mutation_check: $killed of $total applied mutations killed, written to $output"
 if [ ${#survived[@]} -gt 0 ]; then
   echo "survivors: ${survived[*]}"
-  exit 1
 fi
-exit 0
+
+# Three ways this run can be inconclusive rather than informative, and each is an exit code rather than a line in
+# a file: a list whose patterns no longer match anything, a mutation that could not be evaluated because the
+# package did not build, and a tree left dirty, which means a mutation may not have been reverted.
+status=0
+if [ "$total" -eq 0 ] || [ ${#notapplied[@]} -gt 0 ]; then
+  echo "mutation_check: $((total)) applied and ${#notapplied[@]} not applied, so the list has drifted from the code" >&2
+  status=1
+fi
+if [ "$inconclusive" -gt 0 ]; then
+  echo "mutation_check: $inconclusive mutation(s) could not be evaluated, so the score is incomplete" >&2
+  status=1
+fi
+if [ ${#survived[@]} -gt 0 ]; then
+  status=1
+fi
+if [ -n "$(dirty)" ]; then
+  echo "mutation_check: the working tree is dirty after the run, so a mutation may not have been reverted" >&2
+  status=1
+fi
+exit "$status"

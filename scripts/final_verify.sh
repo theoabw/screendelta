@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Run the whole verification and record each command's real exit code, not a pipeline's.
 #
-# The script's own exit code is the count of commands that failed, so a caller or a CI job can read it. An
-# earlier version ended with an echo, so it always exited zero and a reader had to notice the failures by hand.
+# The script exits non-zero when any check failed, so a caller or a CI job can read it. An earlier version ended
+# with an echo, so it always exited zero and a reader had to notice the failures by hand, and a version after that
+# claimed to exit with the number of failures while exiting one whatever the number.
 #
 # Usage: scripts/final_verify.sh [output file]
 set -uo pipefail
@@ -29,16 +30,15 @@ run() {
   fi
   echo "== $label =="
   # Package result lines are summarised by the exit code, and the measurement lines are what a reader wants.
-  echo "$result" | grep -vE "^(ok|no test files)" | tail -16
+  echo "$result" | grep -vE "^(ok|no test files)" | tail -24
   echo "exit=$status"
   echo
 }
 
 {
   echo "Final verification, $(date +%F)."
-  echo "Every command below was run against this commit with a clean working tree. Each exit code is the exit"
-  echo "code of the command itself, captured without a pipeline, and the script exits with the number of commands"
-  echo "that failed."
+  echo "Every exit code below is the exit code of the command itself, captured without a pipeline. The script"
+  echo "exits non-zero when any check failed, and the number of failures is in the verdict at the end."
   echo
 } > "$temporary"
 
@@ -54,17 +54,22 @@ run() {
   echo
   echo
   echo "== formatting and vet =="
-  formatting=$(gofmt -l . | wc -l)
+  # The formatter's own status matters: without it, an unavailable gofmt printed "0 files" and passed a check that
+  # measured nothing.
+  formatting_output=$(gofmt -l . 2>&1)
+  formatting_status=$?
+  formatting=$(printf '%s' "$formatting_output" | grep -c . )
   diagnostics=$(go vet ./... 2>&1 | wc -l)
   ran=$((ran + 2))
   echo "files needing formatting: $formatting"
   echo "vet diagnostics: $diagnostics"
-  if [ "$formatting" -ne 0 ] || [ "$diagnostics" -ne 0 ]; then
+  if [ "$formatting_status" -ne 0 ]; then
+    echo "gofmt exited $formatting_status, so the formatting check did not run"
+    failed=$((failed + 1))
+  elif [ "$formatting" -ne 0 ] || [ "$diagnostics" -ne 0 ]; then
     failed=$((failed + 1))
   fi
   echo
-  echo "== verdict =="
-  echo "$ran checks run, $failed failed."
 } >> "$temporary"
 
 # The record goes into place before the process gate runs, because the gate checks the report against this
@@ -73,6 +78,13 @@ mv "$temporary" "$output"
 
 {
   run "make check-strict" make check-strict
+  echo "== verdict =="
+  echo "$ran checks run, $failed failed, including the process gate above."
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    echo "the working tree is not clean, so the record describes a tree that is not this commit"
+  else
+    echo "the working tree was clean when the record was written"
+  fi
 } >> "$output"
 
 echo "final_verify: $ran checks run, $failed failed, written to $output"

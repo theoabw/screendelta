@@ -33,15 +33,15 @@ go-test:
     - if: $CI_COMMIT_BRANCH
 
 # NFR-008 requires the engine to run on Linux and Windows, and the target users are
-# on Windows desktops, so the cross-build is a gate rather than a release step.
+# on Windows desktops, so the cross-build is a gate rather than a release step. linux/arm64 is built as well,
+# because a portability claim that covers one architecture is a claim about that architecture.
 go-cross-build:
   stage: test
   image: golang:1.24
   script:
-    # A whole-tree build cannot write to one file, and the CLI does not exist yet.
-    # scripts/build.sh produces the named binaries once ./cmd/screendelta lands.
-    - GOOS=linux GOARCH=amd64 go build ./...
-    - GOOS=windows GOARCH=amd64 go build ./...
+    # The same command a developer runs, so the three targets CI claims to check are the three the Makefile
+    # builds, and the list cannot drift between the two.
+    - make cross
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH

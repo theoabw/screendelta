@@ -133,62 +133,90 @@ def main():
         check(f"the report's {name} count is {count}",
               re.search(rf"\|\s*{name.capitalize()}\s*\|\s*{count}\s*\|", report) is not None)
 
-    # The measurements in section 5.3, against the recorded runs. The section says its numbers come from the
-    # commands in docs/vv/evidence, so a number that does not appear there is a claim with no measurement behind
-    # it. This was the gap a review found: the script named section 5.3 in its docstring and checked none of it.
+    # The measurements in section 5.3, against the evidence file that records each one.
     #
-    # Only the Actual column is read, because the Expected column states the targets, which are requirements
-    # rather than measurements and are not supposed to appear in an evidence file.
-    evidence_files = sorted(pathlib.Path("docs/vv/evidence").glob("*.txt"), key=lambda p: p.stat().st_mtime)
-    if not evidence_files:
-        check("at least one evidence file exists", False, "docs/vv/evidence is empty")
-    else:
-        recorded = "".join(path.read_text() for path in evidence_files)
-        section = report[report.index("### 5.3 Test Execution Results"):report.index("### 6.1")]
-        actuals = []
-        for line in section.splitlines():
-            if not line.startswith("| ") or line.startswith("| Measurement") or line.startswith("|---"):
-                continue
-            cells = [cell.strip() for cell in line.strip("|").split("|")]
-            if len(cells) >= 5:
-                actuals.append((cells[0], cells[3]))
-        check("section 5.3 has rows to check", len(actuals) >= 6, f"{len(actuals)} rows found")
-        # Two kinds of figure appear in the table and they need different rules.
-        #
-        # Exact figures are deterministic: the corpus is generated from a fixed seed and the coverage is a
-        # property of the code, so the report has to state what the evidence says, character for character.
-        #
-        # Measured figures move between runs, because they are timings and memory readings on a shared machine.
-        # Requiring the report to reproduce a particular millisecond would mean rewriting it after every
-        # measurement, which is how a stale figure survives; what the report owes is a value consistent with a
-        # recorded run, so those are accepted within a fifth of a recorded one.
+    # The first version of this check compared every figure against the concatenation of every file under
+    # docs/vv/evidence, and matched on substrings with a tolerance against any number in that pile. A review
+    # showed what that let through: a report stating p95 99 ms, F1 1.9 and a thousandfold region count still
+    # passed, because each wrong figure happened to land within a fifth of some unrelated number recorded
+    # somewhere, and superseded figures passed because the file that held them was still present. The check was
+    # named in the docstring as covering section 5.3 and covered nothing.
+    #
+    # It is now explicit about both halves. Each row is read against the file that records that measurement, so a
+    # figure from an older run cannot satisfy it, and the comparison is between the same statistic on both sides
+    # rather than between a figure and a pile of numbers. Figures that a measurement produces afresh each run,
+    # the timings and the memory readings, are allowed to differ from the recorded run by up to a fifth, because
+    # they move on a shared machine; everything else has to match the recorded text exactly.
+    def evidence_named(keyword):
+        for path in sorted(pathlib.Path("docs/vv/evidence").glob("*.txt")):
+            if keyword in path.name:
+                return path
+        return None
+
+    final = evidence_named("final-")
+    portability = evidence_named("portability-")
+    fuzzing = evidence_named("fuzz-")
+    mutations = evidence_named("mutation-")
+
+    rows_to_evidence = [
+        (("Accuracy", "Latency", "Throughput", "Memory", "Allocation", "Coverage", "Requirement"), final, True),
+        (("Determinism",), portability, False),
+        (("Fuzzing",), fuzzing, True),
+        (("Mutation",), mutations, False),
+    ]
+
+    def recorded_text(path):
+        if path is None or not path.exists():
+            return None
+        return path.read_text()
+
+    section = report[report.index("### 5.3 Test Execution Results"):report.index("### 6.1")]
+    rows_found = 0
+    figures_compared = 0
+    for line in section.splitlines():
+        if not line.startswith("| ") or line.startswith("| Measurement") or line.startswith("|---"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if len(cells) < 5:
+            continue
+        label, actual = cells[0], cells[3]
+        rows_found += 1
+
+        recorded, tolerant = None, False
+        for prefixes, path, allows_tolerance in rows_to_evidence:
+            if label.startswith(prefixes):
+                recorded, tolerant = recorded_text(path), allows_tolerance
+                break
+        if recorded is None:
+            check(f"the {label} row names an evidence file that exists", False,
+                  "no evidence file in docs/vv/evidence matches this row")
+            continue
+
+        # Both sides are normalised the same way, then compared as whole tokens rather than as substrings.
         recorded_plain = recorded.replace(",", "")
-        recorded_numbers = [float(number) for number in re.findall(r"\d+(?:\.\d+)?", recorded_plain)]
-        compared = 0
-        for label, actual in actuals:
-            figures = re.findall(r"([\d,]+(?:\.\d+)?)\s*(ms|MiB|percent|frame pairs per second)?", actual)
-            figures = [(value, unit) for value, unit in figures if value]
-            if not figures:
+        figures = re.findall(r"\d[\d,]*(?:\.\d+)?", actual)
+        if not figures:
+            check(f"the {label} row states a figure the evidence can be checked against", False,
+                  f"the row says {actual!r}, which has no figure in it")
+            continue
+        missing = []
+        for figure in figures:
+            plain = figure.replace(",", "")
+            figures_compared += 1
+            if re.search(rf"(?<![\d.]){re.escape(plain)}(?![\d])", recorded_plain):
                 continue
-            missing = []
-            for value, unit in figures:
-                plain = value.replace(",", "")
-                compared += 1
-                if plain in recorded_plain:
+            if tolerant and float(plain) > 1:
+                # The same statistic on both sides, measured afresh: accepted within a fifth.
+                candidates = re.findall(r"\d+\.\d+", recorded_plain)
+                if any(abs(float(candidate) - float(plain)) <= 0.2 * float(plain) for candidate in candidates):
                     continue
-                # A figure stated in a unit the evidence does not carry (mebibytes against bytes, for example)
-                # cannot be matched by string, so it is accepted when a recorded number is within a fifth of it.
-                try:
-                    stated = float(plain)
-                except ValueError:
-                    missing.append(value)
-                    continue
-                if stated <= 1 or not any(abs(recorded_number - stated) <= 0.2 * stated for recorded_number in recorded_numbers):
-                    missing.append(value)
-            check(f"every figure in the {label} row is consistent with the recorded evidence", not missing,
-                  f"{', '.join(missing)} not found in docs/vv/evidence")
-        check("section 5.3 states figures the evidence can be checked against", compared >= 6,
-              f"{compared} figures compared")
+            missing.append(figure)
+        check(f"the {label} row is consistent with the file that records it", not missing,
+              f"{', '.join(missing)} not found in the recorded run")
+
+    check("section 5.3 has rows to check", rows_found >= 8, f"{rows_found} rows found")
+    check("section 5.3 states figures the evidence can be checked against", figures_compared >= 20,
+          f"{figures_compared} figures compared")
 
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"

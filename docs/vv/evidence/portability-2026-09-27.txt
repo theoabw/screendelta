@@ -8,7 +8,32 @@ machine, and this file records exactly how far the evidence goes, because the di
 
 ## Three environments, one digest
 
-The same forty frames were processed by three builds, and the output was compared byte for byte:
+The procedure, so that a reader can reproduce it rather than take the digest on trust. A review found the first
+version of this file reported the result without naming the commands that produce it.
+
+```sh
+# The material: forty frames of the sweep case, from the fixed seed.
+go run ./tools/corpusgen --case sweep --frames 40 --seed 20260926 --out /tmp/xhost/frames
+
+# Environment one: the host toolchain.
+go build -o /tmp/xhost/sd-126 ./cmd/screendelta
+/tmp/xhost/sd-126 stream --source /tmp/xhost/frames --out /tmp/xhost/out-126.ndjson
+
+# Environment two: a second toolchain, same machine.
+GOTOOLCHAIN=go1.25.0 go build -o /tmp/xhost/sd-125 ./cmd/screendelta
+/tmp/xhost/sd-125 stream --source /tmp/xhost/frames --out /tmp/xhost/out-125.ndjson
+
+# Environment three: another userland, in a container, with the module mounted read only.
+docker run --rm -v /tmp/container-src:/src:ro -v /tmp/xhost:/frames -w /src \
+  -e GOFLAGS=-buildvcs=false golang:1.25-bookworm bash -c \
+  'go build -o /tmp/sd ./cmd/screendelta && /tmp/sd stream --source /frames/frames --out /tmp/out-container.ndjson'
+
+# The comparison.
+cmp /tmp/xhost/out-126.ndjson /tmp/xhost/out-125.ndjson
+sha256sum /tmp/xhost/out-126.ndjson /tmp/xhost/out-125.ndjson
+```
+
+The three builds produced the same comparison:
 
   host, go1.26.0, Ubuntu 26.04                      sha256 140e2e764a19078cef62239a3052ba2cb675232519037c57e0cf122803fea1cd
   host, go1.25.0, same machine                      sha256 140e2e764a19078cef62239a3052ba2cb675232519037c57e0cf122803fea1cd
