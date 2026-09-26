@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/screendelta/delta-document-1.0.json",
+  "title": "ScreenDelta delta document",
+  "description": "One self-contained document per frame. Identical input must produce a byte-identical document, so no timing or wall-clock field exists.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "frame", "fingerprint", "regions", "conditions"],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0",
+      "description": "Consumers reject a version they do not understand."
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "width", "height", "scaleFactor"],
+      "properties": {
+        "sequence": { "type": "integer", "minimum": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "scaleFactor": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "gridSize", "cells", "strictHash"],
+      "properties": {
+        "algorithm": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+        "gridSize": { "type": "integer", "minimum": 8, "maximum": 256 },
+        "cells": {
+          "type": "array",
+          "minItems": 64,
+          "maxItems": 65536,
+          "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+        },
+        "strictHash": { "type": "string", "pattern": "^[0-9a-f]{16,128}$" }
+      }
+    },
+    "regions": {
+      "type": "array",
+      "description": "Sorted by top edge then left edge. Ordering is part of the contract, not an implementation detail.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["identity", "class", "bounds", "magnitude", "areaPixels"],
+        "properties": {
+          "identity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Session-scoped, never reused, even after retirement."
+          },
+          "class": { "enum": ["added", "changed", "removed", "moved"] },
+          "bounds": { "$ref": "#/$defs/bounds" },
+          "previousBounds": { "$ref": "#/$defs/bounds" },
+          "magnitude": { "type": "number", "minimum": 0, "maximum": 1 },
+          "areaPixels": { "type": "integer", "minimum": 1 }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "class": { "const": "added" } },
+              "required": ["class"]
+            },
+            "then": { "not": { "required": ["previousBounds"] } }
+          },
+          {
+            "if": {
+              "properties": { "class": { "enum": ["moved", "removed"] } },
+              "required": ["class"]
+            },
+            "then": { "required": ["previousBounds"] }
+          }
+        ]
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["first-frame", "viewport-changed", "out-of-order-timestamp"]
+      }
+    }
+  },
+  "$defs": {
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "h": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

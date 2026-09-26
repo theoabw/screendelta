@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/screendelta/config-1.0.json",
+  "title": "ScreenDelta configuration",
+  "description": "Strictly validated: an unknown key is an error, because a silently ignored setting is the failure mode that costs an afternoon.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "noiseFloor": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.02,
+      "description": "Per-tile mean absolute luma difference below which nothing is reported."
+    },
+    "minRegionAreaPixels": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000,
+      "default": 64
+    },
+    "motionTolerancePixels": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 512,
+      "default": 8,
+      "description": "Translation within which a matched region is reported as moved rather than as removed plus added."
+    },
+    "occlusionFrames": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 600,
+      "default": 3,
+      "description": "Frames a region may be missing before its identity is retired."
+    },
+    "ignoredAreas": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/bounds" },
+      "description": "Areas whose changes are never reported, such as a clock or a cursor region."
+    },
+    "regionsOfInterest": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "bounds"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1 },
+          "bounds": { "$ref": "#/$defs/bounds" }
+        }
+      },
+      "description": "Absent means unrestricted. Present and empty means no region is ever reported. The distinction is deliberate."
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": { "enum": ["json", "ndjson"], "default": "json" },
+        "pretty": { "type": "boolean", "default": false }
+      }
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gridSize": { "type": "integer", "minimum": 8, "maximum": 256, "default": 32 },
+        "maxCellDelta": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "default": 4,
+          "description": "Per-cell quantized difference tolerated when comparing a frame against a stored fingerprint."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "h": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}
