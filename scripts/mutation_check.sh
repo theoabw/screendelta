@@ -62,6 +62,7 @@ mutations=(
   "internal/delta/delta.go::if a.Class != b.Class {::if false {::the class tie-breaker in the region order"
   "internal/delta/delta.go::return a.AreaPixels < b.AreaPixels::return false::the area tie-breaker in the region order"
   "internal/delta/required.go::if raw == nil || isNull(*raw) {::if raw == nil && isNull(*raw) {::the check that a null value counts as a missing required field"
+)
 
 total=0
 killed=0
