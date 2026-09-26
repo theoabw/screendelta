@@ -13,7 +13,7 @@ how long a retired identity can be reacquired              killed       --- FAIL
 the appearance ceiling on a return                         killed       --- FAIL: TestAReturnWithAnIncompatibleAppearanceIsRefused (0.00s)
 the signature tolerance                                    killed       --- FAIL: TestAReturnAfterACoverIsAddedUncertain (0.00s)
 the margin a reported region is grown by                   killed       --- FAIL: TestChangedPanelIsReportedOnceWithCoveringBounds (0.00s)
-the red luma weight                                        killed       --- FAIL: TestCorpus (13.77s)
+the red luma weight                                        killed       --- FAIL: TestCorpus (13.86s)
 the word size used to compare pixels                       SURVIVED     no test failed
 the default noise floor                                    killed       --- FAIL: TestNoiseBelowTheFloorReportsNothing (0.01s)
 the default minimum region area                            killed       --- FAIL: TestTheDefaultAreaFloorFiltersASmallChange (0.00s)
@@ -27,33 +27,3 @@ Surviving mutations, each of which is a rule no test defends:
   - the word size used to compare pixels
 
 The working tree is clean after the run: every mutation was reverted.
-
-## What the score means, and what the two remaining entries are
-
-Thirteen of the fourteen applied mutations are killed: thirteen rules the requirements name have a test that
-fails when the rule is wrong.
-
-The one survivor is the pixel word size, an equivalent mutant. The comparison skips a row in words of eight
-bytes once it knows the row changed, and it only skips a word when the two words are equal, so a smaller word
-skips less and finds the same pixels. The mutation changes how much work the comparison does and never what it
-reports, which is why no test can distinguish it and why none was written to.
-
-Two of the fourteen rows in earlier runs were inconclusive rather than killed, and both were mistakes in this
-list rather than gaps in the suite. A search string containing "||" split into the wrong fields on the separator
-and produced a malformed edit, and a two character separator did not work either because IFS is a set of
-characters rather than a string. Both produced a package that no longer built, both were reported as
-inconclusive rather than as kills, and neither was visible by reading the script: the inconclusive row is what
-surfaced them. That is the category doing the job it was added for.
-
-A third mistake is worth recording because it is the same failure this project keeps finding. A test written for
-the first tie-breaker mutation used a pair of regions that differed in class and in area at once, so each
-tie-breaker decided the pair on its own and neither mutation could be seen through it. Splitting the pair into
-one case per tie-breaker killed both. A test that passes for two reasons is a test that proves neither.
-
-## The score by round
-
-  6 of 12 killed     the first run, before the gaps were closed
-  10 of 12 killed    after four tests were added for the real gaps
-  12 of 14 killed    after the order tie-breakers were given cases of their own
-  13 of 14 killed    after the presence rule's mutation was expressed so that it compiles, and this is the state
-                     recorded above, the one survivor being the equivalent mutant
