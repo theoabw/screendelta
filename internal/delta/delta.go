@@ -119,8 +119,14 @@ type Document struct {
 	Conditions    []Condition `json:"conditions"`
 }
 
-// SortRegions puts regions in the order the contract requires: top edge, then left
-// edge, then identity so the order is total and not merely mostly defined.
+// SortRegions puts regions in the order the contract requires: top edge, left edge, identity, then size.
+//
+// The size keys are part of the order rather than decoration. Two regions can share a position and an
+// identity, because one element can be reported as more than one region, and a key of position and identity
+// alone leaves those two in whatever order they arrived in. A fuzz target found this: the comment claimed a
+// total order while the comparison had three keys, so the claim was false for exactly the case the order
+// exists to settle. Adding the size makes the comparison total, which is what makes the encoded document
+// independent of the order the classifier discovered its regions in.
 func SortRegions(regions []Region) {
 	sort.SliceStable(regions, func(i, j int) bool {
 		a, b := regions[i], regions[j]
@@ -130,8 +136,43 @@ func SortRegions(regions []Region) {
 		if a.Bounds.X != b.Bounds.X {
 			return a.Bounds.X < b.Bounds.X
 		}
-		return a.Identity < b.Identity
+		if a.Identity != b.Identity {
+			return a.Identity < b.Identity
+		}
+		if a.Bounds.W != b.Bounds.W {
+			return a.Bounds.W < b.Bounds.W
+		}
+		return a.Bounds.H < b.Bounds.H
 	})
+}
+
+// Ordered reports whether regions are already in the contract's order. Validate uses it, so a document that
+// arrives out of order from somewhere else is rejected rather than accepted and re-ordered silently.
+func Ordered(regions []Region) bool {
+	for index := 1; index < len(regions); index++ {
+		if regionLess(regions[index], regions[index-1]) {
+			return false
+		}
+	}
+	return true
+}
+
+// regionLess is the contract's ordering as a predicate, so SortRegions, Ordered and the validator cannot
+// drift apart.
+func regionLess(a, b Region) bool {
+	if a.Bounds.Y != b.Bounds.Y {
+		return a.Bounds.Y < b.Bounds.Y
+	}
+	if a.Bounds.X != b.Bounds.X {
+		return a.Bounds.X < b.Bounds.X
+	}
+	if a.Identity != b.Identity {
+		return a.Identity < b.Identity
+	}
+	if a.Bounds.W != b.Bounds.W {
+		return a.Bounds.W < b.Bounds.W
+	}
+	return a.Bounds.H < b.Bounds.H
 }
 
 // SortConditions puts conditions in their canonical order and removes duplicates,

@@ -75,6 +75,21 @@ func Decode(r io.Reader) (Document, error) {
 	if err := document.Validate(); err != nil {
 		return Document{}, err
 	}
+	// The contract states the region order as part of the format, so a document that arrives out of order is
+	// rejected rather than quietly re-ordered: a consumer that relies on the order has to be able to trust it.
+	// The encoder sorts before it writes, so nothing the engine emits fails this rule.
+	if !Ordered(document.Regions) {
+		for index := 1; index < len(document.Regions); index++ {
+			if regionLess(document.Regions[index], document.Regions[index-1]) {
+				return Document{}, &FieldError{
+					Op:      "delta.Decode",
+					Subject: "document",
+					Field:   "regions[" + itoa(index) + "]",
+					Problem: "is out of the contract's order: regions sort by top edge, left edge, identity, width, then height",
+				}
+			}
+		}
+	}
 	return document, nil
 }
 

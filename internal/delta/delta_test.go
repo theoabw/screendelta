@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -347,5 +348,73 @@ func TestGenerateGolden(t *testing.T) {
 	defer file.Close()
 	if err := goldenDocument().Encode(file, true); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder is the property the fuzz target found missing.
+//
+// Two regions can share a position and an identity, because one element can be reported as more than one
+// region, and the contract promises that the order settles them by size. Before this, the comparison had
+// three keys while the comment claimed a total order, so the encoded document depended on the order the
+// classifier discovered its regions in.
+func TestTheRegionOrderIsTotalAndIndependentOfDiscoveryOrder(t *testing.T) {
+	build := func(reverse bool) []Region {
+		regions := []Region{
+			{Identity: 1, Class: ClassChanged, Bounds: Bounds{X: 0, Y: 0, W: 0.4, H: 1}, Magnitude: 0.5, AreaPixels: 100, IdentityConfidence: 1},
+			{Identity: 1, Class: ClassChanged, Bounds: Bounds{X: 0, Y: 0, W: 0.2, H: 1}, Magnitude: 0.5, AreaPixels: 100, IdentityConfidence: 1},
+			{Identity: 2, Class: ClassChanged, Bounds: Bounds{X: 0, Y: 0, W: 0.3, H: 1}, Magnitude: 0.5, AreaPixels: 100, IdentityConfidence: 1},
+		}
+		if reverse {
+			for left, right := 0, len(regions)-1; left < right; left, right = left+1, right-1 {
+				regions[left], regions[right] = regions[right], regions[left]
+			}
+		}
+		return regions
+	}
+
+	forward, backward := build(false), build(true)
+	SortRegions(forward)
+	SortRegions(backward)
+	if !reflect.DeepEqual(forward, backward) {
+		t.Fatalf("the order depends on how the regions were discovered:\n%+v\n%+v", forward, backward)
+	}
+	if !Ordered(forward) {
+		t.Fatalf("the sorted regions are not in the contract's order: %+v", forward)
+	}
+	// Identity is compared before size, and the size settles what identity leaves tied, so the two regions of
+	// element 1 come first in size order and element 2 follows.
+	if forward[0].Bounds.W != 0.2 || forward[1].Bounds.W != 0.4 || forward[2].Bounds.W != 0.3 {
+		t.Fatalf("the order is not position, identity, then size: %+v", forward)
+	}
+}
+
+// TestDecodeRejectsRegionsOutOfOrder covers the other half: the contract states the order, so a document that
+// arrives out of order is rejected rather than quietly re-ordered.
+func TestDecodeRejectsRegionsOutOfOrder(t *testing.T) {
+	cells := make([]string, 64)
+	for index := range cells {
+		cells[index] = "0"
+	}
+	region := func(width string, area int) string {
+		return `{"identity":1,"class":"changed","bounds":{"x":0,"y":0,"w":` + width +
+			`,"h":1},"magnitude":0.5,"areaPixels":` + strconv.Itoa(area) + `,"identityConfidence":1,"identityUncertain":false}`
+	}
+	wrap := func(regions string) string {
+		return `{"schemaVersion":"1.0","frame":{"sequence":2,"width":100,"height":100,"scaleFactor":1},` +
+			`"fingerprint":{"algorithm":"grid-luma-1","gridSize":8,"cells":[` + strings.Join(cells, ",") + `],"strictHash":"0123456789abcdef"},` +
+			`"regions":[` + regions + `],"conditions":[]}`
+	}
+
+	// The contract orders by width after identity, so the narrower region comes first.
+	inOrder := wrap(region("0.2", 2000) + "," + region("0.5", 5000))
+	if _, err := Decode(strings.NewReader(inOrder)); err != nil {
+		t.Fatalf("a document in the contract's order was rejected: %v", err)
+	}
+
+	outOfOrder := wrap(region("0.5", 5000) + "," + region("0.2", 2000))
+	if _, err := Decode(strings.NewReader(outOfOrder)); err == nil {
+		t.Fatal("a document whose regions are out of order decoded")
+	} else if !strings.Contains(err.Error(), "regions[1]") {
+		t.Fatalf("the error does not name the position: %v", err)
 	}
 }
