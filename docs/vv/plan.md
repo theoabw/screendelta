@@ -47,12 +47,18 @@ as work proceeds; each entry gets the commit that fixes it.
 ## Traceability
 
 `docs/traceability.md` is the single matrix. `python3 scripts/check_traceability.py`
-fails when a requirement has no task or no test, so an untested requirement
-cannot be merged silently.
+verifies that every requirement defined in a specification has a row, that a row
+marked `in-progress` or `verified` names a task listed in the feature's
+`tasks.md`, and that a row marked `verified` names a test file and an evidence
+file that exist. A requirement therefore cannot be declared verified on the
+strength of a fictional test. A `planned` requirement may pass the check without
+a task, by design, so the check is a floor and not a substitute for review: only a
+reviewer can judge whether the named test exercises the requirement.
 
 ## Definition of done for a feature
 
-1. Every requirement in the feature's `spec.md` is `verified` in the matrix.
+1. Every requirement in the feature's `spec.md` is `verified` in the matrix, or is
+   recorded as `deferred` or `withdrawn` with the reason stated in the report.
 2. `make check` passes.
 3. The feature's `quickstart.md` scenarios were executed and their output saved.
 4. Every flaw found during review has an audit log entry with a fixing commit.

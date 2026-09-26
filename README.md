@@ -38,7 +38,7 @@ membership and the role split are recorded here and in
 | `.specify/templates/overrides/` | Project overrides that take priority over the installed templates. |
 | `specs/` | One directory per feature: spec, plan, research, data model, contracts, quickstart, tasks. Source of truth. |
 | `src/`, `tests/` | Implementation and tests, created once a stack is selected. |
-| `docs/report/` | The experience report that is submitted for grading. |
+| `docs/report/` | The experience report that is submitted for grading, and the course template it follows. |
 | `docs/prompt-log/` | Verbatim prompt records and the prompt iteration log. |
 | `docs/vv/` | Verification and validation plan, results, and raw evidence. |
 | `docs/analysis/` | Captured output of `/speckit.analyze`, which writes nothing to disk on its own. |
@@ -69,8 +69,9 @@ Spec Kit is run in this order. Steps marked as gates must not be skipped.
 
 ## Quickstart
 
-Prerequisites: `git`, `python3`, and `uv`. Spec Kit is pinned to the version
-this repository was scaffolded with, so every member generates the same files.
+Prerequisites: `git`, Python 3.11 or newer (Spec Kit requires it), and `uv`.
+Spec Kit is pinned to the version this repository was scaffolded with, so every
+member generates the same files.
 
 ```bash
 uv tool install specify-cli --from git+https://github.com/github/spec-kit.git@v1.0.12
@@ -89,7 +90,9 @@ Command surfaces installed in this repository:
 Checks:
 
 ```bash
-make check    # requirement traceability between specs/ and docs/traceability.md
+make check    # requirement traceability: every requirement defined in specs/ has
+              # a matrix row, traced rows name a task listed in tasks.md, and
+              # verified rows name a test file and an evidence file that exist
 make help     # list targets
 ```
 
@@ -104,5 +107,6 @@ make help     # list targets
 
 ## Secrets and personal data
 
-No credentials, tokens or keys are committed. Student IDs appear only in the
-report, as the submission template requires.
+No credentials, tokens or keys are committed. Student identifiers appear only in
+the team table above and in `docs/report/report.md`, because the submission
+template requires them.

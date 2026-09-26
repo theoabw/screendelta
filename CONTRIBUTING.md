@@ -31,18 +31,28 @@ Between steps 7 and 8, every requirement identifier must appear in
    needed that no requirement covers, change the spec first, in its own commit.
 2. **Stable identifiers.** `FR-###`, `NFR-###` and `SC-###` are never renumbered
    after approval. Withdrawn requirements keep their identifier and are marked
-   `[WITHDRAWN]` with the reason.
+   `[WITHDRAWN]` with the reason. Identifiers are namespaced per specification, so
+   `FR-001` in two specifications are two requirements; cite another
+   specification's requirement as `specs/002-beta/spec.md#FR-001`.
 3. **Traceability is part of done.** A task is complete when its row in
    `docs/traceability.md` names the test and the evidence, not when the code
    runs.
-4. **Checklists are reviewer-owned.** Ticking a checklist item means a reviewer
-   judged the requirement quality, not that coding finished. Never tick your own
-   implementation work.
+4. **Checklists have two different owners.** The built-in specification quality
+   checklist at `specs/NNN-slug/checklists/requirements.md` is maintained by
+   `/speckit.specify` and `/speckit.clarify`, which do mark its items. Custom
+   checklists produced by `/speckit.checklist` are reviewer-owned: there, `[x]`
+   means a reviewer judged the requirements-quality criterion satisfied, it never
+   means implementation work is complete, and an agent must leave the items
+   unticked.
 5. **Prompts are logged.** Every substantive agent session gets an entry in
    `docs/prompt-log/`, using `docs/prompt-log/README.md`. Rejected outputs and
    corrections are the valuable part of that record.
-6. **`make check` passes before every commit.** It compares requirement
-   identifiers in `specs/` with `docs/traceability.md` and `tasks.md`.
+6. **`make check` passes before every commit.** It verifies that every requirement
+   defined in `specs/` has a matrix row, that a row marked `in-progress` or
+   `verified` names a task listed in that feature's `tasks.md`, and that a row
+   marked `verified` names a test file and an evidence file that exist. It cannot
+   judge whether a test really exercises a requirement, so that stays a review
+   duty.
 7. **Analyze reports are captured.** `/speckit.analyze` writes nothing, so its
    output is pasted into `docs/analysis/NNNN-<feature>-analyze.md` in the same
    session.
@@ -73,7 +83,9 @@ Prompt: docs/prompt-log/0004-specify-first-feature.md
 `ci`. The `Spec`, `Req`, `Task` and `Prompt` trailers are what make the git
 history answer the report question about linking code to specification changes
 and prompt iterations. A commit that implements behaviour without a `Req` line
-is a process failure.
+is a process failure. A commit that changes only process documentation
+implements no requirement, so it may omit `Req`; when an agent session produced
+it, it still carries `Prompt`.
 
 ## What never goes into the repository
 

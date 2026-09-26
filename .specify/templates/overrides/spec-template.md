@@ -100,9 +100,19 @@
     and the quality attribute it belongs to (performance, security, usability,
     reliability, maintainability, scalability).
   - Success criteria use SC-###.
-  - Identifiers are assigned once and never renumbered after the spec is approved.
-    A withdrawn requirement keeps its ID and is marked [WITHDRAWN] with the reason.
-  - Every identifier must appear in docs/traceability.md with a task and a test.
+  - A requirement is defined on a bullet whose first element is the bold
+    identifier, as in the lines below. Any other mention is a reference and is
+    ignored by scripts/check_traceability.py, so this specification may cite
+    another specification's identifier as specs/002-beta/spec.md#FR-001.
+  - The namespace is this specification. FR-001 here and FR-001 in another
+    specification are different requirements, and docs/traceability.md keys each
+    row by specification path plus identifier.
+  - Identifiers are assigned once and never renumbered after the spec is
+    approved. A withdrawn requirement keeps its ID and is marked [WITHDRAWN] with
+    the reason.
+  - Every identifier must appear in docs/traceability.md. A row marked
+    in-progress or verified must name a task that is listed in tasks.md, and a
+    row marked verified must name a test file and evidence that both exist.
 -->
 
 ### Functional Requirements

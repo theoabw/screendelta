@@ -4,8 +4,10 @@ This table is the short form of the prompt log and is pasted into section 3.3 of
 the report. One row per prompt that had to be corrected. The full record stays in
 the dated entries beside this file.
 
-The first row is the example given by the course, kept as a format reference. The
-checker ignores it because its identifiers contain `000`.
+The first row is the example given by the course, kept as a format reference for
+the first real entry, which replaces it. Nothing checks this file automatically:
+it is evidence for section 3.3 of the report, and its value is in naming what
+failed, not in the number of rows.
 
 | Initial prompt or specification | Failure mode in the output | Refined prompt or specification | Resulting quality | Verified by |
 |---|---|---|---|---|

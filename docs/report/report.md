@@ -47,8 +47,8 @@ as ADRs). Diagram: `docs/process/sdd-workflow.svg`, referenced by section 7.4.
 
 ## 2. Requirements and System Specification (6 points)
 
-This section carries the most weight. It documents the source of truth that was
-fed to the agents.
+The course template calls this the most critical section, because it documents the
+source of truth that was fed to the agents.
 
 ### 2.1 Stakeholders
 

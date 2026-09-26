@@ -10,13 +10,14 @@ report depends on exactly that evidence.
 Save each run as:
 
 ```
-docs/analysis/NNNN-<feature-slug>-analyze.md
+NNN-<feature-slug>-analyze-YYYY-MM-DD.md
 ```
 
-`NNNN` matches the feature number in `specs/`. Include the date, the command
-used, the full report text, and the actions taken for each finding. A finding
-that is accepted as a deliberate deviation is recorded as an entry in
-`docs/adr/`, not silently ignored.
+`NNN` is the feature number as it appears in `specs/NNN-`. When the same feature
+is analyzed more than once on one day, append `-2`, `-3` and so on, so that no run
+overwrites an earlier one. Include the date, the command used, the full report
+text, and the actions taken for each finding. A finding that is accepted as a
+deliberate deviation is recorded as an entry in `docs/adr/`, not silently ignored.
 
 ## What to do with the findings
 

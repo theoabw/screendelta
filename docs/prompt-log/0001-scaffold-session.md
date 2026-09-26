@@ -6,7 +6,7 @@
 - Spec Kit command: none directly; `specify init` plus three integration installs
 - Artifacts produced: the repository scaffold, `docs/course-context.md`, process documents
 - Related requirement IDs: none yet
-- Related commit: scaffold commit on `main`
+- Related commit: `56c2f5e` and `20d91e4` on `main`
 
 ## Prompt (verbatim)
 
@@ -33,13 +33,15 @@ checks that enforce them.
 
 ## Actual output
 
-Context came from two sources. The local scrape under
-`assignments/software-construction/2026-09-08_22-01-58--Software Construction
-2026-27/` supplied the course description, the report template and the lecture
-material. The live Moodle course page supplied what the scrape could not: the
-current deadlines (2026-10-25 23:59 for both the report and the repository), the
-group assignment (Group A), the requirement to host the repository on
-gitlab.abo.fi, and the fact that the system to build is not prescribed.
+Context came from two sources. The course material already held for this course
+supplied the course description, the report template and the lecture list, and is
+now summarised in `docs/course-context.md` with the graded template reproduced in
+`docs/report/course-template.md`. The live course page
+(https://moodle.abo.fi/course/view.php?id=13701) supplied what the downloaded
+material did not: the current deadlines (2026-10-25 23:59 for both the report and
+the repository), the group assignment (Group A), the requirement to host the
+repository on gitlab.abo.fi, and the fact that the system to build is not
+prescribed.
 
 A research subagent established the current Spec Kit surface: version 1.0.12
 installed through `uv`, `specify init --integration <key>`, and the file layout
@@ -73,6 +75,14 @@ produce and the report grades in section 2.3.
 ## Result
 
 `specify integration status` reports all managed files present and unmodified.
-The three command surfaces are installed. The traceability check runs and passes
-on an empty specification set, and is designed to become strict as soon as the
-first spec exists.
+The three command surfaces are installed.
+
+The traceability checker was exercised against fixtures before being trusted:
+two specifications reusing `FR-001`, a duplicated definition inside one
+specification, a verified row naming a missing test file and missing evidence, a
+row naming a task that `tasks.md` does not list, a malformed row whose first cell
+is a bold identifier, an escaped pipe inside a cell, an HTML-commented row, a
+deferred requirement absent from `tasks.md`, and an empty specification under
+`--require-specs`. Each case produced the intended exit status. The checker is
+deliberately strict about `verified` rows and permissive about `planned` ones, and
+`docs/traceability.md` states which claims it cannot check.

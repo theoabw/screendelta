@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
 """Verify requirement traceability between specs/ and docs/traceability.md.
 
+Requirement identifiers are namespaced per specification: FR-001 may exist in
+specs/001-a/spec.md and again in specs/002-b/spec.md, and a matrix row is
+identified by its spec path plus its identifier. A requirement is only defined
+where it appears as a definition line, which is a bullet whose first element is
+the bold identifier, for example "- **FR-001**: ...". Other mentions are treated
+as references and are ignored, so a spec may cite another spec's identifier.
+
 Checks:
-  1. Every FR-###, NFR-### and SC-### identifier defined in specs/*/spec.md has a
-     row in docs/traceability.md.
-  2. Every identifier in the matrix is defined in some specification.
-  3. A row marked in-progress or verified names the task that implements it.
-  4. A row marked verified names its test and its evidence.
-  5. Every status is one of the allowed values.
-  6. When specs/<feature>/tasks.md exists, the feature's identifiers are
-     referenced there.
+  1. Every identifier defined in a spec has a matrix row naming that spec.
+  2. Every matrix row names a spec in which its identifier is defined.
+  3. Every status is one of the allowed values.
+  4. A row marked in-progress or verified names a task, and that task is listed in
+     the feature's tasks.md.
+  5. A row marked verified names a test file that exists and evidence that exists,
+     which is what makes the verification claim checkable rather than asserted.
+  6. Every identifier of a feature whose tasks.md exists is referenced there,
+     unless it is deferred or withdrawn.
+  7. Matrix rows whose identifier cell is malformed are reported instead of being
+     silently skipped.
 
 Identifiers ending in -000 are treated as format examples and ignored.
 
@@ -33,9 +43,16 @@ SPECS_DIR = REPO_ROOT / "specs"
 MATRIX_PATH = REPO_ROOT / "docs" / "traceability.md"
 
 ID_PATTERN = re.compile(r"\b(?:FR|NFR|SC)-\d{3}\b")
+DEFINITION_PATTERN = re.compile(r"^\s*[-*+]\s+\*\*((?:FR|NFR|SC)-\d{3})\*\*")
+REFERENCE_PATTERN = re.compile(r"\b(?:FR|NFR|SC)-\d{3}\b")
 ROW_PATTERN = re.compile(r"^\|\s*((?:FR|NFR|SC)-\d{3})\s*\|")
+CELL_ID_PATTERN = re.compile(r"^\**(?:FR|NFR|SC)-\d{3}\**$")
 COMMENT_PATTERN = re.compile(r"<!--.*?-->", re.DOTALL)
+TASK_PATTERN = re.compile(r"^T\d{2,}$")
+
 STATUSES = {"planned", "in-progress", "verified", "deferred", "withdrawn"}
+INACTIVE_STATUSES = {"deferred", "withdrawn"}
+TRACED_STATUSES = {"in-progress", "verified"}
 COLUMNS = [
     "ID",
     "Requirement",
@@ -46,7 +63,27 @@ COLUMNS = [
     "Evidence",
     "Status",
 ]
-TRACED_STATUSES = {"in-progress", "verified"}
+FILE_SUFFIXES = {
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".java",
+    ".go",
+    ".rs",
+    ".rb",
+    ".cs",
+    ".kt",
+    ".sh",
+    ".feature",
+    ".log",
+    ".txt",
+    ".json",
+    ".xml",
+    ".html",
+    ".md",
+}
 
 
 class Findings:
@@ -69,8 +106,53 @@ def without_comments(text: str) -> str:
     return COMMENT_PATTERN.sub("", text)
 
 
+def read_text(findings: Findings, path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        findings.error(f"{relative(path)} is not valid UTF-8")
+    except OSError as error:
+        findings.error(f"{relative(path)} could not be read: {error.strerror}")
+    return None
+
+
 def relative(path: Path) -> str:
-    return path.relative_to(REPO_ROOT).as_posix()
+    try:
+        return path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def normalise_spec(value: str) -> str:
+    cleaned = value.strip().strip("`").lstrip("./")
+    return cleaned
+
+
+def split_row(line: str) -> list[str]:
+    """Split a markdown table row on unescaped pipes and unescape cells."""
+    body = line.strip()
+    if body.startswith("|"):
+        body = body[1:]
+    if body.endswith("|"):
+        body = body[:-1]
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for character in body:
+        if escaped:
+            current.append("|" if character == "|" else character)
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == "|":
+            cells.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+    if escaped:
+        current.append("\\")
+    cells.append("".join(current).strip())
+    return cells
 
 
 def feature_specs() -> list[Path]:
@@ -79,126 +161,260 @@ def feature_specs() -> list[Path]:
     return sorted(SPECS_DIR.glob("*/spec.md"))
 
 
-def collect_spec_ids(findings: Findings, specs: list[Path]) -> dict[str, str]:
-    """Map requirement identifier to the spec that defines it."""
-    identifiers: dict[str, str] = {}
+def collect_definitions(
+    findings: Findings, specs: list[Path]
+) -> dict[tuple[str, str], int]:
+    """Map (spec path, identifier) to the line where it is defined."""
+    definitions: dict[tuple[str, str], int] = {}
     for spec in specs:
-        text = without_comments(spec.read_text(encoding="utf-8"))
+        text = read_text(findings, spec)
+        if text is None:
+            continue
         location = relative(spec)
-        for match in ID_PATTERN.finditer(text):
-            identifier = match.group(0)
+        for number, line in enumerate(without_comments(text).splitlines(), start=1):
+            match = DEFINITION_PATTERN.match(line)
+            if match is None:
+                continue
+            identifier = match.group(1)
             if is_example(identifier):
                 continue
-            previous = identifiers.get(identifier)
-            if previous is not None and previous != location:
+            key = (location, identifier)
+            if key in definitions:
                 findings.error(
-                    f"{identifier} is defined in two specs: {previous} and {location}"
+                    f"{location}:{number}: {identifier} is defined twice in the "
+                    f"same specification, first at line {definitions[key]}"
                 )
                 continue
-            identifiers[identifier] = location
-    return identifiers
+            definitions[key] = number
+    return definitions
 
 
-def parse_matrix(findings: Findings) -> dict[str, dict[str, object]]:
+def parse_matrix(findings: Findings) -> list[dict[str, object]]:
     if not MATRIX_PATH.is_file():
         findings.error("docs/traceability.md is missing")
-        return {}
-    rows: dict[str, dict[str, object]] = {}
-    lines = MATRIX_PATH.read_text(encoding="utf-8").splitlines()
-    for number, line in enumerate(lines, start=1):
-        match = ROW_PATTERN.match(line)
-        if match is None:
+        return []
+    text = read_text(findings, MATRIX_PATH)
+    if text is None:
+        return []
+    rows: list[dict[str, object]] = []
+    for number, line in enumerate(without_comments(text).splitlines(), start=1):
+        if not line.strip().startswith("|"):
             continue
-        identifier = match.group(1)
+        cells = split_row(line)
+        first = cells[0] if cells else ""
+        strict = ROW_PATTERN.match(line)
+        if strict is None:
+            if CELL_ID_PATTERN.match(first):
+                findings.error(
+                    f"docs/traceability.md:{number}: row starts with '{first}' but "
+                    "is not a well-formed row; the identifier must be the first "
+                    "cell, unformatted and followed by a pipe"
+                )
+            continue
+        identifier = strict.group(1)
         if is_example(identifier):
             continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         if len(cells) != len(COLUMNS):
             findings.error(
                 f"docs/traceability.md:{number}: row for {identifier} has "
                 f"{len(cells)} columns, expected {len(COLUMNS)}"
             )
             continue
-        if identifier in rows:
-            findings.error(
-                f"docs/traceability.md:{number}: duplicate row for {identifier}"
-            )
-            continue
         row: dict[str, object] = dict(zip(COLUMNS, cells))
         row["line"] = number
-        rows[identifier] = row
+        row["spec_path"] = normalise_spec(str(row["Spec"]))
+        rows.append(row)
     return rows
+
+
+def feature_of(spec_path: str) -> str:
+    return spec_path.split("/")[1] if "/" in spec_path else spec_path
+
+
+def check_path_evidence(
+    findings: Findings,
+    row: dict[str, object],
+    identifier: str,
+    column: str,
+) -> None:
+    value = str(row[column]).strip()
+    line = row["line"]
+    if not value:
+        return
+    if value.startswith(("http://", "https://")):
+        findings.warn(
+            f"docs/traceability.md:{line}: {identifier} uses external {column.lower()} "
+            f"'{value}', which cannot be checked from the repository"
+        )
+        return
+    candidate = value.split("::")[0].split("#")[0].strip().strip("`")
+    if not candidate:
+        findings.error(
+            f"docs/traceability.md:{line}: {identifier} has an unusable {column.lower()} "
+            f"value '{value}'"
+        )
+        return
+    suffix = Path(candidate).suffix.lower()
+    if suffix not in FILE_SUFFIXES:
+        findings.warn(
+            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
+            f"'{value}', which does not look like a file path and cannot be checked"
+        )
+        return
+    if not (REPO_ROOT / candidate).exists():
+        findings.error(
+            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
+            f"'{candidate}', which does not exist"
+        )
 
 
 def check_rows(
     findings: Findings,
-    spec_ids: dict[str, str],
-    rows: dict[str, dict[str, object]],
+    definitions: dict[tuple[str, str], int],
+    rows: list[dict[str, object]],
+    task_texts: dict[str, set[str]],
 ) -> None:
-    for identifier, spec in sorted(spec_ids.items()):
-        row = rows.get(identifier)
-        if row is None:
+    seen: set[tuple[str, str]] = set()
+
+    for row in rows:
+        identifier = str(row["ID"])
+        line = row["line"]
+        spec_path = str(row["spec_path"])
+        status = str(row["Status"]).lower()
+
+        if not spec_path:
             findings.error(
-                f"{identifier} defined in {spec} has no row in docs/traceability.md"
+                f"docs/traceability.md:{line}: {identifier} does not name its "
+                "specification, so it cannot be matched to a requirement"
             )
             continue
-        line = row["line"]
-        status = str(row["Status"]).lower()
+
+        key = (spec_path, identifier)
+        if key in seen:
+            findings.error(
+                f"docs/traceability.md:{line}: duplicate row for {identifier} in {spec_path}"
+            )
+            continue
+        seen.add(key)
+
+        if key not in definitions:
+            elsewhere = sorted(
+                spec for (spec, known) in definitions if known == identifier
+            )
+            if elsewhere:
+                findings.error(
+                    f"docs/traceability.md:{line}: {identifier} is not defined in "
+                    f"{spec_path}; it is defined in {', '.join(elsewhere)}"
+                )
+            else:
+                findings.error(
+                    f"docs/traceability.md:{line}: {identifier} is not defined in "
+                    f"{spec_path}"
+                )
+            continue
+
         if status not in STATUSES:
             findings.error(
                 f"docs/traceability.md:{line}: {identifier} has status "
                 f"'{row['Status']}', expected one of {sorted(STATUSES)}"
             )
             continue
-        if status in TRACED_STATUSES and not row["Task"]:
-            findings.error(
-                f"docs/traceability.md:{line}: {identifier} is {status} "
-                "but names no task"
-            )
-        if status == "verified":
-            if not row["Test"]:
-                findings.error(
-                    f"docs/traceability.md:{line}: {identifier} is verified "
-                    "but names no test"
-                )
-            if not row["Evidence"]:
-                findings.error(
-                    f"docs/traceability.md:{line}: {identifier} is verified "
-                    "but names no evidence"
-                )
-        if not row["Spec"]:
-            findings.warn(
-                f"docs/traceability.md:{line}: {identifier} does not name its spec"
-            )
 
-    for identifier, row in sorted(rows.items()):
-        if identifier not in spec_ids:
+        task = str(row["Task"]).strip()
+        if status in TRACED_STATUSES:
+            if not task:
+                findings.error(
+                    f"docs/traceability.md:{line}: {identifier} is {status} but "
+                    "names no task"
+                )
+            elif not TASK_PATTERN.match(task):
+                findings.error(
+                    f"docs/traceability.md:{line}: {identifier} names task "
+                    f"'{task}', expected an identifier such as T012"
+                )
+            else:
+                tasks_in_feature = task_texts.get(feature_of(spec_path))
+                if tasks_in_feature is None:
+                    findings.error(
+                        f"docs/traceability.md:{line}: {identifier} is {status} but "
+                        f"{spec_path.rsplit('/', 1)[0]}/tasks.md does not exist"
+                    )
+                elif task not in tasks_in_feature:
+                    findings.error(
+                        f"docs/traceability.md:{line}: {identifier} names task {task}, "
+                        "which is not listed in that feature's tasks.md"
+                    )
+
+        if status == "verified":
+            if not str(row["Test"]).strip():
+                findings.error(
+                    f"docs/traceability.md:{line}: {identifier} is verified but "
+                    "names no test"
+                )
+            else:
+                check_path_evidence(findings, row, identifier, "Test")
+            if not str(row["Evidence"]).strip():
+                findings.error(
+                    f"docs/traceability.md:{line}: {identifier} is verified but "
+                    "names no evidence"
+                )
+            else:
+                check_path_evidence(findings, row, identifier, "Evidence")
+
+    for (spec_path, identifier), number in sorted(definitions.items()):
+        if (spec_path, identifier) not in seen:
             findings.error(
-                f"docs/traceability.md:{row['line']}: {identifier} is not defined "
-                "in any spec"
+                f"{spec_path}:{number}: {identifier} has no row in docs/traceability.md"
             )
 
 
 def check_task_coverage(
     findings: Findings,
     specs: list[Path],
-    spec_ids: dict[str, str],
+    definitions: dict[tuple[str, str], int],
+    rows: list[dict[str, object]],
 ) -> None:
+    inactive = {
+        (str(row["spec_path"]), str(row["ID"]))
+        for row in rows
+        if str(row["Status"]).lower() in INACTIVE_STATUSES
+    }
     for spec in specs:
         tasks = spec.parent / "tasks.md"
         if not tasks.is_file():
             continue
-        text = without_comments(tasks.read_text(encoding="utf-8"))
-        referenced = {match.group(0) for match in ID_PATTERN.finditer(text)}
+        text = read_text(findings, tasks)
+        if text is None:
+            continue
+        referenced = {
+            match.group(0) for match in REFERENCE_PATTERN.finditer(without_comments(text))
+        }
         location = relative(spec)
-        for identifier, owner in sorted(spec_ids.items()):
-            if owner != location:
+        for (spec_path, identifier), number in sorted(definitions.items()):
+            if spec_path != location:
+                continue
+            if (spec_path, identifier) in inactive:
                 continue
             if identifier not in referenced:
                 findings.error(
-                    f"{identifier} defined in {location} is not referenced in "
+                    f"{location}:{number}: {identifier} is not referenced in "
                     f"{relative(tasks)}"
                 )
+
+
+def collect_task_ids(findings: Findings, specs: list[Path]) -> dict[str, set[str]]:
+    """Map feature directory name to the set of task identifiers listed."""
+    task_texts: dict[str, set[str]] = {}
+    for spec in specs:
+        tasks = spec.parent / "tasks.md"
+        if not tasks.is_file():
+            continue
+        text = read_text(findings, tasks)
+        if text is None:
+            continue
+        feature = spec.parent.name
+        task_texts[feature] = set(re.findall(r"\bT\d{2,}\b", without_comments(text)))
+    return task_texts
 
 
 def main() -> int:
@@ -209,14 +425,18 @@ def main() -> int:
     parser.add_argument(
         "--require-specs",
         action="store_true",
-        help="fail when no specification exists yet",
+        help="fail when no specification, or no requirement, exists yet",
     )
     args = parser.parse_args()
 
     findings = Findings()
     specs = feature_specs()
-    spec_ids = collect_spec_ids(findings, specs)
+    definitions = collect_definitions(findings, specs)
     rows = parse_matrix(findings)
+    task_texts = collect_task_ids(findings, specs)
+
+    check_rows(findings, definitions, rows, task_texts)
+    check_task_coverage(findings, specs, definitions, rows)
 
     if not specs:
         message = (
@@ -227,9 +447,11 @@ def main() -> int:
             findings.error(message)
         else:
             findings.warn(message)
-    else:
-        check_rows(findings, spec_ids, rows)
-        check_task_coverage(findings, specs, spec_ids)
+    elif not definitions and args.require_specs:
+        findings.error(
+            f"{len(specs)} specification(s) found but none defines a requirement; "
+            "requirement lines look like '- **FR-001**: ...'"
+        )
 
     if not args.quiet:
         for warning in findings.warnings:
@@ -237,11 +459,9 @@ def main() -> int:
     for error in findings.errors:
         print(f"error: {error}", file=sys.stderr)
 
-    verified = sum(
-        1 for row in rows.values() if str(row["Status"]).lower() == "verified"
-    )
+    verified = sum(1 for row in rows if str(row["Status"]).lower() == "verified")
     print(
-        f"traceability: {len(spec_ids)} requirements in {len(specs)} spec(s), "
+        f"traceability: {len(definitions)} requirements in {len(specs)} spec(s), "
         f"{len(rows)} matrix rows, {verified} verified, "
         f"{len(findings.errors)} error(s), {len(findings.warnings)} warning(s)"
     )
