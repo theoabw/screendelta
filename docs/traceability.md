@@ -101,7 +101,7 @@ been removed now that the first specification defines real requirements.
 | FR-009 | Compare a frame against a stored fingerprint and report equal or different | specs/001-frame-delta-engine/spec.md | US3 | T037 |  |  | planned |
 | FR-010 | Emit one self-contained document per frame when streaming | specs/001-frame-delta-engine/spec.md | US2 | T011 | | | planned |
 | FR-011 | Accept externally supplied regions of interest and restrict output to them | specs/001-frame-delta-engine/spec.md | US2 | T031 |  |  | planned |
-| FR-012 | Accept a validated configuration document with documented defaults | specs/001-frame-delta-engine/spec.md | US1 | T009 |  |  | planned |
+| FR-012 | Accept a validated configuration document with documented defaults | specs/001-frame-delta-engine/spec.md | US1 | T009 | `internal/config/config_test.go::TestParseRejectsAMiscasedKeyWithASuggestion` |  | in-progress |
 | FR-013 | Expose the same capabilities through CLI and library interfaces | specs/001-frame-delta-engine/spec.md | US1 | T010 |  |  | planned |
 | FR-014 | Declare a schema version in every emitted document | specs/001-frame-delta-engine/spec.md | US3 | T008 | `internal/delta/delta_test.go::TestDecodeRejectsAnUnknownVersion` | | in-progress |
 | FR-015 | Fail explicitly without partial output on unusable input | specs/001-frame-delta-engine/spec.md | US1 | T006 | `internal/frame/frame_test.go::TestDecodePNGRejectsGarbage` |  | in-progress |
