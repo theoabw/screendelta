@@ -1011,3 +1011,129 @@ func TestAResizedReturnIsRecognisedAsUncertain(t *testing.T) {
 		t.Fatalf("confidence %v is outside zero to one", added[0].IdentityConfidence)
 	}
 }
+
+// TestGrowthAtTheFrameEdgeIsNotACover is a re-review finding: the modest growth case passed while a larger
+// growth, including one at the frame edge, was still retired as covered. The pixel evidence is what makes
+// the difference, and it has to be measured the same way wherever the element sits.
+func TestGrowthAtTheFrameEdgeIsNotACover(t *testing.T) {
+	width, height := 320, 240
+	for _, tc := range []struct {
+		name         string
+		small, grown panel
+	}{
+		{name: "in the middle", small: panel{x: 120, y: 100, w: 60, h: 40, value: 200}, grown: panel{x: 60, y: 50, w: 180, h: 140, value: 200}},
+		{name: "at the frame edge", small: panel{x: 0, y: 0, w: 60, h: 40, value: 200}, grown: panel{x: 0, y: 0, w: 180, h: 140, value: 200}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frames := []frame.Frame{
+				buildFrame(1, width, height, nil),
+				buildFrame(2, width, height, []panel{tc.small}),
+				buildFrame(3, width, height, []panel{tc.grown}),
+			}
+			differ := New()
+			if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+				t.Fatalf("Compare failed: %v", err)
+			}
+			regions, _, err := differ.Compare(frames[1], frames[2], defaults())
+			if err != nil {
+				t.Fatalf("Compare failed: %v", err)
+			}
+			if len(regions) == 0 {
+				t.Fatal("the growth produced no regions")
+			}
+			for _, region := range regions {
+				if region.Class == delta.ClassRemoved {
+					t.Fatalf("an element that grew outward with its interior intact was reported as covered: %+v", region)
+				}
+			}
+		})
+	}
+}
+
+// TestRepaintingInsideACoverDoesNotRetireTheCover is a re-review finding: evidence about a small contained
+// area was read as evidence that the whole element it overlapped had gone.
+func TestRepaintingInsideACoverDoesNotRetireTheCover(t *testing.T) {
+	width, height := 320, 240
+	button := panel{x: 120, y: 100, w: 60, h: 40, value: 200}
+	cover := panel{x: 80, y: 60, w: 160, h: 120, value: 80}
+	inside := panel{x: 120, y: 100, w: 60, h: 40, value: 180}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: panelAlt}}),
+		buildFrame(3, width, height, []panel{cover}),
+		// Only the area the button occupied is repainted; the cover is still there across most of itself.
+		buildFrame(4, width, height, []panel{cover, inside}),
+	}
+
+	differ := New()
+	if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if _, _, err := differ.Compare(frames[1], frames[2], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	regions, _, err := differ.Compare(frames[2], frames[3], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(regions) == 0 {
+		t.Fatal("the repaint produced no regions")
+	}
+	for _, region := range regions {
+		if region.Class == delta.ClassRemoved {
+			t.Fatalf("a repaint inside a cover retired the whole cover: %+v", region)
+		}
+	}
+}
+
+// TestAReturnDoesNotAssignItsIdentityToAnotherChange is a re-review finding: the return path retired the
+// element inside the identity layer but left it in the classifier's snapshot, so a second, unrelated change
+// in the same frame was reported as having moved from its position and inherited the return's identity.
+func TestAReturnDoesNotAssignItsIdentityToAnotherChange(t *testing.T) {
+	width, height := 320, 240
+	button := panel{x: 120, y: 100, w: 60, h: 40, value: 90}
+	cover := panel{x: 110, y: 90, w: 80, h: 60, value: 220}
+	// A separate change elsewhere in the same frame as the return.
+	patch := panel{x: 240, y: 180, w: 20, h: 20, value: 180}
+
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		buildFrame(2, width, height, []panel{{x: button.x, y: button.y, w: button.w, h: button.h, value: 120}}),
+		buildFrame(3, width, height, []panel{cover}),
+		buildFrame(4, width, height, []panel{button, patch}),
+	}
+
+	differ := New()
+	if _, _, err := differ.Compare(frames[0], frames[1], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if _, _, err := differ.Compare(frames[1], frames[2], defaults()); err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	regions, _, err := differ.Compare(frames[2], frames[3], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+
+	uncertain := map[uint64]bool{}
+	for _, region := range regions {
+		if region.IdentityUncertain {
+			uncertain[region.Identity] = true
+		}
+	}
+	if len(uncertain) == 0 {
+		t.Fatal("the return was not recognised, so this test is not testing what it means to")
+	}
+	for _, region := range regions {
+		if region.IdentityUncertain {
+			continue
+		}
+		if uncertain[region.Identity] {
+			t.Fatalf("identity %d is both the uncertain return and a confident change: %+v", region.Identity, region)
+		}
+		if region.Class == delta.ClassMoved {
+			t.Fatalf("a change was reported as having moved from a position that a return had already taken: %+v", region)
+		}
+	}
+}
