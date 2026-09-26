@@ -6,8 +6,9 @@ spec-traceability:
   image: python:3.12-slim
   script:
     # While specs/ is empty this succeeds with a warning, so the pipeline is green
-    # on an unstarted repository. Once specs/001-<slug>/spec.md exists, add
-    # --require-specs to the line below, so that a repository whose specification
+    # on an unstarted repository. Once specs/001-<slug>/spec.md exists, replace the
+    # line below with `python3 scripts/check_traceability.py --require-specs`, which
+    # is what `make check-strict` runs, so that a repository whose specification
     # disappeared fails instead of passing quietly.
     - python3 scripts/check_traceability.py
   rules:

@@ -56,7 +56,7 @@ working alone, so the report states that explicitly and compensates:
 | `docs/course-context.md` | What the course requires, captured from Moodle. |
 | `docs/ideas.md` | Candidate systems, scored against what the report grades. |
 | `.github/`, `.opencode/`, `.dsh/` | The same Spec Kit commands rendered for Copilot in VS Code, opencode and dsh. |
-| `scripts/check_traceability.py` | Fails when a requirement is not traced: a row marked in-progress or verified must name a real task, and a verified row must name existing files. |
+| `scripts/check_traceability.py` | Fails when a requirement is not traced: an in-progress or verified row must name a task entry that owns the requirement, and a verified row must name existing files. Values it cannot judge, such as a command string or an external URL, warn instead of failing. |
 
 ## The workflow
 
@@ -100,18 +100,21 @@ Command surfaces installed in this repository:
 Checks:
 
 ```bash
-make check    # requirement traceability: every requirement defined in specs/ has
-              # a matrix row; an in-progress or verified row must name a task that
-              # is a task entry in tasks.md; a verified row must name an existing
-              # test file and an existing evidence file inside the repository.
-              # A planned row may name neither, by design.
-make help     # list targets
+make check        # requirement traceability: every requirement defined in specs/
+                  # has a matrix row; an in-progress or verified row must name a
+                  # task entry in tasks.md, and no other entry may own that
+                  # requirement; a verified row must name an existing test file and
+                  # an existing evidence file inside the repository. A planned row
+                  # may name neither, by design. A command string or an external
+                  # URL warns instead of failing.
+make check-strict # the same, and fails while no specification exists
+make help         # list targets
 ```
 
 CI runs the check without `--require-specs`, so it is green while no
-specification exists yet. Add `--require-specs` to the `.gitlab-ci.yml` job once
-`specs/001-<slug>/spec.md` exists, so that a repository with no specifications
-fails instead of passing quietly.
+specification exists yet. Switch the `.gitlab-ci.yml` job to `make check-strict`
+once `specs/001-<slug>/spec.md` exists, so that a repository with no
+specifications fails instead of passing quietly.
 
 ## Open decisions
 

@@ -9,6 +9,11 @@ the bold identifier, for example "- **FR-001**: ...". Other mentions are treated
 as references and are ignored, so a spec may cite another spec's identifier.
 Definitions inside fenced code blocks are ignored, because they are examples.
 
+A task is a task entry, not a mention: a checkbox line, a numbered line, or a
+heading whose first token is the task identifier. Plain bullet text is not a task
+entry, because it cannot be told apart from prose. An entry's own line and its
+continuation lines together form the text the identifier is looked for in.
+
 What a green run means:
   - every requirement defined in a specification has a matrix row naming that
     specification;
@@ -16,7 +21,8 @@ What a green run means:
     row for the same specification and identifier;
   - every status is one of the allowed values;
   - a row marked in-progress or verified names a task that exists as a task entry
-    in that feature's tasks.md;
+    in that feature's tasks.md, and no other task entry in that feature references
+    the requirement;
   - a row marked verified names a test file and an evidence file that both exist
     inside the repository and are files, not directories;
   - a requirement of a feature that has a tasks.md is referenced there, unless its
@@ -31,7 +37,8 @@ What a green run does not mean:
 
 Warnings are printed for values the checker cannot judge, such as an external URL
 used as evidence or a command string used instead of a file path. Run without
---require-specs while no specification exists yet, and with it afterwards.
+--require-specs while no specification exists yet, and with it afterwards, which
+also rejects a specification set that defines no requirement at all.
 
 Usage:
     python3 scripts/check_traceability.py [--quiet] [--require-specs]
@@ -56,12 +63,16 @@ ID_PATTERN = re.compile(r"\b(?:FR|NFR|SC)-\d{3}\b")
 LOOSE_ID_PATTERN = re.compile(r"(?:FR|NFR|SC)-\d+")
 DEFINITION_PATTERN = re.compile(r"^\s*[-*+]\s+\*\*((?:FR|NFR|SC)-\d{3})\*\*")
 ROW_PATTERN = re.compile(r"^\|\s*((?:FR|NFR|SC)-\d{3})\s*\|")
-TASK_ENTRY_PATTERN = re.compile(
-    r"^\s*(?:[-*+]|\d+\.)\s*(?:\[[ xX]\]\s*)?(T\d{2,})\b"
+CHECKBOX_TASK_PATTERN = re.compile(r"^\s*(?:[-*+]|\d+\.)\s*\[[ xX]\]\s*(T\d{2,})\b")
+NUMBERED_TASK_PATTERN = re.compile(r"^\s*\d+\.\s*(T\d{2,})\b")
+HEADING_TASK_PATTERN = re.compile(r"^\s*#{1,6}\s+(T\d{2,})\b")
+TASK_PATTERNS = (
+    CHECKBOX_TASK_PATTERN,
+    NUMBERED_TASK_PATTERN,
+    HEADING_TASK_PATTERN,
 )
-TASK_HEADING_PATTERN = re.compile(r"^#{2,6}\s+(T\d{2,})\b")
 TASK_PATTERN = re.compile(r"^T\d{2,}$")
-FENCE_PATTERN = re.compile(r"^\s*(?:```|~~~)")
+FENCE_PATTERN = re.compile(r"^\s*(`{3,}|~{3,})")
 
 STATUSES = {"planned", "in-progress", "verified", "deferred", "withdrawn"}
 INACTIVE_STATUSES = {"deferred", "withdrawn"}
@@ -94,6 +105,11 @@ def is_example(identifier: str) -> bool:
     return identifier.endswith("-000")
 
 
+def identifiers_in(text: str) -> set[str]:
+    """Identifiers in text, matched exactly so FR-001 is not NFR-001."""
+    return {match.group(0) for match in ID_PATTERN.finditer(text)}
+
+
 def relative(path: Path) -> str:
     try:
         return path.relative_to(REPO_ROOT).as_posix()
@@ -113,9 +129,7 @@ def read_lines(findings: Findings, path: Path) -> list[str] | None:
     return text.splitlines()
 
 
-def blank_comments(
-    findings: Findings, lines: list[str], location: str
-) -> list[str]:
+def blank_comments(findings: Findings, lines: list[str], location: str) -> list[str]:
     """Blank HTML comments while preserving line numbering."""
     output: list[str] = []
     inside = False
@@ -148,15 +162,24 @@ def blank_comments(
 
 
 def blank_code_fences(lines: list[str]) -> list[str]:
-    """Blank fenced code blocks, which hold examples rather than definitions."""
+    """Blank fenced code blocks, tracking delimiter character and length.
+
+    A block opened with four backticks is only closed by four or more backticks,
+    so a three backtick fence inside it is content rather than a new block.
+    """
     output: list[str] = []
-    inside = False
+    opened_with: tuple[str, int] | None = None
     for line in lines:
-        if FENCE_PATTERN.match(line):
-            inside = not inside
+        match = FENCE_PATTERN.match(line)
+        if match is not None:
+            marker = match.group(1)
+            if opened_with is None:
+                opened_with = (marker[0], len(marker))
+            elif marker[0] == opened_with[0] and len(marker) >= opened_with[1]:
+                opened_with = None
             output.append("")
             continue
-        output.append("" if inside else line)
+        output.append("" if opened_with is not None else line)
     return output
 
 
@@ -173,7 +196,9 @@ def normalise_spec(value: str) -> str:
 
 def spec_path_problem(spec_path: str) -> str | None:
     if not spec_path:
-        return "does not name its specification, so it cannot be matched to a requirement"
+        return (
+            "does not name its specification, so it cannot be matched to a requirement"
+        )
     if spec_path.startswith("/"):
         return "must be a repository-relative path, not an absolute one"
     if ".." in Path(spec_path).parts:
@@ -242,10 +267,23 @@ def collect_definitions(
     return definitions
 
 
+def task_entry_id(line: str) -> str | None:
+    for pattern in TASK_PATTERNS:
+        match = pattern.match(line)
+        if match is not None:
+            return match.group(1)
+    return None
+
+
 def collect_task_entries(
     findings: Findings, specs: list[Path]
 ) -> dict[str, dict[str, tuple[int, str]]]:
-    """Map feature directory name to task entries: identifier to (line, text)."""
+    """Map feature directory name to task entries: identifier to (line, text).
+
+    The text of an entry is its own line plus the continuation lines that follow
+    it, joined, so a requirement named on a wrapped line still counts as owned by
+    that task.
+    """
     entries: dict[str, dict[str, tuple[int, str]]] = {}
     for spec in specs:
         tasks = spec.parent / "tasks.md"
@@ -256,14 +294,38 @@ def collect_task_entries(
             continue
         feature = spec.parent.name
         found: dict[str, tuple[int, str]] = {}
-        for number, line in enumerate(
-            prepare(findings, lines, relative(tasks)), start=1
-        ):
-            match = TASK_ENTRY_PATTERN.match(line) or TASK_HEADING_PATTERN.match(line)
-            if match is None:
+        current_id: str | None = None
+        current_line = 0
+        buffer: list[str] = []
+
+        def flush() -> None:
+            if current_id is None:
+                return
+            found.setdefault(current_id, (current_line, " ".join(buffer)))
+
+        for number, line in enumerate(prepare(findings, lines, relative(tasks)), start=1):
+            entry_id = task_entry_id(line)
+            if entry_id is not None:
+                flush()
+                current_id = entry_id
+                current_line = number
+                buffer = [line.strip()]
                 continue
-            identifier = match.group(1)
-            found.setdefault(identifier, (number, line.strip()))
+            if current_id is None:
+                continue
+            stripped = line.strip()
+            if not stripped:
+                flush()
+                current_id = None
+                buffer = []
+                continue
+            if line[:1] in (" ", "\t") or not stripped.startswith("#"):
+                buffer.append(stripped)
+                continue
+            flush()
+            current_id = None
+            buffer = []
+        flush()
         entries[feature] = found
     return entries
 
@@ -312,6 +374,10 @@ def feature_of(spec_path: str) -> str:
     return spec_path.split("/")[1] if "/" in spec_path else spec_path
 
 
+def looks_like_path(value: str) -> bool:
+    return "/" in value or "\\" in value or bool(Path(value).suffix)
+
+
 def check_file_value(
     findings: Findings,
     row: dict[str, object],
@@ -323,53 +389,53 @@ def check_file_value(
     if not value:
         return
     line = row["line"]
+    label = column.lower()
     if value.startswith(("http://", "https://")):
         findings.warn(
-            f"docs/traceability.md:{line}: {identifier} uses external "
-            f"{column.lower()} '{value}', which cannot be checked from the repository"
+            f"docs/traceability.md:{line}: {identifier} uses external {label} "
+            f"'{value}', which cannot be checked from the repository"
         )
         return
     candidate = value.split("::")[0].split("#")[0].strip().strip("`").strip()
     if not candidate:
         findings.error(
-            f"docs/traceability.md:{line}: {identifier} has an unusable "
-            f"{column.lower()} value '{value}'"
-        )
-        return
-    if any(character.isspace() for character in candidate):
-        findings.warn(
-            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
-            f"'{value}', which looks like a command rather than a file path; "
-            "name the file that holds the evidence"
+            f"docs/traceability.md:{line}: {identifier} has an unusable {label} "
+            f"value '{value}'"
         )
         return
     path = Path(candidate)
     if path.is_absolute():
         findings.error(
-            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
+            f"docs/traceability.md:{line}: {identifier} names {label} "
             f"'{candidate}', which is an absolute path outside the repository"
         )
         return
-    resolved = (REPO_ROOT / path).resolve()
-    try:
-        resolved.relative_to(REPO_ROOT)
-    except ValueError:
+    if ".." in path.parts:
         findings.error(
-            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
-            f"'{candidate}', which resolves outside the repository"
+            f"docs/traceability.md:{line}: {identifier} names {label} "
+            f"'{candidate}', which traverses outside the repository"
         )
         return
-    if not resolved.exists():
+    resolved = REPO_ROOT / path
+    if resolved.exists():
+        if resolved.is_file():
+            return
         findings.error(
-            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
+            f"docs/traceability.md:{line}: {identifier} names {label} "
+            f"'{candidate}', which is not a file"
+        )
+        return
+    if looks_like_path(candidate):
+        findings.error(
+            f"docs/traceability.md:{line}: {identifier} names {label} "
             f"'{candidate}', which does not exist"
         )
         return
-    if not resolved.is_file():
-        findings.error(
-            f"docs/traceability.md:{line}: {identifier} names {column.lower()} "
-            f"'{candidate}', which is not a file"
-        )
+    findings.warn(
+        f"docs/traceability.md:{line}: {identifier} names {label} '{value}', which "
+        "looks like a command rather than a file path; name the file that holds "
+        "the evidence"
+    )
 
 
 def check_rows(
@@ -449,11 +515,11 @@ def check_rows(
                         f"{task}, which is not a task entry in that feature's "
                         "tasks.md"
                     )
-                elif identifier not in entries[task][1]:
+                elif identifier not in identifiers_in(entries[task][1]):
                     owners = sorted(
                         other
                         for other, (_, text) in entries.items()
-                        if identifier in text and other != task
+                        if other != task and identifier in identifiers_in(text)
                     )
                     if owners:
                         findings.error(
@@ -464,7 +530,7 @@ def check_rows(
                     else:
                         findings.warn(
                             f"docs/traceability.md:{line}: task {task} in "
-                            f"{feature}/tasks.md does not mention {identifier} at "
+                            f"{feature}/tasks.md does not reference {identifier} at "
                             "all; confirm that the mapping is right"
                         )
 
@@ -512,7 +578,7 @@ def check_task_coverage(
         location = relative(spec)
         referenced: set[str] = set()
         for line in prepare(findings, lines, relative(tasks)):
-            referenced.update(match.group(0) for match in ID_PATTERN.finditer(line))
+            referenced.update(identifiers_in(line))
         for (spec_path, identifier), number in sorted(definitions.items()):
             if spec_path != location:
                 continue
@@ -533,7 +599,10 @@ def main() -> int:
     parser.add_argument(
         "--require-specs",
         action="store_true",
-        help="fail when no specification, or no requirement, exists yet",
+        help=(
+            "fail when no specification exists, or when the specifications define "
+            "no requirement"
+        ),
     )
     args = parser.parse_args()
 

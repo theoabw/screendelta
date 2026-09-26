@@ -24,8 +24,15 @@ Run `make check` after every change. `scripts/check_traceability.py` fails when:
   its row is `deferred` or `withdrawn`;
 - a matrix row's identifier cell looks like an identifier but is malformed.
 
-It warns, rather than fails, when it cannot judge a value: an external URL used as
-evidence, or a command string such as `pytest -q` instead of a file path.
+It warns, rather than fails, in two cases where it cannot judge a value: an
+external URL used as evidence, or a value such as `pytest -q` that looks like a
+command rather than a file path. A warning is a prompt to look, not a pass, and it
+never appears for a path that could have been checked and does not exist.
+
+A requirement is owned by a task when the task entry for that identifier, together
+with its continuation lines, references the identifier exactly. `NFR-001` does not
+count as `FR-001`, and an entry defined as a checkbox line, a numbered line or a
+heading is required: plain bullet prose is not a task entry.
 
 What it cannot check, and what therefore remains a reviewer's job: that the named
 test actually exercises the requirement, and that the evidence shows what the row
@@ -33,12 +40,16 @@ claims. The check rejects a verification claim whose test or evidence file does 
 exist, and rejects a task that is not a real task entry; it cannot tell a relevant
 test from an irrelevant one that happens to exist.
 
+Requirement definitions inside fenced code blocks are ignored, because a fence in a
+specification is nearly always an example. Never put a real requirement inside a
+fence: it will not be checked, and it will not appear in the coverage counts.
+
 A `planned` row may name no task and no test, by design, so a green run is a floor
 rather than a statement that everything is implemented. While `specs/` holds no
-specification at all, the check warns and succeeds unless it is run with
-`--require-specs`, which is the flag to use from the moment the first
-specification exists. CI currently runs without that flag; add it to
-`.gitlab-ci.yml` with the first specification.
+specification at all, the check warns and succeeds; `make check-strict` runs the
+same check with `--require-specs`, which also fails when the specifications define
+no requirement at all. Use `make check-strict` from the moment the first
+specification exists, and switch the `.gitlab-ci.yml` job to it at the same time.
 
 ## Identifier namespaces
 

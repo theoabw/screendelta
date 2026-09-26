@@ -49,14 +49,14 @@ Between steps 7 and 8, every requirement identifier must appear in
    corrections are the valuable part of that record.
 6. **`make check` passes before every commit.** It verifies that every requirement
    defined in `specs/` has a matrix row, that a row marked `in-progress` or
-   `verified` names a task that exists as a task entry in that feature's
-   `tasks.md`, and that a row marked `verified` names a test file and an evidence
+   `verified` names a task entry in that feature's `tasks.md` which owns the
+   requirement, and that a row marked `verified` names a test file and an evidence
    file that exist as files inside the repository. Values it cannot judge, such as
    an external URL or a command string, produce a warning instead of a failure.
    A `planned` row may name no task and no test. It cannot judge whether a test
-   really exercises a requirement, so that stays a review duty. Run it with
-   `--require-specs` once the first specification exists, so that a repository
-   with no specifications fails rather than passing quietly.
+   really exercises a requirement, so that stays a review duty. Once the first
+   specification exists, use `make check-strict`, which also fails when no
+   specification, or no requirement, exists at all.
 7. **Analyze reports are captured.** `/speckit.analyze` writes nothing, so its
    output is pasted into `docs/analysis/NNN-<feature-slug>-analyze-YYYY-MM-DD.md`
    in the same session, following `docs/analysis/README.md`.

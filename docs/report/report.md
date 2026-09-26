@@ -119,8 +119,10 @@ over the alternatives. The decision record is `docs/adr/0001-adopt-spec-kit.md`.
 ### 4.2 Development Environment
 
 The operating systems, editors, coding agents and models used, and why. Include
-the three command surfaces configured in this repository, because team members
-use different agents.
+the three command surfaces configured in this repository, and say why a solo
+project still needs all three: the specification workflow stays usable from any
+agent, and the independent review pass runs in a different one from the authoring
+pass, which is what keeps a single author from reviewing their own blind spots.
 
 ### 4.3 Deriving the Requirements Using the IDE and Coding Agents
 
