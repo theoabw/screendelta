@@ -48,7 +48,7 @@ uncertain rather than silently matched.
 **Acceptance Scenarios**:
 
 1. **Given** a sequence of frames in which one region moves by a few pixels per frame, **When** the stream is processed, **Then** that region keeps one identifier throughout and the identifier is never assigned to another region.
-2. **Given** a region that disappears behind an overlay and returns, **When** the stream is processed, **Then** the returning region carries a new identifier and an explicit uncertainty marker.
+2. **Given** an element that is covered by a larger one and later shows its content again, **When** the stream is processed, **Then** the covered element is reported as removed naming its identifier, the covering area as added naming a different one, and the returning content as added with a newly allocated identifier marked uncertain and a confidence strictly between zero and one. A cover whose area equals the covered element's footprint leaves no margin to exceed it and is reported as a change, which is recorded as a boundary of the stage rather than a defect.
 3. **Given** a stream of one thousand frames in which a region appears and disappears repeatedly, **When** the stream is processed, **Then** no identifier is reused and memory does not grow with stream length.
 
 ---
@@ -101,6 +101,15 @@ and different respectively.
 - **FR-005**: The engine MUST report no regions when two frames differ only below the configured noise floor.
 - **FR-006**: The engine MUST assign element identifiers that are stable across a frame stream and never reused within a session.
 - **FR-007**: The engine MUST report identity confidence per tracked region, and MUST mark an identity as uncertain rather than silently matching a region whose identity cannot be re-established.
+
+  A single frame pair cannot decide whether a changed area that contains a tracked element is a cover, a
+  replacement or a repaint of that element, so the engine decides on evidence rather than on a guess: it
+  keeps a coarse appearance signature per element and reports a reacquisition only when the returning
+  content looks like an element it has retired and unlike the one that covered it. Where the evidence is
+  absent the engine reports a change, which is truthful about the pixels. A same-footprint disappearance
+  is therefore reported as a change rather than as a removal, because the evidence that would justify a
+  removal also fires on a subtle repaint of an element whose fill resembles its surroundings, and false
+  removals are forbidden by NFR-005 and SC-001.
 - **FR-008**: The engine MUST compute a per-frame fingerprint that is stable under sub-threshold noise.
 - **FR-009**: The engine MUST support comparing a frame against a previously stored fingerprint and MUST report equal or different.
 - **FR-010**: The engine MUST emit one self-contained document per frame when streaming, so that a consumer can process frames independently and in order.

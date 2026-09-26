@@ -48,6 +48,12 @@ rectangles, and a consumer that groups regions by identity gets one group per el
 `magnitude` is inside 0 to 1 inclusive; a `changed` or `added` region's bounds are
 the current frame's, a `removed` region's bounds are the previous frame's.
 
+**What previousBounds means**: for a `moved` region it is the engine's belief about where the element
+was, taken from the tracked footprint rather than from the area that changed, so it describes the
+element and may be larger than the element after it has shrunk. `bounds` is always the measured changed
+area and stays exact. A consumer that needs the element's extent should use the footprint the engine
+reports, not the changed area.
+
 **Identity fields**: `identityConfidence` is the match score when the identity is carried
 over, 1 when the engine has no competing interpretation (a first appearance or a first
 comparison), and the observed overlap when an element returned after being occluded.
@@ -75,6 +81,15 @@ frames.
 - An `added` region allocates a new identity in state `live`.
 - A matched region keeps its identity and updates `lastFrame` and `confidence`.
 - A region unmatched for more than the occlusion window moves to `retired`.
+- An element whose footprint has nothing changed inside it is still on the screen, so it is refreshed
+  rather than aged: the window counts frames in which the element's own area changed and it was not
+  matched, which is the only evidence the engine has.
+- A changed area that contains a tracked element and exceeds its footprint by more than the growth
+  margin is a cover or a replacement: the tracked element is reported as `removed` and the area as
+  `added`, with different identifiers.
+- A changed area that overlaps a tracked element, looks unlike it, and looks like an element the engine
+  has retired is a return: the tracked element is reported as `removed` and the area as `added` with a
+  newly allocated identity marked uncertain.
 - A region that reappears after retirement receives a **new** identity with
   `uncertain` set, because the engine will not claim a match it cannot support.
 - A retired identity never returns to `live` and its `id` is never reissued.
