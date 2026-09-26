@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 560" width="1040" height="560" role="img" aria-label="The vibe coding workflow as it was actually used">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3c4043"/>
+    </marker>
+  </defs>
+
+  <style>
+    .title { font: 700 20px Helvetica, Arial, sans-serif; fill: #202124; }
+    .sub { font: 400 13px Helvetica, Arial, sans-serif; fill: #5f6368; }
+    .phase { font: 700 12px Helvetica, Arial, sans-serif; fill: #5f6368; }
+    .name { font: 700 15px Helvetica, Arial, sans-serif; fill: #202124; }
+    .art { font: 400 11px Helvetica, Arial, sans-serif; fill: #5f6368; }
+    .legend { font: 400 12px Helvetica, Arial, sans-serif; fill: #3c4043; }
+    .human { fill: #e8f0fe; stroke: #1a56db; stroke-width: 2; }
+    .agent { fill: #e6f4ea; stroke: #137333; stroke-width: 2; }
+    .risk { fill: #fce8e6; stroke: #c5221f; stroke-width: 2; }
+    .keep { fill: #fef7e0; stroke: #b06000; stroke-width: 2; }
+    .link { stroke: #3c4043; stroke-width: 2; fill: none; }
+    .riskline { stroke: #c5221f; stroke-width: 1.5; stroke-dasharray: 5 4; fill: none; }
+  </style>
+
+  <rect x="0" y="0" width="1040" height="560" fill="#ffffff"/>
+  <text class="title" x="40" y="42">The vibe coding workflow, as it was actually used</text>
+  <text class="sub" x="40" y="64">A loop with no artifact between the prompt and the result. Blue is a human decision, green is agent execution, red is where it fails, amber is what this project kept from it.</text>
+
+  <rect class="human" x="700" y="86" width="16" height="16" rx="3"/>
+  <text class="legend" x="724" y="99">Human decision</text>
+  <rect class="agent" x="850" y="86" width="16" height="16" rx="3"/>
+  <text class="legend" x="874" y="99">Agent execution</text>
+  <rect class="risk" x="700" y="112" width="16" height="16" rx="3"/>
+  <text class="legend" x="724" y="125">Where it fails</text>
+  <rect class="keep" x="850" y="112" width="16" height="16" rx="3"/>
+  <text class="legend" x="874" y="125">What was kept</text>
+
+  <rect class="human" x="40" y="160" width="220" height="92" rx="8"/>
+  <text class="phase" x="56" y="182">STEP 1</text>
+  <text class="name" x="56" y="203">Describe an outcome</text>
+  <text class="art" x="56" y="223">"make me a thing that does X"</text>
+  <text class="art" x="56" y="240">no requirement is written</text>
+
+  <rect class="agent" x="300" y="160" width="220" height="92" rx="8"/>
+  <text class="phase" x="316" y="182">STEP 2</text>
+  <text class="name" x="316" y="203">The agent generates</text>
+  <text class="art" x="316" y="223">code, documents, or both</text>
+  <text class="art" x="316" y="240">plausible and fast</text>
+
+  <rect class="human" x="560" y="160" width="220" height="92" rx="8"/>
+  <text class="phase" x="576" y="182">STEP 3</text>
+  <text class="name" x="576" y="203">Try it</text>
+  <text class="art" x="576" y="223">run it, read it, react</text>
+  <text class="art" x="576" y="240">the only check that exists</text>
+
+  <rect class="human" x="820" y="160" width="180" height="92" rx="8"/>
+  <text class="phase" x="836" y="182">STEP 4</text>
+  <text class="name" x="836" y="203">Keep or discard</text>
+  <text class="art" x="836" y="223">accept, or prompt again</text>
+
+  <path class="link" d="M 260 206 L 292 206" marker-end="url(#arrow)"/>
+  <path class="link" d="M 520 206 L 552 206" marker-end="url(#arrow)"/>
+  <path class="link" d="M 780 206 L 812 206" marker-end="url(#arrow)"/>
+  <path class="link" d="M 910 252 L 910 300 L 150 300 L 150 256" marker-end="url(#arrow)"/>
+  <text class="art" x="470" y="294">the loop: another prompt, no artifact accumulated</text>
+
+  <rect class="risk" x="40" y="330" width="300" height="80" rx="8"/>
+  <text class="phase" x="56" y="352">FAILURE MODE</text>
+  <text class="art" x="56" y="373">Nothing records what was supposed to happen,</text>
+  <text class="art" x="56" y="390">so the first real test becomes the specification.</text>
+  <text class="art" x="56" y="407">Observed: four systems explored and rejected.</text>
+
+  <rect class="risk" x="370" y="330" width="300" height="80" rx="8"/>
+  <text class="phase" x="386" y="352">FAILURE MODE</text>
+  <text class="art" x="386" y="373">A plausible result is indistinguishable from a</text>
+  <text class="art" x="386" y="390">correct one, so review has nothing to check against.</text>
+  <text class="art" x="386" y="407">Observed: an unconstrained exploration prompt.</text>
+
+  <rect class="risk" x="700" y="330" width="300" height="80" rx="8"/>
+  <text class="phase" x="716" y="352">FAILURE MODE</text>
+  <text class="art" x="716" y="373">The work cannot be audited later, because the</text>
+  <text class="art" x="716" y="390">prompt that produced it is the only record.</text>
+  <text class="art" x="716" y="407">Observed: no line of code was written this way.</text>
+
+  <rect class="keep" x="40" y="440" width="960" height="80" rx="8"/>
+  <text class="phase" x="56" y="462">WHAT THIS PROJECT KEPT, AND WHY IT WAS SAFE TO KEEP</text>
+  <text class="art" x="56" y="484">Three bounded activities, each with a check that does not depend on the specification: exploring candidate systems before one existed (checked by scoring them against what the course grades),</text>
+  <text class="art" x="56" y="501">scaffolding the repository and its process (checked by running the checks the scaffolding defines), and drafting wording (checked by reading it). No implementation line came from this loop.</text>
+</svg>

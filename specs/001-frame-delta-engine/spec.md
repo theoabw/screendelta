@@ -132,6 +132,7 @@ and different respectively.
 - **NFR-008** (portability): CPU only, no GPU, no network access at runtime, and the engine MUST run on both Linux and Windows.
 - **NFR-009** (maintainability): At least 80 percent line coverage on the geometry and identity modules, with coverage reported by the standard tool for the chosen stack.
 - **NFR-010** (compatibility): Schema changes MUST be versioned, and a consumer MUST be able to reject a document whose version it does not understand.
+- **NFR-011** (security): The engine MUST hold no network socket, start no process, read only the frames and configuration it is given, and write only to the output path it is given. The module MUST import no network package, so the guarantee is a property of the build rather than of the current code paths.
 
 ### Key Entities
 

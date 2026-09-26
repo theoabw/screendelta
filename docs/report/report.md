@@ -17,34 +17,28 @@ member.
 
 ## Executive Summary
 
-The system built is **ScreenDelta**, a deterministic frame delta and element identity engine written in
-Go. It takes consecutive screen frames at 1920 by 1080, reports which rectangular areas changed, assigns
-each area an element identity that stays stable while that element is tracked, and emits one
-self-contained JSON document per frame. It is deliberately one stage of a larger pipeline rather than a
-whole tool: it does not classify, recognise text or drive a pointer. What it adds is a contract a later
-stage can plan against, including an explicit uncertainty marker for identities the engine has evidence
-for but will not claim.
+The system built is **ScreenDelta**, a deterministic frame delta and element identity engine in Go. It reads
+consecutive 1920 by 1080 frames, reports which rectangular areas changed, assigns each area an element
+identity that stays stable while that element is tracked, and emits one self-contained JSON document per
+frame. It is deliberately one stage of a larger pipeline: it does not classify, recognise text or drive a
+pointer, and it carries an explicit uncertainty marker for identities it has evidence for but will not claim.
 
-Specification was done with **GitHub Spec Kit v1.0.12** in the flow-forward model: a constitution, a
-feature specification with 16 functional requirements, 10 non-functional requirements and 6 success
-criteria, an implementation plan, a task list of 53 tasks, interface contracts including a JSON Schema,
-and a requirement traceability matrix whose rows are checked by a script that runs in CI. Deviations from
-the plan are recorded as architecture decision records rather than edited away.
+Specification was formal and versioned: a project constitution, a feature specification with 16 functional
+requirements, 11 non-functional requirements and 6 success criteria, an implementation plan with research
+decisions, interface contracts including a JSON Schema, a task list of 53 tasks, and a requirement
+traceability matrix checked by a script that runs in CI.
 
-The AI tools were a **DeepSeek-backed agent harness** (dsh) for authoring, with the same repository
-reachable from three command surfaces: GitHub Copilot prompts, opencode commands and dsh skills. Every
-authoring session is logged in `docs/prompt-log/`, including what failed. Independent review was run in a
-**separate agent context** configured for falsification rather than reading, which produced five review
-rounds and 36 findings.
+The work used **GitHub Spec Kit v1.0.12** as the SDD tool kit, driven command by command from a DeepSeek
+backed agent harness, with the same repository reachable from three surfaces: GitHub Copilot prompts,
+opencode commands and dsh skills. Independent review ran in a separate agent context, briefed to falsify
+rather than to read, and produced six rounds and 46 findings.
 
-Verification is measurement rather than assertion. The engine scores F1 1.0000 with zero false removals on
-5,134 generated frame pairs, holds p95 latency of 9.65 ms per frame pair on one CPU core against a 12 ms
-requirement, sustains 79.2 frame pairs per second against 30, and holds a 24.0 MiB peak heap over 10,000
-frames against a 128 MiB ceiling. 28 of 32 requirements are verified with committed tests and
-recorded output; the four that are not need a person, a Windows machine or a second host, and the report says
-which is which. Thirty-five defects were
-found and recorded, of which 34 are fixed, and one is documented as inherent to a pixel-only stage with
-its reason.
+Verification is measurement rather than assertion, and every measurement was first defeated deliberately: F1
+1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.65 ms per 1080p frame pair on
+one CPU core against a 12 ms target, 79.2 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
+against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 28 of 32
+requirements verified with a committed test and recorded output. Thirty-five defects were found and recorded;
+34 are fixed and one is documented as inherent to a pixel-only stage.
 
 ## 1. Introduction and Paradigm Shift (3 points)
 
@@ -110,6 +104,12 @@ updated deliberately when reality contradicts it, and the update is a commit of 
 the message, rather than the specification being regenerated from the code. Deviations that change the
 design rather than the wording become ADRs; deviations that change a requirement are spec commits.
 
+Two diagrams accompany this section, because the template asks for both approaches. The unstructured loop is
+`docs/process/vibe-coding-workflow.svg`: describe an outcome, let the agent generate, try it, keep or discard,
+with no artifact accumulating between prompts, which is why its three failure modes are the reason this
+project did not write implementation code that way. The specification-driven workflow actually followed is
+`docs/process/sdd-workflow.svg`, and section 7.4 proposes the version of it worth reusing.
+
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
 is graded on what the process produced rather than on how long it took: 90 commits, 6,153 lines of Go and
@@ -149,7 +149,7 @@ By user story and priority:
 | US3: a fingerprint for plan caching | P3 | FR-008, FR-009 (2) | A per-frame fingerprint stable under sub-threshold noise, and comparison against a stored fingerprint reporting equal or different |
 
 Counts by category: 16 functional requirements, of which 12 are priority 1, 2 are priority 2 and 2 are
-priority 3; 10 non-functional requirements; 6 success criteria. Each functional requirement names the
+priority 3; 11 non-functional requirements; 6 success criteria. Each functional requirement names the
 observable behaviour and the input that produces it, and none of them names a data structure, a package or
 an algorithm, which is what keeps the agents from inventing an implementation inside a requirement.
 
@@ -177,6 +177,7 @@ result.
 | NFR-008 | Portability | CPU only, no GPU, no network at runtime, Linux and Windows | Cross-build in CI, no-network test | partly met: cross-build done, no-network test outstanding |
 | NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 81.9, identity 85.2 |
 | NFR-010 | Compatibility | Schema changes versioned, and a consumer can reject a version it does not understand | Decode-time rejection test, exit code 3 from the command line | met |
+| NFR-011 | Security | No network socket, no process execution, reads only the frames and configuration given, writes only to the declared output path | Two static checks over the syntax trees of every non-test file, and one dynamic check comparing the filesystem before and after a run | met: the checks fail when an import of `net/http` and a stray `os.WriteFile` are added, and pass again when they are removed |
 
 Two of the targets were met only after the first measurement failed, and the failures are recorded rather
 than replaced: latency measured 25.26 ms p95 before three optimisations (AUD-008), and the memory
@@ -476,18 +477,18 @@ trustworthy, with the defect that caused each withdrawal in the same table.
 
 Current state, from the commands named:
 
-| Measurement | Command | Result | Requirement |
+| Measurement | Command | Expected | Actual | Status | Requirement |
 |---|---|---|---|
-| Accuracy over generated frames | `make accuracy` | 5,134 frame pairs and 27,094 regions, precision 1.0000, recall 1.0000, F1 1.0000, zero false removals | NFR-005, NFR-006, SC-001 |
-| Latency, one core, 1080p | `make perf` | p50 8.44 ms, p95 9.65 ms, p99 10.37 ms | NFR-001, SC-002 |
-| Throughput, one core | `make perf` | 77 frame pairs per second | NFR-002 |
-| Memory over 10,000 frames | `make memcheck` | peak heap 24.0 MiB, peak resident 22.5 MiB, no growth between frame 1,000 and frame 10,000 | NFR-003, SC-003 |
-| Allocation steady state | the allocation guard | 8,220 and 8,226 bytes per frame in two consecutive windows | NFR-003 |
-| Coverage | `go test -cover` | diff 81.9, identity 85.2, fingerprint 87.2, stream 96.4 percent | NFR-009 |
-| Determinism | two runs encoded and compared | Byte-identical over 10,000 frames at GOMAXPROCS 1 and 4 | NFR-004 in part |
-| Requirement traceability | `make check-strict` | 32 requirements, 32 matrix rows, 28 verified, 0 errors | the process gate |
+| Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, zero false removals | pass | NFR-005, NFR-006, SC-001 |
+| Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.44 ms, p95 9.65 ms, p99 10.37 ms | pass | NFR-001, SC-002 |
+| Throughput, one core | `make perf` | at least 30 frame pairs per second | 79.2 frame pairs per second | pass | NFR-002 |
+| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB, peak resident 22.2 MiB, identical heap at frames 1,000 and 10,000 | pass | NFR-003, SC-003 |
+| Allocation steady state | the allocation guard | no growth between two consecutive windows | the two windows agree | pass | NFR-003 |
+| Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 85.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
+| Determinism | four runs encoded and compared | byte-identical output | identical across two thread counts and two collector settings | pass in part | NFR-004 |
+| Requirement traceability | `make check-strict` | every requirement traced to a task, a test and existing evidence | 33 rows, 29 verified, 0 errors, 0 warnings | pass | the process gate |
 
-28 of 32 requirements are verified, meaning a test passes and its output is committed. The rest are
+29 of 33 requirements are verified, meaning a test passes and its output is committed. The rest are
 in progress and the matrix says which, and the honest summary of the gap is this:
 
 - **The identity requirements are verified against a specification that states their boundaries.**
@@ -560,7 +561,7 @@ people, and what replaced the missing second and third reviewers.
 
 Leverage, quantified rather than asserted: 90 commits in two days, 6,153 lines of Go against 5,813 lines
 of test and 4,436 lines of specification, plan and process documents, 53 planned tasks of which 21 are
-complete, 32 requirements of which 28 are verified, and 46 recorded findings of which 45 are fixed. The
+complete, 33 requirements of which 29 are verified, and 46 recorded findings of which 45 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
 Where the human was the bottleneck is the honest part of this section, and there are three places:
@@ -604,7 +605,7 @@ What worked, with the measurement or the artifact that shows it:
 How much time construction gained is hard to state honestly, so the report gives the count that can be
 verified instead: 6,153 lines of implementation and 5,813 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
-hour but defects per requirement: 46 recorded findings across 32 requirements, of which 45 are fixed, is a
+hour but defects per requirement: 46 recorded findings across 33 requirements, of which 45 are fixed, is a
 rate that only holds because the review was as cheap as it was.
 
 ### 7.2 Core Bottlenecks and Challenges
