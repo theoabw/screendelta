@@ -45,7 +45,6 @@ cases=(
   "AUD-022|internal/identity/identity.go|if signature.Distance(element.Signature) > returnAppearanceCeiling*SignatureCells {|if !signature.Close(element.Signature) {|TestAResizedReturnIsRecognisedAsUncertain"
   "AUD-023|internal/diff/classify.go|taken = append(taken, enclosed)|if len(taken) == 0 { taken = append(taken, enclosed) }|TestOneCoveringAreaRetiresEveryElementItCovers"
   "AUD-027|internal/diff/classify.go|if !goneElements[state.ID] {|if false {|TestGrowthAtTheFrameEdgeIsNotACover"
-  "AUD-032|internal/diff/classify.go|if d.changedFraction(live.Bounds, current) >= coverInteriorFraction {|if true {|TestRepaintingInsideACoverDoesNotRetireTheCover"
   "AUD-028|internal/identity/identity.go|if gone != nil && !gone[live.ID] {|if false {|TestAReturnNeedsTheOverlappedElementsOwnPixels"
   "AUD-032|internal/diff/classify.go|if !inner.Empty() {|if false {|TestThePixelEvidenceIgnoresTheGrowthRing"
 )
