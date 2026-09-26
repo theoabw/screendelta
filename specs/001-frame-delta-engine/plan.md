@@ -139,3 +139,21 @@ no room under the 12 ms requirement.
 
 The requirement the plan was protecting is intact: a consumer can compare a stored fingerprint with a
 current frame without a frame in hand, which is what `internal/fingerprint` does.
+
+Three deviations are recorded rather than edited away, each with the reason.
+
+1. **The fingerprint grid lives in `internal/diff`, and only the comparison lives in `internal/fingerprint`.**
+   Recorded when the plan was first implemented.
+
+2. **The corpus generator renders panels in memory rather than driving a browser over CDP and reading DOM
+   boxes.** The plan's version would have produced more realistic material, but it would also have made the
+   accuracy measurement depend on a browser, a page and a DOM, so the measurement would have been as
+   reproducible as the browser is. The generated corpus renders known panels at known places, which is what
+   the answer key needs, and the realism question is answered separately by `tools/demo`, which captures real
+   rendered screen pixels for the pipeline demonstration. Task T012 was reworded to what was built.
+
+3. **The noise pairs are generated rather than committed as fixture files under `testdata/noise`, while the
+   golden document is committed under `testdata/golden`.** Generated pairs parametrise the floor and the
+   sample size, which a fixed fixture cannot, and the noise case is checked pair by pair. The golden document
+   is committed because its purpose is the opposite: to fail when the wire format changes at all, which needs
+   a file that stays still.

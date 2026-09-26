@@ -6,36 +6,36 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the Go module with the toolchain version pinned (`go.mod`)
-- [ ] T002 Add build, test, lint, vet, bench, corpus, accuracy and memcheck targets (`Makefile`)
-- [ ] T003 Add CI jobs for traceability, tests and lint (`.gitlab-ci.yml`)
-- [ ] T004 Add cross-compilation for `linux/amd64` and `windows/amd64` (`scripts/build.sh`)
+- [x] T001 Create the Go module with the toolchain version pinned (`go.mod`)
+- [x] T002 Add build, test, lint, vet, bench, corpus, accuracy and memcheck targets (`Makefile`)
+- [x] T003 Add CI jobs for traceability, tests and lint (`.gitlab-ci.yml`)
+- [x] T004 Add cross-compilation for `linux/amd64` and `windows/amd64` (`scripts/build.sh`)
 
 ## Phase 2: Foundational
 
-- [ ] T005 Decode PNG and raw RGBA frames with dimension and format validation (`internal/frame`) (FR-001)
-- [ ] T006 Validate frame invariants and detect a viewport change against the predecessor (`internal/frame`) (FR-015)
-- [ ] T007 Define error values that carry the frame sequence and the offending field (`internal/frame`) (FR-015)
-- [ ] T008 Implement the document model and JSON encoding with `schemaVersion` (`internal/delta`) (FR-014)
-- [ ] T009 Implement configuration defaults, parsing and strict validation (`internal/config`) (FR-012)
-- [ ] T010 Add the CLI skeleton: subcommands, flags and exit codes (`cmd/screendelta`) (FR-013)
-- [ ] T011 Implement the stream loop with stream-owned buffer pools (`internal/stream`) (FR-010)
-- [ ] T012 Build the corpus generator: render pages over CDP, read DOM boxes, synthesise sequences (`tools/corpusgen`)
-- [ ] T013 Add the determinism test comparing one worker against several (`internal/stream`) (NFR-004)
+- [x] T005 Decode PNG and raw RGBA frames with dimension and format validation (`internal/frame`) (FR-001)
+- [x] T006 Validate frame invariants and detect a viewport change against the predecessor (`internal/frame`) (FR-015)
+- [x] T007 Define error values that carry the frame sequence and the offending field (`internal/frame`) (FR-015)
+- [x] T008 Implement the document model and JSON encoding with `schemaVersion` (`internal/delta`) (FR-014)
+- [x] T009 Implement configuration defaults, parsing and strict validation (`internal/config`) (FR-012)
+- [x] T010 Add the CLI skeleton: subcommands, flags and exit codes (`cmd/screendelta`) (FR-013)
+- [x] T011 Implement the stream loop with stream-owned buffer pools (`internal/stream`) (FR-010)
+- [x] T012 Build the corpus generator: render panels with ground truth and synthesise sequences (`internal/corpus`, `tools/corpusgen`)
+- [x] T013 Add the determinism test comparing one worker against several (`internal/stream`) (NFR-004)
 
 ## Phase 3: User Story 1, report what changed (P1)
 
-- [ ] T014 Implement tiling and normalized region bounds (`internal/diff`) (FR-002)
-- [ ] T015 Implement the luma channel and per-tile mean difference (`internal/diff`) (FR-002)
-- [ ] T016 Implement the two-part noise floor and per-region magnitude (`internal/diff`) (FR-004)
-- [ ] T017 Implement connected-component merging and region growth (`internal/diff`) (FR-002)
-- [ ] T018 Implement classification of added, changed, removed and moved (`internal/diff`) (FR-003)
-- [ ] T019 Add noise-only frame pairs and the zero-false-removal test (`testdata/noise`) (FR-005, NFR-005)
-- [ ] T020 Add the memory ceiling test over 10,000 frames (`internal/stream`) (NFR-003)
-- [ ] T021 [P] Add property tests for bounds invariants: inside the frame, magnitude in range (`internal/diff`) (FR-002, FR-004)
-- [ ] T022 Add the IoU matching harness that scores regions against ground truth (`internal/score`) (NFR-006)
-- [ ] T023 Add the accuracy test over the generated corpus, reporting F1 and false removals (`internal/score`) (NFR-006, SC-001)
-- [ ] T024 Add golden documents for the diff shape and ordering (`testdata/golden`) (FR-002, NFR-004)
+- [x] T014 Implement tiling and normalized region bounds (`internal/diff`) (FR-002)
+- [x] T015 Implement the luma channel and per-tile mean difference (`internal/diff`) (FR-002)
+- [x] T016 Implement the two-part noise floor and per-region magnitude (`internal/diff`) (FR-004)
+- [x] T017 Implement connected-component merging and region growth (`internal/diff`) (FR-002)
+- [x] T018 Implement classification of added, changed, removed and moved (`internal/diff`) (FR-003)
+- [x] T019 Add noise-only frame pairs and the zero-false-removal test (`internal/corpus`) (FR-005, NFR-005)
+- [x] T020 Add the memory ceiling test over 10,000 frames (`internal/stream`) (NFR-003)
+- [x] T021 [P] Add property tests for bounds invariants: inside the frame, magnitude in range (`internal/diff`) (FR-002, FR-004)
+- [x] T022 Add the IoU matching harness that scores regions against ground truth (`internal/score`) (NFR-006)
+- [x] T023 Add the accuracy test over the generated corpus, reporting F1 and false removals (`internal/score`) (NFR-006, SC-001)
+- [x] T024 Add golden documents for the diff shape and ordering (`testdata/golden`) (FR-002, NFR-004)
 
 ## Phase 4: User Story 2, keep identity across frames (P2)
 
@@ -60,20 +60,20 @@
 
 ## Phase 6: Polish and cross-cutting concerns
 
-- [ ] T040 Add the benchmark harness reporting p50, p95 and p99 per frame pair (`internal/diff`) (NFR-001)
-- [ ] T041 Run the benchmark on the reference machine and commit the output (`docs/vv/evidence`) (NFR-001, SC-002)
-- [ ] T042 Add memory sampling to the stream benchmark and fail when the ceiling is exceeded (`internal/stream`) (NFR-003, SC-003)
+- [x] T040 Add the benchmark harness reporting p50, p95 and p99 per frame pair (`internal/diff`) (NFR-001)
+- [x] T041 Run the benchmark on the reference machine and commit the output (`docs/vv/evidence`) (NFR-001, SC-002)
+- [x] T042 Add memory sampling to the stream benchmark and fail when the ceiling is exceeded (`internal/stream`) (NFR-003, SC-003)
 - [x] T043 Add end-to-end tests for every quickstart scenario (`tests/e2e`) (FR-005, FR-015)
 - [x] T044 Verify the no-network and no-stray-write behaviours by test (`internal/stream`) (FR-016, NFR-011)
 - [x] T045 Add the Windows cross-build check and platform smoke test (`.gitlab-ci.yml`) (NFR-008)
-- [ ] T046 Add coverage reporting for the geometry and identity packages (`Makefile`) (NFR-009)
+- [x] T046 Add coverage reporting for the geometry and identity packages (`Makefile`) (NFR-009)
 - [x] T047 Add the pipeline demonstration: capture, engine, stub detector, decision rate (`tools/demo`) (SC-004)
 - [x] T048 Write an independent second consumer against the schema alone (`tools/consumer`) (SC-006, FR-013)
 - [x] T049 Add the CLI usability pass: help text, error wording, README quickstart (`cmd/screendelta`, `README.md`) (NFR-007, SC-005)
-- [ ] T050 Report benchmark, coverage and memory results into the V&V record (`docs/vv/results.md`) (SC-001, SC-002, SC-003)
+- [x] T050 Report benchmark, coverage and memory results into the V&V record (`docs/vv/results.md`) (SC-001, SC-002, SC-003)
 - [ ] T051 Write the acceptance script for external testers and run it (`docs/vv/acceptance.md`) (SC-005)
-- [ ] T052 Move traceability rows to verified with their test and evidence (`docs/traceability.md`) (FR-013)
-- [ ] T053 Regenerate every README number from committed benchmark output (`README.md`) (NFR-001, NFR-002)
+- [x] T052 Move traceability rows to verified with their test and evidence (`docs/traceability.md`) (FR-013)
+- [x] T053 Regenerate every README number from committed benchmark output (`README.md`) (NFR-001, NFR-002)
 
 ## Dependencies and execution order
 

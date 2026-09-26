@@ -3,6 +3,7 @@ package delta
 import (
 	"bytes"
 	"math"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -278,5 +279,73 @@ func TestDecodeRejectsAMissingRequiredField(t *testing.T) {
 				t.Fatalf("the error does not name %s: %v", tc.field, err)
 			}
 		})
+	}
+}
+
+// goldenDocument is the fixed document the golden file records: one changed region, one moved region and one
+// condition, so the file exercises ordering, the class-specific rules and the absence of timing fields.
+func goldenDocument() Document {
+	previous := Bounds{X: 0.1, Y: 0.2, W: 0.2, H: 0.1}
+	document := Document{
+		SchemaVersion: SchemaVersion,
+		Frame:         FrameRef{Sequence: 7, Width: 1920, Height: 1080, ScaleFactor: 1},
+		Fingerprint: Fingerprint{
+			Algorithm:  "grid-luma-1",
+			GridSize:   8,
+			Cells:      []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63},
+			StrictHash: "0123456789abcdef",
+		},
+		Regions: []Region{
+			{Identity: 1, Class: ClassChanged, Bounds: Bounds{X: 0.25, Y: 0.3, W: 0.1, H: 0.05}, Magnitude: 0.42, AreaPixels: 192 * 54, IdentityConfidence: 1},
+			{Identity: 2, Class: ClassMoved, Bounds: Bounds{X: 0.6, Y: 0.7, W: 0.05, H: 0.04}, PreviousBounds: &previous, Magnitude: 0.31, AreaPixels: 96 * 43, IdentityConfidence: 0.64, IdentityUncertain: true},
+		},
+		Conditions: []Condition{ConditionViewportChanged},
+	}
+	SortRegions(document.Regions)
+	return document
+}
+
+// TestTheEncoderReproducesTheGoldenDocument pins the wire format. A change to field order, to a key name or to
+// the way a value is written shows up here as a failing test rather than as a consumer that stops parsing,
+// and the file can be regenerated deliberately with GENERATE_GOLDEN=1.
+func TestTheEncoderReproducesTheGoldenDocument(t *testing.T) {
+	expected, err := os.ReadFile("../../testdata/golden/document.json")
+	if err != nil {
+		t.Fatalf("cannot read the golden document: %v", err)
+	}
+
+	var encoded bytes.Buffer
+	if err := goldenDocument().Encode(&encoded, true); err != nil {
+		t.Fatalf("encoding failed: %v", err)
+	}
+	if encoded.String() != string(expected) {
+		t.Fatalf("the encoded document differs from the golden file:\n--- encoded ---\n%s\n--- golden ---\n%s",
+			encoded.String(), string(expected))
+	}
+
+	// The golden document has to be one the engine would accept, or it is a fixture for a format nothing else
+	// agrees with.
+	decoded, err := Decode(strings.NewReader(string(expected)))
+	if err != nil {
+		t.Fatalf("the golden document does not decode: %v", err)
+	}
+	if len(decoded.Regions) != 2 {
+		t.Fatalf("the golden document decoded into %d regions", len(decoded.Regions))
+	}
+}
+
+// TestGenerateGolden regenerates the golden document, so the file can be refreshed deliberately rather than
+// by hand when the wire format changes on purpose.
+func TestGenerateGolden(t *testing.T) {
+	if os.Getenv("GENERATE_GOLDEN") != "1" {
+		t.Skip("set GENERATE_GOLDEN=1 to regenerate testdata/golden/document.json")
+	}
+	file, err := os.Create("../../testdata/golden/document.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := goldenDocument().Encode(file, true); err != nil {
+		t.Fatal(err)
 	}
 }
