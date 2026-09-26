@@ -75,3 +75,19 @@ The consumer finds the engine's output conformant, which is a weaker statement t
 stating precisely: it proves that the engine emits documents this independent implementation, written from
 the schema, will read, and that the two agree on what the schema requires. It does not prove that either
 interpretation matches every reader's, and it does not exercise documents from any other producer.
+
+Third part, same day: portability and usability.
+
+  make cross
+      builds the whole module for the host, for linux/amd64 and for windows/amd64. All three succeed, which
+      is the half of NFR-008 that can be checked from here: the engine has no C dependency and no
+      platform-specific build tags. Running the test suite on a Windows machine is outstanding, and the
+      requirement is recorded as partly met because of it.
+
+  make build && bin/screendelta diff --previous a.png --current b.png
+      the path a new user takes from the README. The README now carries that path as its third section,
+      with the corpus generator as the way to get frames without taking screenshots, the nine quickstart
+      scenarios as the reference, and the measured results in a table that names the command for each one.
+
+NFR-007 and SC-005 stay unverified until someone who is not the author follows that path while being timed,
+which is what docs/vv/acceptance.md is for.

@@ -4,7 +4,7 @@ GO ?= go
 BIN := bin/screendelta
 BENCH_ENV := GOMAXPROCS=1
 
-.PHONY: help all check check-strict trace trace-strict build test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
+.PHONY: help all check check-strict trace trace-strict build cross test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
 
 help: ## List available targets
 	@echo "Available targets:"
@@ -69,6 +69,12 @@ capture: ## Capture real screen frames for the pipeline demonstration (needs a h
 		i=$$((i+1)); \
 	done
 	@ls -1 $(CAPTURE_DIR)/*.png | wc -l | xargs echo "capture: frames written:"
+
+cross: ## Cross-build for Linux and Windows, which is what the CI portability check runs
+	$(GO) build ./...
+	GOOS=linux GOARCH=amd64 $(GO) build ./...
+	GOOS=windows GOARCH=amd64 $(GO) build ./...
+	@echo "cross: linux/amd64 and windows/amd64 both build"
 
 demo: capture ## Run the pipeline demonstration on real captured frames and assert the decision rate
 	$(GO) run ./tools/demo --source $(CAPTURE_DIR) --passes 20 --assert-rate 20
