@@ -5,7 +5,13 @@
   "description": "One self-contained document per frame. Identical input must produce a byte-identical document, so no timing or wall-clock field exists.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "frame", "fingerprint", "regions", "conditions"],
+  "required": [
+    "schemaVersion",
+    "frame",
+    "fingerprint",
+    "regions",
+    "conditions"
+  ],
   "properties": {
     "schemaVersion": {
       "const": "1.0",
@@ -14,28 +20,64 @@
     "frame": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sequence", "width", "height", "scaleFactor"],
+      "required": [
+        "sequence",
+        "width",
+        "height",
+        "scaleFactor"
+      ],
       "properties": {
-        "sequence": { "type": "integer", "minimum": 1 },
-        "width": { "type": "integer", "minimum": 1 },
-        "height": { "type": "integer", "minimum": 1 },
-        "scaleFactor": { "type": "number", "exclusiveMinimum": 0 }
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "scaleFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
       }
     },
     "fingerprint": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "gridSize", "cells", "strictHash"],
+      "required": [
+        "algorithm",
+        "gridSize",
+        "cells",
+        "strictHash"
+      ],
       "properties": {
-        "algorithm": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
-        "gridSize": { "type": "integer", "minimum": 8, "maximum": 256 },
+        "algorithm": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "gridSize": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 256
+        },
         "cells": {
           "type": "array",
           "minItems": 64,
           "maxItems": 65536,
-          "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          }
         },
-        "strictHash": { "type": "string", "pattern": "^[0-9a-f]{16,128}$" }
+        "strictHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16,128}$"
+        }
       }
     },
     "regions": {
@@ -44,33 +86,94 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["identity", "class", "bounds", "magnitude", "areaPixels"],
+        "required": [
+          "identity",
+          "class",
+          "bounds",
+          "magnitude",
+          "areaPixels",
+          "identityConfidence",
+          "identityUncertain"
+        ],
         "properties": {
           "identity": {
             "type": "integer",
             "minimum": 1,
             "description": "Session-scoped, never reused, even after retirement."
           },
-          "class": { "enum": ["added", "changed", "removed", "moved"] },
-          "bounds": { "$ref": "#/$defs/bounds" },
-          "previousBounds": { "$ref": "#/$defs/bounds" },
-          "magnitude": { "type": "number", "minimum": 0, "maximum": 1 },
-          "areaPixels": { "type": "integer", "minimum": 1 }
+          "identityConfidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Strength of the evidence that this region is the element its identity refers to. 1 when the engine has no competing interpretation, lower when the identity rests on a partial match."
+          },
+          "class": {
+            "enum": [
+              "added",
+              "changed",
+              "removed",
+              "moved"
+            ]
+          },
+          "identityUncertain": {
+            "type": "boolean",
+            "description": "True when the identity could not be re-established and was re-acquired, for example an element that returned after being occluded. A consumer that needs a stable handle must treat an uncertain identity as new."
+          },
+          "bounds": {
+            "$ref": "#/$defs/bounds"
+          },
+          "previousBounds": {
+            "$ref": "#/$defs/bounds"
+          },
+          "magnitude": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "areaPixels": {
+            "type": "integer",
+            "minimum": 1
+          }
         },
         "allOf": [
           {
             "if": {
-              "properties": { "class": { "const": "added" } },
-              "required": ["class"]
+              "properties": {
+                "class": {
+                  "const": "added"
+                }
+              },
+              "required": [
+                "class"
+              ]
             },
-            "then": { "not": { "required": ["previousBounds"] } }
+            "then": {
+              "not": {
+                "required": [
+                  "previousBounds"
+                ]
+              }
+            }
           },
           {
             "if": {
-              "properties": { "class": { "enum": ["moved", "removed"] } },
-              "required": ["class"]
+              "properties": {
+                "class": {
+                  "enum": [
+                    "moved",
+                    "removed"
+                  ]
+                }
+              },
+              "required": [
+                "class"
+              ]
             },
-            "then": { "required": ["previousBounds"] }
+            "then": {
+              "required": [
+                "previousBounds"
+              ]
+            }
           }
         ]
       }
@@ -79,7 +182,11 @@
       "type": "array",
       "uniqueItems": true,
       "items": {
-        "enum": ["first-frame", "viewport-changed", "out-of-order-timestamp"]
+        "enum": [
+          "first-frame",
+          "viewport-changed",
+          "out-of-order-timestamp"
+        ]
       }
     }
   },
@@ -87,12 +194,33 @@
     "bounds": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["x", "y", "w", "h"],
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
       "properties": {
-        "x": { "type": "number", "minimum": 0, "maximum": 1 },
-        "y": { "type": "number", "minimum": 0, "maximum": 1 },
-        "w": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-        "h": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "w": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "h": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
       }
     }
   }

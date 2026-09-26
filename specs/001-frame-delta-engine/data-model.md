@@ -36,10 +36,19 @@ One rectangular area reported as different from the previous frame.
 | `previousBounds` | object, optional | Required for `moved` and `removed`, forbidden for `added` |
 | `magnitude` | number | 0 to 1, the mean luma difference over the region, scaled |
 | `areaPixels` | unsigned integer | Absolute area, for consumers that care about size |
+| `identityConfidence` | number | 0 to 1, the strength of the evidence that this region is the element its identity refers to |
+| `identityUncertain` | boolean | True when the identity could not be re-established and was re-acquired |
 
 **Invariants**: all bounds are within the frame, so `x + w <= 1` and `y + h <= 1`;
 `magnitude` is inside 0 to 1 inclusive; a `changed` or `added` region's bounds are
 the current frame's, a `removed` region's bounds are the previous frame's.
+
+**Identity fields**: `identityConfidence` is the match score when the identity is carried
+over, 1 when the engine has no competing interpretation (a first appearance or a first
+comparison), and the observed overlap when an element returned after being occluded.
+`identityUncertain` is true only in that last case, because the engine will not claim a match
+it cannot support: a consumer that needs a stable handle must treat an uncertain identity as
+new, which is why the flag is in the document and not only in the engine.
 
 **Requirements**: FR-002, FR-003, FR-004, FR-005.
 

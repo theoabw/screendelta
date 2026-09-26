@@ -44,6 +44,21 @@ baseline, which only a stream provides, so a consumer that needs them must use `
 This is a consequence of the failure semantics, not a limitation of the comparison, and
 `quickstart.md` exercises each class where it can actually occur.
 
+### Identity fields on a region
+
+Every region carries `identityConfidence` and `identityUncertain` because FR-007 requires the
+engine to report how strong its claim is and to refuse a match it cannot support. The rule a
+consumer can rely on:
+
+- a region whose element was matched in the previous frame carries the same `identity` with
+  `identityConfidence` equal to the match score and `identityUncertain` false;
+- a region that appears where nothing was tracked, or where a retired element used to be,
+  carries a newly allocated `identity`; in the second case `identityUncertain` is true, because
+  the engine has evidence that something similar was there before but not enough to claim it is
+  the same element;
+- an `identity` is never reissued, so a consumer can keep a handle forever and learn that it is
+  gone from a `removed` region.
+
 ### Exit codes
 
 | Code | Meaning |
