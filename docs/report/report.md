@@ -183,6 +183,14 @@ context, self-review against `CONTRIBUTING.md`, and external testers for user
 acceptance. Cite the review records in `docs/prompt-log/` and the audit log in
 `docs/vv/plan.md`.
 
+Quantify the leverage rather than asserting it: tasks closed per agent session,
+commits per phase, requirements specified per hour of human work, and lines of the
+specification written per line of code changed. Say where the human was the
+bottleneck, which is where the honest part of this section lives. One person
+directing agents can produce the output of a much larger team, but the specification
+gates, the review passes and the acceptance testing stay serial and human, and
+saying so is worth more than a claim about team size.
+
 ## 7. Reflections on Specification-Driven Development (5 points)
 
 ### 7.1 Benefits of AI-Assisted SDD
