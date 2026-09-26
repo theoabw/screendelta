@@ -88,7 +88,7 @@ findings in `docs/vv/results.md`.
 | AUD-030 | logical | Review, round 6 | A return bypassed the retirement of the other elements the same area had covered | The retirement loop runs for every candidate; the return decision only picks the area's identity | `TestOneCoveringAreaRetiresEveryElementItCovers` |
 | AUD-031 | logical | Review, round 6 | An ineligible retired candidate could win the ranking and block a valid one | Eligibility is checked before ranking | `TestReturnNeedsEvidenceInBothDirections` |
 | AUD-032 | logical | Review, round 6 | The pixel evidence included the growth margin, whose ring never changes, so a fully changed element measured as partly unchanged | The measurement runs inside the margin | the return and cover regression tests |
-| AUD-021 | compliance | Review, round 4 | `delta.Decode` accepts a document missing the identity fields, because a missing JSON field becomes a valid zero value | Open. The engine always emits them; a library consumer reading a foreign document is not protected, and the decoder strictness question is recorded for the endgame | Not fixed |
+| AUD-021 | compliance | Review, round 4 | `delta.Decode` accepted a document missing the identity fields, because a missing JSON field becomes a valid zero value | Presence is checked against the raw JSON for every required field, with the field named in the error | `TestDecodeRejectsAMissingRequiredField`, falsified by removing the check |
 | AUD-022 | logical | Review, round 5 | A returning element whose content occupies only part of the changed area is not recognised, and the area is reported as a confident change of the element that covered it | Open, with the fix identified: measure the appearance of the retired element's own footprint rather than of the whole changed area. A missed reacquisition, not a wrong handle | `TestAResizedReturnIsNotYetRecognised` pins it |
 | AUD-023 | logical | Review, round 5 | One covering area retired only the element it contained most completely, so other covered handles stayed live | Every element an area contains and exceeds is examined | `TestOneCoveringAreaRetiresEveryElementItCovers` |
 | AUD-024 | logical | Review, round 5 | An element that grew outward without its interior changing was reported as covered | The decision asks whether the element's own pixels changed, from the comparison's pixel mask | `TestGrowthWithoutAnInteriorRepaintIsNotACover` |
@@ -102,11 +102,11 @@ findings in `docs/vv/results.md`.
 
 ### Reading the log
 
-Of 35 recorded findings plus the 11 from round 1: 33 are fixed, one is documented as inherent with the
-reason, and one is open with its fix identified. The classes are 30 logical, 5 compliance and 3
-maintainability, and none security. The compliance entries are the ones worth reading, because they are
-all cases where the evidence said something the code did not do, which is the failure mode this project
-spent the most effort on.
+Of 35 recorded findings plus the 11 from round 1: 34 are fixed, and one is documented as inherent with its
+reason. Nothing is open. The classes are 27 logical, 7 compliance and
+1 maintainability, and none security. The compliance entries are the ones worth
+reading, because they are all cases where the evidence said something the code did not do, which is the
+failure mode this project spent the most effort on.
 
 ## Traceability
 
