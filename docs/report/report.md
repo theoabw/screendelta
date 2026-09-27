@@ -580,8 +580,8 @@ The numbers, all reproducible from the repository:
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Commits | 172 when this table was written, and the command gives the current count | `git rev-list --count HEAD` |
-| By type | 72 docs, 37 fix, 27 test, 24 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore, summing to 172 at the same moment | `git log --format='%s' \| cut -d: -f1 \| sort \| uniq -c` |
+| Commits | 185 when this table was written, and the command gives the current count | `git rev-list --count HEAD` |
+| By type | 82 docs, 40 fix, 27 test, 24 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore, summing to 185 at the same moment | `git log --format='%s' \| cut -d: -f1 \| sort \| uniq -c` |
 | Commits carrying a `Spec:` trailer | 116 | `git log --grep='^Spec:' --oneline \| wc -l` |
 | Commits carrying a `Req:` trailer | 114 | the same with `^Req:` |
 | Commits carrying a `Task:` trailer | 76 | the same with `^Task:` |
@@ -614,7 +614,7 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,882 lines of
+Leverage, quantified rather than asserted: 185 commits in two days, 6,350 lines of Go against 6,882 lines of
 test and 4,989 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
 requirements of which 29 are verified, and 67 findings were recorded, of which 66 are fixed. The human wrote no
 implementation line by hand and every one that was committed was read.
