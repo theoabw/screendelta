@@ -3,6 +3,13 @@
 Everything an agent can do to this repository is done. This file is the short list of what is left, who has to do
 it, and how to check the result. It is written for the repository owner on the day of submission.
 
+## Where to check the state of the work
+
+`docs/vv/evidence/objective-2026-09-27.txt` is the clause-by-clause sweep: every task accounted for, each acceptance
+criterion with its value and the test that asserts it, the review loop, the report against the template, and the
+repository's own gates with their exit codes. It is produced by running the commands and reading the tables, so it is
+the file to read before and after the remaining steps below.
+
 ## State
 
 | | |
