@@ -303,6 +303,32 @@ The expected result was that independent review would find defects the authoring
 result was stronger and less comfortable: it found that the *evidence* was not what it claimed. The later
 revisions to the brief ask about the measurement first and the code second.
 
+### 3.2b The Modules and How They Combine
+
+The template asks how the project was divided and how the parts were combined, and the division is the first thing
+the plan fixed because it is what let each task be handed to an agent on its own.
+
+| Module | Responsibility | Depends on |
+|---|---|---|
+| `internal/frame` | Decode a PNG or raw frame and validate it: geometry, format and buffer length, all refused before anything else sees it | nothing |
+| `internal/diff` | Compare two frames: luma, the noise floor, per-pixel connectivity, region bounds, magnitude and classification | `frame`, `config`, `delta` |
+| `internal/identity` | Track elements across a stream: matching, footprints, covers, returns, retirement and identifier allocation | `delta` only |
+| `internal/delta` | Own the document: the types, the validator, the canonical ordering, the encoder and the decoder | nothing |
+| `internal/config` | Parse and validate the configuration document, with defaults and strict unknown-key rejection | `delta` for the region of interest type |
+| `internal/stream` | The loop: own the buffers, call the differ, call the identity map, build the document, emit conditions | the five above |
+| `internal/fingerprint` | Compare a stored fingerprint with a current frame without a frame in hand | `delta` |
+| `cmd/screendelta` | The command line: `diff`, `stream`, `fingerprint`, `compare`, `validate`, `version`, and the exit codes | the library |
+| `internal/corpus`, `internal/score` | Generate material with ground truth, and score the engine against it. Test support, not shipped behaviour | `frame` |
+
+The dependencies run one way, and the shape is deliberate: `delta` and `frame` depend on nothing, so the contract
+and the input path can be tested without the engine, and `identity` knows nothing about pixels, so its rules are
+testable without constructing frames. That is what let the identity slice be reviewed on its own, and what let the
+comparison be removed and rewritten twice without touching the document contract.
+
+The parts are combined in one call chain: `cmd` reads frames, `stream` runs the loop, `diff` answers what changed,
+`identity` answers which element it is, and `delta` writes the answer. The two support modules sit outside that
+chain and are compiled only into the tooling.
+
 ### 3.3 Prompt Iteration Log
 
 The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the course asks for:
