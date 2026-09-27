@@ -42,11 +42,11 @@ cases=(
   "AUD-039|internal/delta/delta.go|if seenConditions[condition] {|if false {|TestDecodeAndValidateRejectDuplicateConditions"
   "AUD-041|internal/delta/delta.go|if a.Magnitude != b.Magnitude {|if false {|TestTheRegionOrderSettlesEveryFieldPair"
   "AUD-042|internal/delta/encode.go|if err := checkNullObjects(raw); err != nil {|if err := error(nil); err != nil {|TestDecodeRejectsNullObjects"
-  "AUD-022|internal/identity/identity.go|if signature.Distance(element.Signature) > returnAppearanceCeiling*SignatureCells {|if !signature.Close(element.Signature) {|TestAResizedReturnIsRecognisedAsUncertain"
+  "AUD-022|internal/identity/identity.go|if distance > returnAppearanceCeiling*SignatureCells {|if !signature.Close(element.Signature) {|TestAResizedReturnIsRecognisedAsUncertain"
   "AUD-023|internal/diff/classify.go|taken = append(taken, enclosed)|if len(taken) == 0 { taken = append(taken, enclosed) }|TestOneCoveringAreaRetiresEveryElementItCovers"
   "AUD-031|internal/identity/identity.go|if !withinTolerance(candidate, rect, m.motionTolerancePixels) &&|if false &&|TestAnUnreachableRetiredCandidateCannotWinTheRanking"
   "AUD-027|internal/diff/classify.go|if !goneElements[state.ID] {|if false {|TestGrowthAtTheFrameEdgeIsNotACover"
-  "AUD-028|internal/identity/identity.go|if gone != nil && !gone[live.ID] {|if false {|TestAReturnNeedsTheOverlappedElementsOwnPixels"
+  "AUD-028|internal/identity/identity.go|if !gone[live.ID] {|if false {|TestAReturnNeedsTheOverlappedElementsOwnPixels"
   "AUD-032|internal/diff/classify.go|if !inner.Empty() {|if false {|TestThePixelEvidenceIgnoresTheGrowthRing"
 )
 
