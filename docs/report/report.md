@@ -42,8 +42,8 @@ opencode commands and dsh skills. Independent review ran in a separate agent con
 rather than to read, and produced 7 review passes and all 55 of the recorded findings.
 
 Verification is measurement rather than assertion, and each measurement was defeated deliberately first: F1
-1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.59 ms per 1080p frame pair on
-one CPU core against a 12 ms target, 76.9 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
+1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.74 ms per 1080p frame pair on
+one CPU core against a 12 ms target, 78.7 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
 against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
 requirements verified with a committed test and recorded output. 44 defects were found and recorded;
 43 are fixed and one is documented as inherent to a pixel-only stage.
@@ -175,9 +175,9 @@ result.
 
 | ID | Attribute | Target | How measured | State |
 |---|---|---|---|---|
-| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 9.59 ms, p99 11.92 ms |
-| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 76.9 per second |
-| NFR-003 | Memory | At most 128 MB over 10,000 frames at 1080p, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 25.6 MiB peak resident in the highest recorded run |
+| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 9.74 ms, p99 11.76 ms |
+| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 78.7 per second |
+| NFR-003 | Memory | At most 128 MB over 10,000 frames at 1080p, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 25.4 MiB peak resident in the highest recorded run |
 | NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Three builds compared byte for byte; two thread counts and two collector settings; a container on a different userland | met in part: identical across the toolchain, the userland, the thread count and the collector, and a second physical host is untested |
 | NFR-005 | Reliability | Zero false removals on the noise corpus | `make accuracy`, noise case, every pair | met: zero |
 | NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs, and moved-region attribution at or above 0.95 | `make accuracy`, corpus with generated ground truth, which asserts both clauses | met: 5,134 frame pairs, F1 1.0000, and 20 of 20 movements attributed as movements |
@@ -531,9 +531,9 @@ Current state, from the commands named:
 | Measurement | Command | Expected | Actual | Status | Requirement |
 |---|---|---|---|---|---|
 | Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, moved attribution at or above 0.95, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, 20 of 20 movements attributed (1.0000), zero false removals | pass | NFR-005, NFR-006, SC-001 |
-| Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.44 ms, p95 9.59 ms, p99 11.92 ms | pass | NFR-001, SC-002 |
-| Throughput, one core | `make perf` | at least 30 frame pairs per second | 76.9 frame pairs per second | pass | NFR-002 |
-| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 25.6 MiB in the recorded run over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
+| Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.38 ms, p95 9.74 ms, p99 11.76 ms | pass | NFR-001, SC-002 |
+| Throughput, one core | `make perf` | at least 30 frame pairs per second | 78.7 frame pairs per second | pass | NFR-002 |
+| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 25.4 MiB in the recorded run over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,225 in the second | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | 176,899 bytes and one SHA-256 in three environments, and identical across two thread counts and two collector settings | pass in part | NFR-004 |
@@ -557,7 +557,7 @@ in progress and the matrix says which, and the honest summary of the gap is this
   passes on two Linux userlands while the Windows runtime half needs a Windows machine.
 
 Everything else the specification asks for is verified, including the demonstrations the acceptance criteria name:
-the independent consumer accepts the engine's output (SC-006), the pipeline sustains 295.7 decisions per second on
+the independent consumer accepts the engine's output (SC-006), the pipeline sustains 297.8 decisions per second on
 real screenshots (SC-004), the engine holds no socket and writes only where it is told (FR-016), and the identity
 rules are verified against a specification that records their two boundaries as inherent rather than as defects.
 
