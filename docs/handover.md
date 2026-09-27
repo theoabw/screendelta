@@ -7,11 +7,11 @@ it, and how to check the result. It is written for the repository owner on the d
 
 | | |
 |---|---|
-| Commits | 154 on `main`, signed, no remote configured |
+| Commits | 165 on `main`, signed, no remote configured |
 | Requirements | 33 defined, 29 verified with a committed test and recorded output |
 | Tasks | 54 planned, 53 complete |
 | Defects | 44 recorded: 43 fixed, 1 documented as inherent with its reason, none open |
-| Gates | `make check-strict`, `go test ./...`, `./scripts/regression_check.sh`, `python3 scripts/check_report.py` and `./scripts/final_verify.sh` all pass |
+| Gates | `make check-strict` (which runs the test suite, the traceability check and the report check), `./scripts/regression_check.sh`, `./scripts/mutation_check.sh` and `./scripts/final_verify.sh` all pass |
 | Report | `docs/report/report.md`, exported to `docs/report/report.pdf` |
 
 The four requirements that are not verified need something this machine does not have, and the traceability matrix
@@ -31,6 +31,16 @@ says which is which:
 | Push the repository | Local for now | The 154 signed commits stay on this machine. Nothing has been pushed and no remote is configured |
 | The acceptance run | The owner runs it and reports the result | `docs/vv/acceptance.md` is ready; the timed scenario and six short ones take about ten minutes with a second person. NFR-007 and SC-005 move to verified once the result is recorded |
 | The second host | Retry the owner's own machines later | The desktop, the laptop and its WSL instance were all unreachable when attempted, so NFR-004's cross-host claim and NFR-008's Windows runtime half stay unmet with the residual recorded |
+
+## One thing to enable in a fresh clone
+
+```bash
+git config core.hooksPath .githooks
+```
+
+That pre-commit hook refuses to commit while a check is applying a mutation to the tree, which is how a broken form
+of a fix was once committed and left the suite red while the process gate reported green. `make hooks` reports
+whether it is enabled. The three guards together are described in `CONTRIBUTING.md`.
 
 ## What the owner has to do
 
