@@ -168,6 +168,7 @@ def main():
         ("Determinism", portability, [r"([\d,]+) bytes each"], False),
         ("Fuzzing", fuzzing, [r"([\d.]+) million inputs"], True),
         ("Mutation", mutations, [r"([\d]+) of ([\d]+) applied mutations killed"], False),
+        ("Regression", evidence_named("regression-"), [r"([\d]+) of ([\d]+) applied reversions caught"], False),
         # The traceability row is read from the matrix rather than from the recorded run, because the recorded run
         # is being written by the gate that reads it: the numbers do not exist in the file yet at that moment.
         ("Requirement", pathlib.Path("docs/traceability.md"), ["matrix"], False),

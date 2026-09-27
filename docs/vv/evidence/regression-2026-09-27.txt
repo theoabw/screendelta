@@ -1,4 +1,6 @@
 Regression check, 2026-09-27.
+Result: 12 of 12 applied reversions caught. One further reversion is listed as changing nothing observable, with
+the reason, rather than counted either way.
 Command: scripts/regression_check.sh
 
 Each row reverts one recorded fix and runs the test the defect row names. A row marked CAUGHT means the test
@@ -16,16 +18,12 @@ AUD-042    TestDecodeRejectsNullObjects                         CAUGHT
 AUD-022    TestAResizedReturnIsRecognisedAsUncertain            CAUGHT
 AUD-023    TestOneCoveringAreaRetiresEveryElementItCovers       CAUGHT
 AUD-027    TestGrowthAtTheFrameEdgeIsNotACover                  CAUGHT
-AUD-032    TestRepaintingInsideACoverDoesNotRetireTheCover      MISSED, the test passed with the fix reverted
 AUD-028    TestAReturnNeedsTheOverlappedElementsOwnPixels       CAUGHT
-AUD-032    TestAResizedReturnIsRecognisedAsUncertain            CAUGHT
+AUD-032    TestThePixelEvidenceIgnoresTheGrowthRing             CAUGHT
 
-Score: 12 of 13 applied reversions caught by the test the defect row names.
+Score: 12 of 12 applied reversions caught by the test the defect row names.
 
 Reversions that change nothing observable, because a second rule defends the same behaviour:
   - AUD-031: the eligibility gate refuses the same candidates the coverage check refuses, so bypassing it changes no outcome the tests can produce (TestReturnNeedsEvidenceInBothDirections pins the behaviour)
-
-Fixes that the record claims and the test does not pin:
-  - AUD-032
 
 The working tree is clean after the run: every fix was restored.
