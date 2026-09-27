@@ -1,0 +1,49 @@
+The objective, clause by clause, verified against the repository
+================================================================================
+
+This is the sweep a reader can run to see whether the project is finished: every clause of the work it set out to do,
+with the evidence for it in this repository. It was produced on 2026-09-27 at the commit it names, by a script that
+runs the commands and reads the files rather than by a summary written from memory.
+
+1. Every task in tasks.md is complete
+   53 of 54 tasks are complete.
+   Outstanding: T051 Write the acceptance script for external testers and run it (`docs/vv/acceptance.md`) (SC-005)
+   The outstanding task is the human half of T051: the acceptance script is written and every command in it
+   has been run by the author; the run itself needs a person who is not the author.
+
+2. The acceptance criteria the specification sets
+MET      F1 at or above 0.98 with zero false removals: 1.0000
+         asserted by internal/score/corpus_test.go::TestCorpus
+MET      p95 at or below 12 ms per 1080p frame pair on one core: 9.74
+         asserted by internal/perf/perf_test.go::TestLatencyPercentiles
+MET      p99 at or below 25 ms per 1080p frame pair on one core: 11.76
+         asserted by internal/perf/perf_test.go::TestLatencyPercentiles
+MET      at most 128 MB over 10,000 frames: 25.4
+         asserted by internal/stream/memory_test.go::TestMemoryCeiling
+MET      zero false removals on the noise corpus: 0
+         asserted by internal/score/corpus_test.go::TestCorpus
+MET      moved-region attribution at or above 0.95: 1.0000
+         asserted by internal/score/corpus_test.go::TestCorpus, the second clause of NFR-006
+MET      byte-identical output across thread counts and collector settings
+         scenario 9 of the end-to-end suite runs the engine four times, at two thread counts with a frequent
+         garbage collector, and compares the documents byte for byte. The portability run repeats it across three
+         environments at thread counts 1, 2 and 4: 176,899 bytes each, identical to the byte. Evidence:
+         docs/vv/evidence/e2e-2026-09-27.txt, docs/vv/evidence/portability-2026-09-27.txt
+
+3. The review loop on each slice
+   10 independent review passes are recorded, plus measurement, mutation, fuzzing and final
+   verification rounds: Review of the verification slices, Review, round 3, Review, round 4, Review, round 5, Review, round 6, Second review of the verification slices.
+   56 numbered defects and 11 from the first pass, all fixed except one documented as inherent.
+
+MET      every template section is present (7 sections, 11,418 words, 0 pages)
+         checked by scripts/check_report.py in make check-strict
+
+MET      make check-strict exits 0
+MET      go test ./... -count=1 exits 0
+MET      ./scripts/regression_check.sh exits 0
+MET      ./scripts/mutation_check.sh exits 0
+MET      ./scripts/final_verify.sh exits 0
+MET      the history is ready to push: 176 commits, signing G, 0 uncommitted files, 0 remotes
+         the push itself is the owner's, by their decision: the repository stays local
+MET      the traceability matrix is current: 29 of 33 requirements verified
+         the four that are not need a person who is not the author, a Windows machine or a second host
