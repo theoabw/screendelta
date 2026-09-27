@@ -1,11 +1,13 @@
 # An Experience Report on a Specification-Driven, AI-Assisted Software Construction Project
 
-**Status**: complete and verified against the course template. Sections 1 to 7 and the appendix are written
-from the repository, and every count and measurement in them is recomputed from the repository by
-`scripts/check_report.py`, which runs in `make check-strict`. One item is outstanding and is marked as such
-where it belongs rather than implied complete: the user acceptance testing in `docs/vv/acceptance.md`, which
-needs a person who is not the author and is the reason NFR-007 and SC-005 are the two requirements the
-traceability matrix still shows as unmet.
+**Status**: complete and verified against the course template. Sections 1 to 7 and the appendix are written from
+the repository, and the figures they state are checked against the repository by `scripts/check_report.py`, which
+runs in `make check-strict`: the requirement, defect, class, task, finding, review and commit counts, the activity
+table, the line counts, every measurement in section 5.3, the report's consistency with itself, every repository
+path it cites, and the measured figures in the README. The activity figures are the state at the commit that wrote
+them, so the check allows the small drift each later commit causes and refuses anything further away. One item is
+outstanding and is marked as such where it belongs rather than implied complete: the user acceptance testing in
+`docs/vv/acceptance.md`, which needs a person who is not the author and is the reason NFR-007 and SC-005 are unmet.
 
 ## Team Details (Team A)
 
@@ -116,7 +118,7 @@ project did not write implementation code that way. The specification-driven wor
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
 is graded on what the process produced rather than on how long it took: 153 commits, 6,350 lines of Go and
-6,855 lines of test, with the specification, plan and task list written before the code they describe.
+6,882 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
 
@@ -458,7 +460,7 @@ the level below it cannot see the defect it catches.
 | Integration and functional tests | That the parts agree: the engine, the differ, the identity map and the document validator | The corpus harness runs the real engine over generated frames and scores the documents | `docs/vv/results.md` |
 | Compliance | That the promises a consumer relies on hold rather than being asserted: no socket, no process, no write outside the declared path, and a document the published schema accepts | `tests/e2e/compliance_test.go`, which walks the syntax trees and compares the filesystem before and after a run, plus the independent consumer | `docs/vv/evidence/e2e-2026-09-27.txt` |
 | Measurement | That the non-functional targets hold, and that the harness that says so is not lying | `make accuracy`, `make perf`, `make memcheck`, each defeated deliberately before it is believed | `docs/vv/evidence/` |
-| Requirement verification | That every requirement has a task, a test and recorded output, and that nothing is claimed on a file that does not exist | `make check-strict`, which runs the traceability script over the matrix and the specification | `docs/traceability.md` |
+| Requirement verification | That every requirement has a task, a test and recorded output, that a named test exists in the file it names, and that every figure the report and the README state matches the repository | `make check-strict`, which runs the traceability script and the report check | `docs/traceability.md`, `docs/vv/evidence/report-check-2026-09-27.txt` |
 | User acceptance | That a person who has not read the code can use the engine from the README alone | The script in `docs/vv/acceptance.md`, run by external testers | Not yet run; the criterion is unverified and marked so |
 
 **Threats to validity**, stated because the numbers are only as good as their scope:
@@ -600,10 +602,10 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,855 lines
-of test and 4,928 lines of specification and process documents, plan and process documents, 54 planned tasks of which 53 are
-complete, 33 requirements of which 29 are verified, and 55 recorded findings of which 43 are fixed. The
-human wrote no implementation line by hand and read every one that was committed.
+Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,882 lines of
+test and 4,928 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
+requirements of which 29 are verified, and 55 recorded findings of which 54 are fixed. The human wrote no
+implementation line by hand and every one that was committed was read.
 
 Where the human was the bottleneck is the honest part of this section, and there are three places:
 
@@ -644,7 +646,7 @@ What worked, with the measurement or the artifact that shows it:
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
-verified instead: 6,350 lines of implementation and 6,855 lines of test in two working days, with a
+verified instead: 6,350 lines of implementation and 6,882 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
 hour but defects per requirement: 55 recorded findings across 33 requirements, of which 43 are fixed, is a
 rate that only holds because the review was as cheap as it was.

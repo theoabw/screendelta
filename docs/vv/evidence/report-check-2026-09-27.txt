@@ -28,3 +28,32 @@ unmodified copy of the repository passes, which is what makes the seven catches 
 One observation from the harness rather than from the check: a copy without a git checkout fails the check,
 because the commit count cannot be read. That is the intended behaviour, since a count that cannot be read is not a
 count, and the message names the command that failed.
+
+## The second round: the figures the first check never read
+
+An assessor simulation over the report found what six code reviews had not: the document's numbers had been true at
+some earlier commit and were never re-derived. Section 6.1's activity table summed to eighty commits under a line
+claiming more than a hundred, its trailer counts were a third of the real ones, the line counts disagreed with each
+other in three places, and the README's measured table matched no evidence file. The report's status line said every
+count and measurement in it was recomputed from the repository, which was true of some tables and not of these,
+which made the claim itself the seventh instance of the failure this project keeps recording.
+
+The check covers them now, and each addition was falsified the same way as the first round: one figure perturbed at
+a time in a copy of the repository, and the check required to notice.
+
+  a commit count far from the repository's     caught
+  a trailer count                              caught
+  the Go line count                            caught
+  the commit breakdown                         caught
+  the README's latency figure                  caught
+  the README's decision rate                   caught
+  a figure left unchanged, as a control        passed, as it must
+
+Six of six real perturbations caught, and the unmodified copy passes, which is what makes the six mean something.
+
+Two properties are worth stating because they bound what the check can do. The activity figures move with every
+commit, including the commit that writes a correction, so the check allows a drift of five and refuses anything
+further away; a figure twenty commits stale is caught, and one a commit behind is not, which is the honest limit of
+checking a moving count against a document that cannot be committed after itself. And the check reads the figures
+the two documents state, not the reasoning around them: it can tell that a number is wrong, and it cannot tell that
+a sentence is.

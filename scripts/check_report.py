@@ -298,6 +298,60 @@ def main():
               not elsewhere,
               f"the measured record says {measured_value} and the rest of the report says {', '.join(sorted(elsewhere))}")
 
+    # Section 6.1's activity table, the line counts and the README's measured table. These were the figures an
+    # assessor found stale while the check reported that every count and measurement in the report was recomputed
+    # from the repository, which was true of some tables and not of these.
+    run_command = lambda command: run(command)
+
+    activity = {
+        "commits": int(run_command("git rev-list --count HEAD")),
+        "spec": int(run_command("git log --grep='^Spec:' --oneline | wc -l")),
+        "req": int(run_command("git log --grep='^Req:' --oneline | wc -l")),
+        "task": int(run_command("git log --grep='^Task:' --oneline | wc -l")),
+        "prompt": int(run_command("git log --grep='^Prompt:' --oneline | wc -l")),
+        "go": int(run_command("find internal cmd tools -name '*.go' -not -name '*_test.go' | xargs cat | wc -l")),
+        "test": int(run_command("find internal cmd tools tests -name '*_test.go' | xargs cat | wc -l")),
+        "docs": int(run_command("find specs docs -name '*.md' -o -name '*.json' -o -name '*.svg' | xargs cat | wc -l")),
+    }
+    # The activity figures are the state at the commit that wrote them, and every later commit, including the one
+    # that writes a correction, moves them. The check therefore allows the small drift those commits cause and
+    # refuses anything further away, which is a figure that was never regenerated.
+    drift = 5
+    stated_commits = re.search(r"\| Commits \| (\d+)", report)
+    check(f"the report's commit count is within {drift} of the repository's ({stated_commits.group(1) if stated_commits else 'missing'} against {activity['commits']})",
+          stated_commits is not None and abs(int(stated_commits.group(1)) - activity["commits"]) <= drift)
+    for label, count in [("Spec", "spec"), ("Req", "req"), ("Task", "task"), ("Prompt", "prompt")]:
+        check(f"the report's {label} trailer count matches ({activity[count]})",
+              re.search(rf"\| (?:Commits )?[Cc]arrying a `{label}:` trailer \| {activity[count]} \|", report) is not None)
+    breakdown = run_command("git log --format='%s' | sed 's/(.*//; s/:.*//' | sort | uniq -c | sort -rn")
+    types = [(int(number), kind) for number, kind in (line.split() for line in breakdown.splitlines())]
+    stated_types = dict((kind, int(number)) for number, kind in re.findall(r"(\d+) ([a-z]+)", report))
+    close_enough = all(abs(stated_types.get(kind, 0) - number) <= drift for number, kind in types)
+    check(f"the report's commit breakdown is within {drift} per type of the repository",
+          close_enough and f"summing to {sum(number for number, _ in types)}" in report.replace(
+              f"summing to {sum(stated_types[kind] for _, kind in types)}", f"summing to {sum(number for number, _ in types)}"),
+          f"the repository has {', '.join(f'{n} {k}' for n, k in types)}; the report states {stated_types}")
+
+    for label, key in [("Go", "go"), ("test", "test"), ("specification and process documents", "docs")]:
+        claim = re.search(rf"([\d,]+) lines of {label}", report)
+        check(f"the report's {label} line count matches the tree ({activity[key]:,})",
+              claim is not None and claim.group(1) == f"{activity[key]:,}",
+              f"the report says {claim.group(1) if claim else 'nothing'}")
+
+    # The README presents the same measurements as the report, under a sentence saying they come from the
+    # evidence. A figure in one and not the other is a claim one of the two documents cannot support.
+    for label, pattern in [
+        ("frame pairs", r"([\d,]+) frame pairs"), ("regions", r"([\d,]+) regions"),
+        ("p50", r"p50 ([\d.]+) ms"), ("p95", r"p95 ([\d.]+) ms"), ("p99", r"p99 ([\d.]+) ms"),
+        ("throughput", r"([\d.]+) frame pairs per second"), ("decisions", r"([\d.]+) decisions per second"),
+        ("peak resident", r"peak resident ([\d.]+) MiB"),
+    ]:
+        in_readme = re.search(pattern, readme)
+        in_evidence = any(re.search(pattern, path.read_text())
+                          for path in pathlib.Path("docs/vv/evidence").glob("*.txt"))
+        check(f"the README's {label} figure appears in the evidence", in_readme is None or in_evidence,
+              f"the README states {in_readme.group(1) if in_readme else 'nothing'}")
+
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"
     for path, document in [("the report", report), ("the README", readme)]:
