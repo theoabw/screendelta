@@ -99,6 +99,11 @@ make report-pdf
 git add docs/report/report.pdf && git commit -m "docs(report): re-export the PDF"
 ```
 
+If you re-run the verification (`make verify`), it writes a fresh record with fresh measurements, and the report and
+the README then quote the previous run. `make sync-figures` rewrites the measured figures in both from the newest
+record, and `python3 scripts/sync_figures.py --check` says whether they follow it. The requirement targets are left
+alone by design: they belong to the specification, not to a run.
+
 Then check everything once more, from a clean tree:
 
 ```bash

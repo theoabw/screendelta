@@ -24,12 +24,12 @@ go test ./internal/score/... -run TestCorpus -count=1 -v
 === NAME  TestCorpus
     corpus_test.go:198: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
     corpus_test.go:204: moved-region attribution: 20 of 20 movements reported as moved (1.0000, NFR-006 asks for 0.95)
---- PASS: TestCorpus (13.70s)
-    --- PASS: TestCorpus/changed-label (0.01s)
-    --- PASS: TestCorpus/moving-button (0.04s)
-    --- PASS: TestCorpus/occluded-button (0.01s)
-    --- PASS: TestCorpus/noise (0.25s)
-    --- PASS: TestCorpus/sweep (13.40s)
+--- PASS: TestCorpus (13.25s)
+    --- PASS: TestCorpus/changed-label (0.00s)
+    --- PASS: TestCorpus/moving-button (0.03s)
+    --- PASS: TestCorpus/occluded-button (0.00s)
+    --- PASS: TestCorpus/noise (0.23s)
+    --- PASS: TestCorpus/sweep (12.98s)
 PASS
 exit=0
 
@@ -37,30 +37,30 @@ exit=0
 SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 === RUN   TestLatencyPercentiles
     perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
-    perf_test.go:237: mean 8.57 ms, p50 8.62 ms, p90 9.10 ms, p95 9.22 ms, p99 9.99 ms, worst 11.31 ms, fastest 6.87 ms
+    perf_test.go:237: mean 8.42 ms, p50 8.40 ms, p90 9.05 ms, p95 9.24 ms, p99 10.92 ms, worst 12.26 ms, fastest 6.77 ms
     perf_test.go:239: 456 of 460 frames reported at least one region
---- PASS: TestLatencyPercentiles (5.74s)
+--- PASS: TestLatencyPercentiles (5.59s)
 === RUN   TestLatencyOnALargerChange
-    perf_test.go:291: 1920x1080, large change, one core: p50 38.89 ms, p95 43.47 ms, p99 49.20 ms
-    perf_test.go:293: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
---- PASS: TestLatencyOnALargerChange (6.04s)
+    perf_test.go:293: 1920x1080, large change, one core: p50 37.89 ms, p95 40.13 ms, p99 41.13 ms
+    perf_test.go:295: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
+--- PASS: TestLatencyOnALargerChange (5.90s)
 === RUN   TestThroughput
-    perf_test.go:316: sustained 74.4 frame pairs per second on one core (300 pairs in 4.03s)
---- PASS: TestThroughput (4.03s)
+    perf_test.go:318: sustained 74.9 frame pairs per second on one core (300 pairs in 4.008s)
+--- PASS: TestThroughput (4.01s)
 PASS
 exit=0
 
 == make memcheck ==
 go test ./internal/stream/... -run 'TestMemoryCeiling|TestAllocationsDoNotGrowWithStreamLength' -count=1 -v
 === RUN   TestAllocationsDoNotGrowWithStreamLength
-    memory_test.go:130: bytes allocated per frame: first window 8220, second window 8225
+    memory_test.go:130: bytes allocated per frame: first window 8220, second window 8220
 --- PASS: TestAllocationsDoNotGrowWithStreamLength (0.04s)
 === RUN   TestMemoryCeiling
-    memory_test.go:201: streamed 10000 frames at 1920x1080 in 6.349s
-    memory_test.go:202: peak heap 25200712 bytes (24.0 MiB), engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 31985664 bytes (30.5 MiB)
-    memory_test.go:208: heap at frame 1000: 25200712 bytes, at frame 10000: 25200712 bytes
---- PASS: TestMemoryCeiling (6.35s)
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.561s
+    memory_test.go:202: peak heap 25201208 bytes (24.0 MiB), engine buffers 16588800 bytes
+    memory_test.go:204: peak resident 24694784 bytes (23.6 MiB)
+    memory_test.go:208: heap at frame 1000: 25201208 bytes, at frame 10000: 25201208 bytes
+--- PASS: TestMemoryCeiling (2.56s)
 PASS
 exit=0
 
@@ -73,11 +73,11 @@ cross: linux/amd64, linux/arm64 and windows/amd64 all build
 exit=0
 
 == make demo ==
-capture: frames written: 5
+capture: frames written: 8
 go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
-source corpus/real, 5 frames replayed 20 times, 100 frames processed
-capture 1280x720, elapsed 344ms
-frames per second 290.9, decisions 79, decisions per second 229.8
+source corpus/real, 8 frames replayed 20 times, 160 frames processed
+capture 1280x720, elapsed 422ms
+frames per second 379.4, decisions 119, decisions per second 282.2
 exit=0
 
 == coverage of the measured modules ==
@@ -91,12 +91,14 @@ vet diagnostics: 0
 python3 scripts/check_traceability.py --require-specs
 traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
 python3 scripts/check_report.py
-repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '166', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '170', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
 
-FAIL  the report's specification and process documents line count matches the tree (4,939): the report says 4,929
-FAIL  the report's decision rate matches the recorded run: the report says 294.8 and the record says ['229.8']
+FAIL  the Memory over 10,000 frames row agrees with the recorded memory over 10,000 frames measurement: 30.5 not among the recorded values ['24.0', '23.6']
+FAIL  the README's decisions matches the recorded value (229.8 against ['282.2']): the README says 229.8; the record has ['282.2']
+FAIL  the README's peak resident matches the recorded value (30.5 against ['23.6']): the README says 30.5; the record has ['23.6']
+FAIL  the NFR-003 state in the report is the recorded measurement ([30.5]): the report states [30.5] and the record has [23.6]
 
-2 claim(s) do not hold: the report's specification and process documents line count matches the tree (4,939), the report's decision rate matches the recorded run
+4 claim(s) do not hold: the Memory over 10,000 frames row agrees with the recorded memory over 10,000 frames measurement, the README's decisions matches the recorded value (229.8 against ['282.2']), the README's peak resident matches the recorded value (30.5 against ['23.6']), the NFR-003 state in the report is the recorded measurement ([30.5])
 make: *** [Makefile:35: check-report] Error 1
 exit=2
 

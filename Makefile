@@ -4,7 +4,7 @@ GO ?= go
 BIN := bin/screendelta
 BENCH_ENV := GOMAXPROCS=1
 
-.PHONY: help hooks all check check-report report-pdf verify mutants check-strict trace trace-strict build cross test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
+.PHONY: help hooks sync-figures all check check-report report-pdf verify mutants check-strict trace trace-strict build cross test test-race cover fmt fmt-check vet lint bench corpus accuracy memcheck clean
 
 hooks: ## Report whether the pre-commit guard is enabled
 	@configured="$$(git config --get core.hooksPath || true)"; \
