@@ -603,7 +603,7 @@ people, and what replaced the missing second and third reviewers.
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
 Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,882 lines of
-test and 4,928 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
+test and 4,929 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
 requirements of which 29 are verified, and 55 recorded findings of which 54 are fixed. The human wrote no
 implementation line by hand and every one that was committed was read.
 
@@ -641,7 +641,7 @@ What worked, with the measurement or the artifact that shows it:
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 4,928 lines of specification, research notes, plan and
+- **Documentation kept pace with the code.** 4,929 lines of specification, research notes, plan and
   decision records against 6,350 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
@@ -657,7 +657,8 @@ rate that only holds because the review was as cheap as it was.
 |---|---|---|
 | Context limits | A review of the whole repository at once produced shallow findings; an implementation session that tried to hold the specification, the plan and the code drifted | Work sliced by task, reviews bounded to a commit range with numbered claims, and the durable state kept in the repository rather than in a conversation |
 | Drift from the specification | Two requirements were phrased as design ("use a tile grid"), which would have made a later optimisation a requirement change | Requirements were rewritten as observable behaviour, and the traceability check keeps a requirement from existing without a task and a test |
-| The evidence claiming more than the code did | Three defects in the measurement itself, each of the same kind: a result that checked less than it claimed | Every measurement is now defeated deliberately before it is believed, and the rule is written into the prompt for each measurement round |
+| The evidence claiming more than the code did | Seven defects in the measurement or in the tooling that checks it, each of the same kind: a result that checked less than it claimed | Every measurement is defeated deliberately before it is believed, and the rule is written into the prompt for each measurement round |
+| A check that mutates the tree, and a gate that does not run the suite | A regression mutation was committed by accident, so the suite was red at HEAD while the process gate reported green: the gate checked traceability and the report's figures and never ran the tests | The gate runs the suite now, and the two scripts that mutate the tree refuse to start unless it is clean. The error was found by an assessor reading the repository rather than by the gate, which is the honest account of how it survived |
 | A second memory of the same thing | The classifier kept its own copy of where the elements were, and the two copies disagreed | The identity map owns the geometry and the classifier reads it; the duplication was removed rather than reconciled |
 | An undecidable question treated as decidable | A cover and a content change are the same rectangle, and the first implementation answered as if it knew | The question is now stated as undecidable in one frame pair (R17), answered with evidence rather than proof, and the residual boundaries are in the contract |
 | Solo review blindness | The first eleven code commits went in with no independent review, and an author reviewing their own diff approves it | The review gate became a rule, and the authoring and review passes run in different contexts on different surfaces |
