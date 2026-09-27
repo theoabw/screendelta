@@ -24,12 +24,12 @@ go test ./internal/score/... -run TestCorpus -count=1 -v
 === NAME  TestCorpus
     corpus_test.go:198: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
     corpus_test.go:204: moved-region attribution: 20 of 20 movements reported as moved (1.0000, NFR-006 asks for 0.95)
---- PASS: TestCorpus (13.25s)
+--- PASS: TestCorpus (13.04s)
     --- PASS: TestCorpus/changed-label (0.00s)
     --- PASS: TestCorpus/moving-button (0.03s)
-    --- PASS: TestCorpus/occluded-button (0.00s)
-    --- PASS: TestCorpus/noise (0.23s)
-    --- PASS: TestCorpus/sweep (12.99s)
+    --- PASS: TestCorpus/occluded-button (0.01s)
+    --- PASS: TestCorpus/noise (0.22s)
+    --- PASS: TestCorpus/sweep (12.78s)
 PASS
 exit=0
 
@@ -37,30 +37,30 @@ exit=0
 SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 === RUN   TestLatencyPercentiles
     perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
-    perf_test.go:237: mean 8.43 ms, p50 8.41 ms, p90 9.10 ms, p95 9.42 ms, p99 10.65 ms, worst 12.12 ms, fastest 6.70 ms
+    perf_test.go:237: mean 8.15 ms, p50 8.20 ms, p90 8.61 ms, p95 8.76 ms, p99 9.83 ms, worst 14.07 ms, fastest 6.58 ms
     perf_test.go:239: 456 of 460 frames reported at least one region
---- PASS: TestLatencyPercentiles (5.58s)
+--- PASS: TestLatencyPercentiles (5.41s)
 === RUN   TestLatencyOnALargerChange
-    perf_test.go:293: 1920x1080, large change, one core: p50 37.51 ms, p95 40.11 ms, p99 47.96 ms
+    perf_test.go:293: 1920x1080, large change, one core: p50 37.93 ms, p95 42.44 ms, p99 47.13 ms
     perf_test.go:295: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
---- PASS: TestLatencyOnALargerChange (5.78s)
+--- PASS: TestLatencyOnALargerChange (5.89s)
 === RUN   TestThroughput
-    perf_test.go:318: sustained 79.0 frame pairs per second on one core (300 pairs in 3.797s)
---- PASS: TestThroughput (3.80s)
+    perf_test.go:318: sustained 80.1 frame pairs per second on one core (300 pairs in 3.745s)
+--- PASS: TestThroughput (3.75s)
 PASS
 exit=0
 
 == make memcheck ==
 go test ./internal/stream/... -run 'TestMemoryCeiling|TestAllocationsDoNotGrowWithStreamLength' -count=1 -v
 === RUN   TestAllocationsDoNotGrowWithStreamLength
-    memory_test.go:130: bytes allocated per frame: first window 8220, second window 8220
+    memory_test.go:130: bytes allocated per frame: first window 8225, second window 8220
 --- PASS: TestAllocationsDoNotGrowWithStreamLength (0.04s)
 === RUN   TestMemoryCeiling
-    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.727s
-    memory_test.go:202: peak heap 25200728 bytes (24.0 MiB), engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 24457216 bytes (23.3 MiB)
-    memory_test.go:208: heap at frame 1000: 25195296 bytes, at frame 10000: 25200728 bytes
---- PASS: TestMemoryCeiling (2.73s)
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.562s
+    memory_test.go:202: peak heap 25201096 bytes (24.0 MiB), engine buffers 16588800 bytes
+    memory_test.go:204: peak resident 25059328 bytes (23.9 MiB)
+    memory_test.go:208: heap at frame 1000: 25201096 bytes, at frame 10000: 25201096 bytes
+--- PASS: TestMemoryCeiling (2.56s)
 PASS
 exit=0
 
@@ -76,8 +76,8 @@ exit=0
 capture: frames written: 8
 go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
 source corpus/real, 8 frames replayed 20 times, 160 frames processed
-capture 1280x720, elapsed 400ms
-frames per second 400.0, decisions 119, decisions per second 297.5
+capture 1280x720, elapsed 406ms
+frames per second 394.1, decisions 119, decisions per second 293.1
 exit=0
 
 == coverage of the measured modules ==
@@ -91,7 +91,7 @@ vet diagnostics: 0
 python3 scripts/check_traceability.py --require-specs
 traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
 python3 scripts/check_report.py
-repository state: {'requirements': 33, 'verified': 29, 'defects': 56, 'findings': 67, 'fixed': 55, 'commits': '183', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+repository state: {'requirements': 33, 'verified': 29, 'defects': 56, 'findings': 67, 'fixed': 55, 'commits': '184', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
 
 
 every claim in the report and the README holds against this commit
