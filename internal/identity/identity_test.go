@@ -1182,3 +1182,30 @@ func TestAReturnNeedsTheOverlappedElementsOwnPixels(t *testing.T) {
 		}
 	})
 }
+
+// TestAnUnreachableRetiredCandidateCannotWinTheRanking pins the eligibility gate in the retired-candidate search.
+//
+// The regression check reported that reverting this gate changed no outcome, and classified it as defence in
+// depth. A review falsified that with a probe, and it is recorded here because the probe is the test: a retired
+// element far from the area whose appearance matches the area perfectly, against a live element at the area whose
+// appearance does not match it at all. With the gate, the far candidate is never considered and no return is
+// reported. Without it, geometry is checked after the ranking, the far candidate wins on appearance, and the
+// engine reports a return that is not one. That is a wrong identity rather than a missed one, which is the failure
+// this project treats as the worse of the two.
+func TestAnUnreachableRetiredCandidateCannotWinTheRanking(t *testing.T) {
+	m := identity.New(4, 8)
+
+	// Far away, and looking exactly like the area.
+	far := m.Appear(boundsOf(0, 0, 200, 100), frameWidth, frameHeight, 1, ptrSignature(filledSignature(90)))
+	m.EndFrame(1, nil, frameWidth, frameHeight)
+	m.RetireByID(far.ID)
+
+	// At the area, and looking nothing like it.
+	live := m.Appear(boundsOf(0, 0, 100, 100), frameWidth, frameHeight, 2, ptrSignature(filledSignature(220)))
+
+	decision := m.Return(boundsOf(0, 0, 100, 100), ptrSignature(filledSignature(90)), frameWidth, frameHeight, 3,
+		map[uint64]bool{live.ID: true})
+	if decision.IsReturn {
+		t.Fatalf("a return was reported from a candidate that does not reach the area: %+v", decision)
+	}
+}

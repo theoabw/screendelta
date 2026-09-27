@@ -1209,3 +1209,42 @@ func TestThePixelEvidenceIgnoresTheGrowthRing(t *testing.T) {
 		t.Fatalf("the footprint with its growth ring measured %v, want 1: the ring belongs to the background, and counting it says an element that changed entirely did not", got)
 	}
 }
+
+// TestAWholeScreenChangeIsOneBoundedRegion covers one of the specification's edge cases: a theme switch or a
+// dark-mode toggle changes every pixel, and it must produce a bounded region set rather than thousands of
+// individual tiles.
+//
+// This is the property the tile grid was removed for. A tile grid reported a change per tile, so a whole-screen
+// change produced a document of hundreds of regions; per-pixel grouping reports one area. The property had no
+// test, which meant the removal was pinned by the accuracy corpus rather than by the case it was about.
+func TestAWholeScreenChangeIsOneBoundedRegion(t *testing.T) {
+	width, height := 320, 240
+	frames := []frame.Frame{
+		buildFrame(1, width, height, nil),
+		// The whole screen becomes a different shade.
+		buildFrame(2, width, height, []panel{{x: 0, y: 0, w: width, h: height, value: 200}}),
+	}
+
+	regions, conditions, err := New().Compare(frames[0], frames[1], defaults())
+	if err != nil {
+		t.Fatalf("Compare failed: %v", err)
+	}
+	if len(conditions) != 0 {
+		t.Fatalf("a whole-screen change reported conditions %v, and nothing about the viewport changed", conditions)
+	}
+	if len(regions) != 1 {
+		t.Fatalf("a whole-screen change produced %d regions, and the contract promises a bounded set: %+v",
+			len(regions), regions)
+	}
+	bounds := regions[0].Bounds
+	if bounds.X != 0 || bounds.Y != 0 || bounds.W < 0.99 || bounds.H < 0.99 {
+		t.Fatalf("the region does not cover the screen: %+v", bounds)
+	}
+	// Magnitude is the mean per-pixel luma difference over the region, divided by full scale, so a whole-screen
+	// change from the background shade to 200 measures (200-30)/255, which is the two thirds this asserts. The
+	// first version of this test expected more than nine tenths and was wrong about the scale rather than about
+	// the engine.
+	if regions[0].Magnitude < 0.5 || regions[0].Magnitude > 1 {
+		t.Fatalf("the magnitude of a change affecting every pixel is %v, and the scale runs from zero to one", regions[0].Magnitude)
+	}
+}

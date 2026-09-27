@@ -44,15 +44,10 @@ cases=(
   "AUD-042|internal/delta/encode.go|if err := checkNullObjects(raw); err != nil {|if err := error(nil); err != nil {|TestDecodeRejectsNullObjects"
   "AUD-022|internal/identity/identity.go|if signature.Distance(element.Signature) > returnAppearanceCeiling*SignatureCells {|if !signature.Close(element.Signature) {|TestAResizedReturnIsRecognisedAsUncertain"
   "AUD-023|internal/diff/classify.go|taken = append(taken, enclosed)|if len(taken) == 0 { taken = append(taken, enclosed) }|TestOneCoveringAreaRetiresEveryElementItCovers"
+  "AUD-031|internal/identity/identity.go|if !withinTolerance(candidate, rect, m.motionTolerancePixels) &&|if false &&|TestAnUnreachableRetiredCandidateCannotWinTheRanking"
   "AUD-027|internal/diff/classify.go|if !goneElements[state.ID] {|if false {|TestGrowthAtTheFrameEdgeIsNotACover"
   "AUD-028|internal/identity/identity.go|if gone != nil && !gone[live.ID] {|if false {|TestAReturnNeedsTheOverlappedElementsOwnPixels"
   "AUD-032|internal/diff/classify.go|if !inner.Empty() {|if false {|TestThePixelEvidenceIgnoresTheGrowthRing"
-)
-
-# Reversions that change nothing observable, because the behaviour is defended by a second rule as well. The
-# record's claim is about the behaviour, and the behaviour is pinned; the line is defence in depth.
-redundant=(
-  "AUD-031|internal/identity/identity.go|if !withinTolerance(candidate, rect, m.motionTolerancePixels) &&|if false &&|TestReturnNeedsEvidenceInBothDirections|the eligibility gate refuses the same candidates the coverage check refuses, so bypassing it changes no outcome the tests can produce"
 )
 
 total=0
@@ -68,8 +63,24 @@ notapplied=()
   echo "failed with the old behaviour in place, which is what makes the fix's claim worth something. A row marked"
   echo "MISSED means the fix is not pinned by the test the record names."
   echo
-  printf '%-10s %-52s %s\n' "DEFECT" "TEST THE RECORD NAMES" "RESULT"
+  printf '%-10s %-52s %s\n' "DEFECT" "TEST THAT MUST CATCH THE REVERSION" "RESULT"
 } > "$output"
+
+# The control. Every named test has to pass on the untouched tree first, or a failure after the reversion proves
+# nothing: the run would score a full mark for a red baseline, which is the failure this project has recorded six
+# times and which a review demonstrated by committing a broken test.
+baseline_failed=()
+for entry in "${cases[@]}"; do
+  IFS='|' read -r defect file search revert test <<< "$entry"
+  if ! go test ./internal/... -run "$test" -count=1 > "$log" 2>&1; then
+    baseline_failed+=("$defect")
+  fi
+done
+if [ ${#baseline_failed[@]} -gt 0 ]; then
+  echo "regression_check: the named tests do not pass on the untouched tree for: ${baseline_failed[*]}" >&2
+  echo "regression_check: a failure after a reversion would prove nothing, so the run is refused" >&2
+  exit 2
+fi
 
 for entry in "${cases[@]}"; do
   IFS='|' read -r defect file search revert test <<< "$entry"
@@ -94,13 +105,15 @@ PY
   failing="$(grep -m1 -E '^--- FAIL: ' "$log")"
   if [ "$status" -ne 0 ] && [ -n "$failing" ]; then
     caught=$((caught + 1))
+    detail="$(grep -m1 -E '^    [a-z_]+_test\.go:[0-9]+: ' "$log" | sed 's/^ *//' | cut -c1-90)"
     printf '%-10s %-52s %s\n' "$defect" "$test" "CAUGHT" >> "$output"
+    [ -n "$detail" ] && printf '%-10s %-52s %s\n' "" "" "$detail" >> "$output"
   elif [ "$status" -eq 0 ]; then
     missed+=("$defect")
     printf '%-10s %-52s %s\n' "$defect" "$test" "MISSED, the test passed with the fix reverted" >> "$output"
   else
     missed+=("$defect (build failure)")
-    printf '%-10s %-52s %s\n' "$defect" "$test" "BUILD FAILED, so the reversion proves nothing" >> "$output"
+    printf '%-10s %-52s %s\n' "$defect" "$test" "NO FAILING TEST, so the reversion proves nothing" >> "$output"
   fi
 
   git checkout -- "$file"
@@ -109,14 +122,7 @@ done
 {
   echo
   echo "Score: $caught of $total applied reversions caught by the test the defect row names."
-  if [ ${#redundant[@]} -gt 0 ]; then
-    echo
-    echo "Reversions that change nothing observable, because a second rule defends the same behaviour:"
-    for entry in "${redundant[@]}"; do
-      IFS='|' read -r defect _ _ _ test reason <<< "$entry"
-      echo "  - $defect: $reason ($test pins the behaviour)"
-    done
-  fi
+
   if [ ${#missed[@]} -gt 0 ]; then
     echo
     echo "Fixes that the record claims and the test does not pin:"

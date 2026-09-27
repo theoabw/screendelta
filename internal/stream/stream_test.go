@@ -573,3 +573,64 @@ func TestAViewportRoundTripStillResets(t *testing.T) {
 		t.Fatal("changing the size back did not reset the differ")
 	}
 }
+
+// TestPushRefusesANonMonotonicSequence pins the behaviour behind the specification's edge case for frames that
+// arrive out of order.
+//
+// The contract's condition list includes out-of-order-timestamp, and this engine never emits it. The reason is
+// worth recording where the behaviour is: a frame carries a sequence and no timestamp, by design, because a
+// document with a timing field in it could not be byte-identical between runs. So a frame whose sequence does not
+// advance is a caller error rather than something to report, and it is refused with the sequence in the error. The
+// condition stays in the published enum for a capture layer that has timestamps of its own to report; this engine
+// cannot produce one, which is what this test and the contract say.
+func TestPushRefusesANonMonotonicSequence(t *testing.T) {
+	engine := newEngine(t, &stubDiffer{})
+	defer engine.Close()
+
+	if _, err := engine.Push(testFrame(5, 8, 8, 1)); err != nil {
+		t.Fatalf("the first frame was refused: %v", err)
+	}
+	for _, sequence := range []uint64{5, 4, 1} {
+		_, err := engine.Push(testFrame(sequence, 8, 8, 2))
+		if err == nil {
+			t.Fatalf("a frame with sequence %d was accepted after sequence 5", sequence)
+		}
+		var field *fielderr.Error
+		if !errors.As(err, &field) {
+			t.Fatalf("the refusal is not a field error: %v", err)
+		}
+		if field.Field != "sequence" || field.Sequence != sequence {
+			t.Fatalf("the error names field %q and sequence %d, want sequence and %d", field.Field, field.Sequence, sequence)
+		}
+	}
+}
+
+// TestAnEmptyStreamAndASingleFrame covers two of the specification's edge cases that had no test.
+//
+// Neither is interesting on its own, which is why neither had one, and both are the kind of case that produces a
+// panic or a stray document in a pipeline rather than a wrong number.
+func TestAnEmptyStreamAndASingleFrame(t *testing.T) {
+	t.Run("no frames at all", func(t *testing.T) {
+		engine := newEngine(t, &stubDiffer{})
+		defer engine.Close()
+		// Closing without pushing anything is the whole test: nothing to report, nothing to flush.
+		if err := engine.Close(); err != nil {
+			t.Fatalf("closing an empty stream failed: %v", err)
+		}
+	})
+
+	t.Run("exactly one frame", func(t *testing.T) {
+		engine := newEngine(t, &stubDiffer{})
+		defer engine.Close()
+		document, err := engine.Push(testFrame(1, 8, 8, 1))
+		if err != nil {
+			t.Fatalf("the single frame was refused: %v", err)
+		}
+		if len(document.Conditions) != 1 || document.Conditions[0] != delta.ConditionFirstFrame {
+			t.Fatalf("a single frame reported conditions %v, want first-frame alone", document.Conditions)
+		}
+		if len(document.Regions) != 0 {
+			t.Fatalf("a single frame reported %d regions, and there is no predecessor to differ from", len(document.Regions))
+		}
+	})
+}
