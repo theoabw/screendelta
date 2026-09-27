@@ -23,12 +23,12 @@ go test ./internal/score/... -run TestCorpus -count=1 -v
     corpus_test.go:147: sweep: 5000 pairs, 27069 regions reported, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27069 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
 === NAME  TestCorpus
     corpus_test.go:180: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
---- PASS: TestCorpus (13.75s)
-    --- PASS: TestCorpus/changed-label (0.01s)
+--- PASS: TestCorpus (14.20s)
+    --- PASS: TestCorpus/changed-label (0.00s)
     --- PASS: TestCorpus/moving-button (0.04s)
     --- PASS: TestCorpus/occluded-button (0.01s)
-    --- PASS: TestCorpus/noise (0.28s)
-    --- PASS: TestCorpus/sweep (13.43s)
+    --- PASS: TestCorpus/noise (0.27s)
+    --- PASS: TestCorpus/sweep (13.89s)
 PASS
 exit=0
 
@@ -36,16 +36,16 @@ exit=0
 SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 === RUN   TestLatencyPercentiles
     perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
-    perf_test.go:237: mean 9.28 ms, p50 8.84 ms, p90 11.35 ms, p95 11.90 ms, p99 13.32 ms, worst 14.18 ms, fastest 7.00 ms
+    perf_test.go:237: mean 9.15 ms, p50 9.00 ms, p90 10.24 ms, p95 10.72 ms, p99 11.50 ms, worst 14.08 ms, fastest 7.25 ms
     perf_test.go:239: 456 of 460 frames reported at least one region
---- PASS: TestLatencyPercentiles (6.14s)
+--- PASS: TestLatencyPercentiles (6.09s)
 === RUN   TestLatencyOnALargerChange
-    perf_test.go:291: 1920x1080, large change, one core: p50 44.51 ms, p95 48.29 ms, p99 49.52 ms
+    perf_test.go:291: 1920x1080, large change, one core: p50 39.92 ms, p95 47.82 ms, p99 51.48 ms
     perf_test.go:293: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
---- PASS: TestLatencyOnALargerChange (6.67s)
+--- PASS: TestLatencyOnALargerChange (6.27s)
 === RUN   TestThroughput
-    perf_test.go:316: sustained 64.3 frame pairs per second on one core (300 pairs in 4.668s)
---- PASS: TestThroughput (4.67s)
+    perf_test.go:316: sustained 74.6 frame pairs per second on one core (300 pairs in 4.023s)
+--- PASS: TestThroughput (4.02s)
 PASS
 exit=0
 
@@ -55,11 +55,11 @@ go test ./internal/stream/... -run 'TestMemoryCeiling|TestAllocationsDoNotGrowWi
     memory_test.go:130: bytes allocated per frame: first window 8220, second window 8220
 --- PASS: TestAllocationsDoNotGrowWithStreamLength (0.04s)
 === RUN   TestMemoryCeiling
-    memory_test.go:201: streamed 10000 frames at 1920x1080 in 3.253s
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 6.774s
     memory_test.go:202: peak heap 25201080 bytes (24.0 MiB), engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 25776128 bytes (24.6 MiB)
-    memory_test.go:208: heap at frame 1000: 25200952 bytes, at frame 10000: 25201080 bytes
---- PASS: TestMemoryCeiling (3.25s)
+    memory_test.go:204: peak resident 34820096 bytes (33.2 MiB)
+    memory_test.go:208: heap at frame 1000: 25200968 bytes, at frame 10000: 25200984 bytes
+--- PASS: TestMemoryCeiling (6.78s)
 PASS
 exit=0
 
@@ -75,8 +75,8 @@ exit=0
 capture: frames written: 8
 go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
 source corpus/real, 8 frames replayed 20 times, 160 frames processed
-capture 1280x720, elapsed 471ms
-frames per second 339.5, decisions 119, decisions per second 252.5
+capture 1280x720, elapsed 461ms
+frames per second 347.1, decisions 119, decisions per second 258.2
 exit=0
 
 == coverage of the measured modules ==
@@ -90,7 +90,7 @@ vet diagnostics: 0
 python3 scripts/check_traceability.py --require-specs
 traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
 python3 scripts/check_report.py
-repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '139', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '140', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
 
 
 every claim in the report and the README holds against this commit
@@ -98,8 +98,4 @@ exit=0
 
 == verdict ==
 9 checks run, 0 failed, including the process gate above.
-the working tree is not clean, so the record describes a tree that is not this commit:
- M README.md
- M docs/report/report.md
- M docs/vv/evidence/regression-2026-09-27.txt
- M scripts/check_report.py
+the working tree was clean when the record was written
