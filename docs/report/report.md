@@ -392,7 +392,7 @@ The workflow as actually followed, with the gate that ends each step:
 | 6 | `/speckit.analyze` | `docs/analysis/analyze-2026-09-26.md` | Five findings, all resolved or recorded |
 | 7 | `/speckit.tasks` | `tasks.md`, 53 tasks | Every requirement has at least one task; checked by `scripts/check_traceability.py` |
 | 8 | `/speckit.implement`, task by task | Code, tests, evidence | `make check` (traceability, format, vet, tests) before any commit; an independent review before a slice is called done |
-| 9 | `/speckit.converge` (not yet used) | A gap list | Planned for the endgame, once the acceptance testing has run |
+| 9 | `/speckit.converge` | `docs/analysis/converge-2026-09-27.md` | The specification reconciled against the built system: four edge cases had no test and two had no implementation, and each was closed or recorded |
 
 Three deviations from the comfortable path are worth recording. First, the implementation started before the
 whole task list was written: the frame, error and document types existed while tasks 20 onwards were still

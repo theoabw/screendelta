@@ -17,17 +17,17 @@ AUD-039    TestDecodeAndValidateRejectDuplicateConditions       CAUGHT
                                                                 delta_test.go:543: a document naming a condition twice validated
 AUD-041    TestTheRegionOrderSettlesEveryFieldPair              CAUGHT
 AUD-042    TestDecodeRejectsNullObjects                         CAUGHT
-AUD-022    TestAResizedReturnIsRecognisedAsUncertain            NOT APPLIED, the pattern is not in internal/identity/identity.go
+AUD-022    TestAResizedReturnIsRecognisedAsUncertain            CAUGHT
+                                                                diff_test.go:1002: a resized return produced 0 removals and 0 additions: [{Identity:2 Clas
 AUD-023    TestOneCoveringAreaRetiresEveryElementItCovers       CAUGHT
                                                                 diff_test.go:916: identity 2 was covered but not reported as removed: [{Identity:3 Class:a
 AUD-031    TestAnUnreachableRetiredCandidateCannotWinTheRanking CAUGHT
                                                                 identity_test.go:1210: a return was reported from a candidate that does not reach the area
 AUD-027    TestGrowthAtTheFrameEdgeIsNotACover                  CAUGHT
-AUD-028    TestAReturnNeedsTheOverlappedElementsOwnPixels       NOT APPLIED, the pattern is not in internal/identity/identity.go
+AUD-028    TestAReturnNeedsTheOverlappedElementsOwnPixels       CAUGHT
 AUD-032    TestThePixelEvidenceIgnoresTheGrowthRing             CAUGHT
                                                                 diff_test.go:1209: the footprint with its growth ring measured 0.5102040816326531, want 1:
 
-Score: 11 of 11 applied reversions caught by the test the defect row names.
-2 reversion(s) were never applied because their pattern was not found: AUD-022 AUD-028
+Score: 13 of 13 applied reversions caught by the test the defect row names.
 
 The working tree is clean after the run: every fix was restored.

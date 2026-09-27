@@ -156,3 +156,13 @@ stays within the generation. Removing a field, changing a type, changing the mea
 of an existing field or changing region ordering starts a new generation, and the
 decoder rejects the old one rather than guessing. Every such change is recorded in
 `docs/adr/`.
+
+## Conditions
+
+The document declares its conditions rather than implying them, and three are defined by the schema:
+
+| Condition | Produced by this engine | Meaning |
+|---|---|---|
+| `first-frame` | yes | There is no predecessor, so the document reports no regions. |
+| `viewport-changed` | yes | The geometry or the scale factor changed, so everything the engine remembered about the previous frame's coordinates is meaningless. |
+| `out-of-order-timestamp` | no | The frame's timestamp is earlier than its predecessor's. This engine cannot produce it: a frame carries a sequence and no timestamp, by design, because a document that carried a timing field could not be byte-identical between runs. A frame whose sequence does not advance is refused with the sequence in the error, which `stream.Push` documents and a test pins. The condition stays in the published enum for a capture layer that has timestamps of its own and wants to report one through this contract. |
