@@ -580,12 +580,12 @@ The numbers, all reproducible from the repository:
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Commits | 159 when this table was written, and the command gives the current count | `git rev-list --count HEAD` |
-| By type | 68 docs, 31 fix, 27 test, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore, summing to 161 at the same moment | `git log --format='%s' \| cut -d: -f1 \| sort \| uniq -c` |
-| Commits carrying a `Spec:` trailer | 115 | `git log --grep='^Spec:' --oneline \| wc -l` |
-| Carrying a `Req:` trailer | 113 | the same with `^Req:` |
-| Carrying a `Task:` trailer | 75 | the same with `^Task:` |
-| Carrying a `Prompt:` trailer | 121 | the same with `^Prompt:` |
+| Commits | 172 when this table was written, and the command gives the current count | `git rev-list --count HEAD` |
+| By type | 72 docs, 37 fix, 27 test, 24 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore, summing to 172 at the same moment | `git log --format='%s' \| cut -d: -f1 \| sort \| uniq -c` |
+| Commits carrying a `Spec:` trailer | 116 | `git log --grep='^Spec:' --oneline \| wc -l` |
+| Commits carrying a `Req:` trailer | 114 | the same with `^Req:` |
+| Commits carrying a `Task:` trailer | 76 | the same with `^Task:` |
+| Commits carrying a `Prompt:` trailer | 122 | the same with `^Prompt:` |
 | Days of work | 2 (2026-09-26, 2026-09-27) | `git log --format='%ad' --date=short \| sort \| uniq -c` |
 
 The trailers are the link between a code change, the requirement it serves, the task that planned it and
