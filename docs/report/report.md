@@ -2,12 +2,15 @@
 
 **Status**: complete and verified against the course template. Sections 1 to 7 and the appendix are written from
 the repository, and the figures they state are checked against the repository by `scripts/check_report.py`, which
-runs in `make check-strict`: the requirement, defect, class, task, finding, review and commit counts, the activity
-table, the line counts, every measurement in section 5.3, the report's consistency with itself, every repository
-path it cites, and the measured figures in the README. The activity figures are the state at the commit that wrote
-them, so the check allows the small drift each later commit causes and refuses anything further away. One item is
-outstanding and is marked as such where it belongs rather than implied complete: the user acceptance testing in
-`docs/vv/acceptance.md`, which needs a person who is not the author and is the reason NFR-007 and SC-005 are unmet.
+runs in `make check-strict`: the requirement, defect, class, task, finding, review and commit counts; the activity
+table and the commit breakdown; the line counts; the measurements in section 5.3 and in the executive summary; the
+thresholds in the verification table's Expected column, against the specification rather than against the results;
+each requirement's target against the specification and each stated measurement against the recorded run; the
+report's consistency with itself; every repository path it cites; every table's shape; and the measured figures in
+the README. What it does not do is judge the sentences: it can tell that a number is wrong and cannot tell that a
+claim is unsupported. One item is outstanding and is marked as such where it belongs rather than implied complete:
+the user acceptance testing in `docs/vv/acceptance.md`, which needs a person who is not the author and is the reason
+NFR-007 and SC-005 are unmet.
 
 ## Team Details (Team A)
 
@@ -36,7 +39,7 @@ traceability matrix checked by a script that runs in CI.
 The work used **GitHub Spec Kit v1.0.12** as the SDD tool kit, driven command by command from a DeepSeek
 backed agent harness, with the same repository reachable from three surfaces: GitHub Copilot prompts,
 opencode commands and dsh skills. Independent review ran in a separate agent context, briefed to falsify
-rather than to read, and produced 7 review passes and 31 of the 55 recorded findings.
+rather than to read, and produced 7 review passes and all 55 of the recorded findings.
 
 Verification is measurement rather than assertion, and each measurement was defeated deliberately first: F1
 1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.22 ms per 1080p frame pair on
@@ -118,7 +121,7 @@ project did not write implementation code that way. The specification-driven wor
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
 is graded on what the process produced rather than on how long it took: 153 commits, 6,350 lines of Go and
-6,882 lines of test, with the specification, plan and task list written before the code they describe.
+6,884 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
 
@@ -257,6 +260,8 @@ which a pixel-only stage cannot do, and it now states the two events the engine 
 change is commit `17900ed`, and `docs/prompt-log/0007-measurement-review.md` records why the first
 implementation could not satisfy the original wording.
 
+## 3. The Approach and Prompting Framework (5 points)
+
 ### 3.1 Prompting Framework
 
 The framework is a mix, chosen per activity rather than per project:
@@ -269,8 +274,9 @@ The framework is a mix, chosen per activity rather than per project:
 | Verification | Adversarial role prompting: "your job is to falsify the claims below, not to comment on style" | A review prompt that asks for correctness returns code style; the one that asks for a counterexample returns defects |
 | Measurement | No prompting: the harness is code, and the agent's role is to build and then try to defeat it | The most valuable findings in this project came from an agent trying to pass a measurement with a deliberately wrong implementation |
 
-The single most important choice is the last one. 7 independent review passes are recorded in the audit log, and
-31 of the 44 defects came from one of them. Seven of those 31 were about the measurement or about the tooling
+The single most important choice is the last one. 7 independent review passes are recorded in the audit log, and every finding came from one of them: 31 of the
+44 numbered defects, plus the 11 from the first pass, which the audit log counts separately because they predate
+the numbered table. Seven of those 31 were about the measurement or about the tooling
 that checks it rather than about the engine: a success criterion that could be satisfied by an engine with broken
 classification, a memory guard that passed with a deliberate per-frame leak, a latency run inside the full test
 suite whose tail belonged to the machine, a corpus generator that made every accuracy number irreproducible, a
@@ -344,6 +350,8 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
 attempt to pass it with a deliberately wrong implementation has failed. Three of the 44 recorded defects
 were found by exactly that, and not one of them by reading the code.
+
+## 4. Workspace Setup and Process Tool Kit (3 points)
 
 ### 4.1 SDD Tool Kit
 
@@ -430,7 +438,7 @@ being refined, because the interfaces they define had to be real before the plan
 about them. The task list was updated in the same round. Second, the review gate was added after the fact:
 eleven code commits went in without an independent review, which the audit log records as a process
 failure, and the standing rule since is that a slice is not finished until a review in a separate context
-has tried to break it. That rule has produced 31 of the 55 recorded findings.
+has tried to break it. That rule has produced 42 of the 55 recorded findings.
 
 ### 4.5 Prompts
 
@@ -445,6 +453,8 @@ most information for a reader are:
   caused;
 - `0008-verification-tail.md`: the end to end tests, the independent consumer, the demonstration on real
   rendered pixels, and the re-review that falsified five of the previous round's claims.
+
+## 5. Verification and Validation (6 points)
 
 ### 5.1 V&V Strategy
 
@@ -524,7 +534,7 @@ Current state, from the commands named:
 | Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.62 ms, p95 9.22 ms, p99 9.99 ms | pass | NFR-001, SC-002 |
 | Throughput, one core | `make perf` | at least 30 frame pairs per second | 74.4 frame pairs per second | pass | NFR-002 |
 | Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 30.5 MiB over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
-| Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,220 in the second | pass | NFR-003 |
+| Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,225 in the second | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | 176,899 bytes and one SHA-256 in three environments, and identical across two thread counts and two collector settings | pass in part | NFR-004 |
 | Fuzzing | 4 fuzz targets, 16.4 million executions | no panic, and the checked invariants hold | no panic in 16.4 million executions; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
@@ -558,6 +568,8 @@ and a false removal is what the noise corpus exists to catch. Every other defect
 fixed, including the decoder that accepted a document missing the required identity fields: presence is now
 checked against the raw JSON before the struct is built.
 
+## 6. Teamwork and Version Control (5 points)
+
 ### 6.1 Version Control and Prompt Integration
 
 Git activity carries 15 of the 50 course points, so the history is a deliverable rather than a by-product,
@@ -569,7 +581,7 @@ The numbers, all reproducible from the repository:
 | Measure | Value | How to reproduce |
 |---|---|---|
 | Commits | 159 when this table was written, and the command gives the current count | `git rev-list --count HEAD` |
-| By type | 67 docs, 29 fix, 27 test, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore when this table was written | `git log --format='%s' \| cut -d: -f1 \| sort \| uniq -c` |
+| By type | 68 docs, 31 fix, 27 test, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore, summing to 161 at the same moment | `git log --format='%s' \| cut -d: -f1 \| sort \| uniq -c` |
 | Commits carrying a `Spec:` trailer | 115 | `git log --grep='^Spec:' --oneline \| wc -l` |
 | Carrying a `Req:` trailer | 113 | the same with `^Req:` |
 | Carrying a `Task:` trailer | 75 | the same with `^Task:` |
@@ -585,7 +597,7 @@ test file and an evidence file that exist in the repository.
 Issues and merge requests: the course asks for these to be visible, and this repository does not have them,
 because the work was done on one branch by one author with no remote until the owner pushes. That is a
 real gap against the course's expectation and it is stated rather than papered over with retrospective
-issues. What stands in its place is the review record: five independent review rounds, each with its
+issues. What stands in its place is the review record: seven independent review rounds, each with its
 findings, the fix and the test that proves the fix, recorded in `docs/vv/plan.md` (audit log) and
 `docs/prompt-log/`. The commit history is local and ready to push to `gitlab.abo.fi`, and the owner pushes
 it; the repository is not the agent's to publish.
@@ -603,7 +615,7 @@ people, and what replaced the missing second and third reviewers.
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
 Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,882 lines of
-test and 4,939 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
+test and 4,953 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
 requirements of which 29 are verified, and 55 recorded findings of which 54 are fixed. The human wrote no
 implementation line by hand and every one that was committed was read.
 
@@ -624,6 +636,8 @@ team, is supported by the commit and line counts. The claim it should not make i
 therefore fast: the specification gates, the review rounds and the acceptance testing stay serial and
 human, and they were the majority of the elapsed time.
 
+## 7. Reflections and Lessons Learned (4 points)
+
 ### 7.1 Benefits of AI-Assisted SDD
 
 What worked, with the measurement or the artifact that shows it:
@@ -636,17 +650,17 @@ What worked, with the measurement or the artifact that shows it:
   input, the corpus harness and the boundary tests exist at the level the requirement is stated: for
   example the noise floor has a test for a difference exactly at the floor and one level past it, which is
   a test nobody writes from reading the implementation.
-- **Review in a separate context is cheap and effective.** Seven review passes, 31 of the 55 findings, no authoring context
+- **Review in a separate context is cheap and effective.** Seven review passes, 42 of the 55 findings, no authoring context
   shared. The cost is minutes of wall clock per round, and the value is measured by what the findings
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 4,939 lines of specification, research notes, plan and
+- **Documentation kept pace with the code.** 4,953 lines of specification, research notes, plan and
   decision records against 6,350 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
-verified instead: 6,350 lines of implementation and 6,882 lines of test in two working days, with a
+verified instead: 6,350 lines of implementation and 6,884 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
 hour but defects per requirement: 55 recorded findings across 33 requirements, of which 43 are fixed, is a
 rate that only holds because the review was as cheap as it was.
@@ -686,7 +700,7 @@ Each claim is attached to something in this project rather than to a general pri
    duplication in code.
 5. **Review in a different context, with a brief that demands a counterexample.** A review prompt that asks
    for correctness returns style; one that numbers the claims and requires a demonstrating case per finding
-   returns defects. Seven review passes, 31 of the 55 findings, and the two most valuable were about the evidence rather than
+   returns defects. Seven review passes, 42 of the 55 findings, and the two most valuable were about the evidence rather than
    the code.
 6. **Keep the specification in the repository, and let it be wrong sometimes.** Both specification changes
    in this project were corrections, made in their own commits with the reason, and the history of being

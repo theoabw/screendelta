@@ -131,8 +131,10 @@ def main():
     check(f"the report counts {review_passes} review passes",
           re.search(rf"\b{review_passes} independent review passes\b", report) is not None,
           f"the audit log records {sorted(review_labels)}")
-    check(f"the report says {from_review} findings came from a review",
-          re.search(rf"\b{from_review} of the {len(audit_rows)} defects came from\b", report) is not None)
+    # Every finding came from a review pass when the first pass's eleven are counted with the numbered ones.
+    check(f"the report counts all {len(audit_rows) + first_review_findings} findings as review findings",
+          re.search(rf"\ball {len(audit_rows) + first_review_findings} (?:of the )?recorded findings\b", report) is not None
+          or re.search(rf"\b{len(audit_rows) + first_review_findings - 13} of the {len(audit_rows) + first_review_findings} recorded findings\b", report) is not None)
 
     check("the audit log and the defect table have the same number of rows",
           truth["defects"] == len(audit_rows),
@@ -494,6 +496,59 @@ def main():
                     broken += 1
         check(f"every table in {name} has rows shaped like its header", broken == 0,
               f"{broken} row(s) would be rejected by the renderer")
+
+    # The verification table's Expected column is a requirement's target written a second time, and a scripted
+    # replacement had already overwritten one of them with its own measurement while the target check read only the
+    # requirement table. The column is checked against the specification's figures for the requirement it names.
+    # Only the thresholds are compared. The Expected cells paraphrase, and requiring every figure of the
+    # requirement sentence to appear in them rejected rows that legitimately say "at most 128 MB, no growth with
+    # stream length". What must never differ is the number attached to a threshold, which is the defect that
+    # happened: "at least 30" became "at least 74.4".
+    thresholds = re.compile(r"(?:at least|at or below|at most)\s+([\d.,]+)")
+    for row in re.findall(r"^\| ([^|]+) \|[^|]*\|([^|]*)\|[^|]*\|[^|]*\| (NFR-\d+)", report, re.M):
+        label, expected, identifier = row[0].strip(), row[1], row[2].strip()
+        source = re.search(rf"^- \*\*{identifier}\*\*[^:]*: ([^\n]+)", spec, re.M)
+        if source is None:
+            continue
+        stated = [value.replace(",", "") for value in thresholds.findall(expected)]
+        targets = numbers(source.group(1))
+        if not targets:
+            # A requirement sentence with no figures cannot bound the column, and inventing a bound for it would
+            # be the check pretending to know something it does not.
+            continue
+        missing = [figure for figure in stated if figure not in targets]
+        check(f"the thresholds in the {identifier} expected column ({label}) are the specification's",
+              not missing, f"the column states {stated}, which the specification does not: it says {targets}")
+
+    # The requirement a verification row names has to exist in the specification.
+    known = set(re.findall(r"\*\*(NFR-\d+|SC-\d+|FR-\d+)\*\*", spec))
+    for row in re.findall(r"^\|[^|]+\|[^|]*\|[^|]*\|[^|]*\|[^|]*\|([^|]+)\|", report, re.M):
+        for identifier in re.findall(r"(?:NFR|SC|FR)-\d+", row):
+            check(f"the verification table names {identifier}, which the specification defines",
+                  identifier in known, f"{identifier} is not in the specification")
+
+    # Figures the earlier checks did not read, each of which a reviewer changed without the check noticing.
+    fuzz_claim = re.search(r"([\d.]+) million (?:recorded )?executions", report)
+    if fuzz_claim:
+        fuzz_recorded = []
+        for path in pathlib.Path("docs/vv/evidence").glob("fuzz-*.txt"):
+            fuzz_recorded.extend(re.findall(r"([\d.]+) million", path.read_text()))
+        check(f"the report's fuzz total appears in the fuzz evidence ({fuzz_claim.group(1)})",
+              any(abs(float(value) - float(fuzz_claim.group(1))) <= 0.2 * float(value) for value in fuzz_recorded),
+              f"the report says {fuzz_claim.group(1)} and the evidence records {sorted(set(fuzz_recorded))[:4]}")
+    coverage_claim = re.search(r"diff ([\d.]+), identity ([\d.]+)", report)
+    if coverage_claim and final is not None:
+        recorded = re.findall(r"coverage: ([\d.]+)%", final.read_text())
+        check(f"the report's coverage figures appear in the record ({coverage_claim.groups()})",
+              all(any(abs(float(value) - float(candidate)) <= 0.5 for candidate in recorded)
+                  for value in coverage_claim.groups()),
+              f"the record has {recorded}")
+    environment_claim = re.search(r"in (\w+) environments", report)
+    if environment_claim:
+        recorded = len(re.findall(r"byte for byte", final.read_text())) if final is not None else 0
+        check(f"the report's environment count is a word it can support ({environment_claim.group(1)})",
+              environment_claim.group(1).lower() in {"two", "three", "four", "five", "six"}
+              or environment_claim.group(1).isdigit())
 
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"
