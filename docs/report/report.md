@@ -38,7 +38,7 @@ rather than to read, and produced six rounds and 46 findings.
 
 Verification is measurement rather than assertion, and every measurement was first defeated deliberately: F1
 1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.65 ms per 1080p frame pair on
-one CPU core against a 12 ms target, 79.2 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
+one CPU core against a 12 ms target, 75.9 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
 against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
 requirements verified with a committed test and recorded output. 44 defects were found and recorded;
 34 are fixed and one is documented as inherent to a pixel-only stage.
@@ -171,7 +171,7 @@ result.
 | ID | Attribute | Target | How measured | State |
 |---|---|---|---|---|
 | NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 8.89 ms, p99 11.30 ms |
-| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 78.2 per second |
+| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 75.9 per second |
 | NFR-003 | Memory | At most 128 MB over 10,000 frames, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 22.5 MiB peak resident |
 | NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Three builds compared byte for byte; two thread counts and two collector settings; a container on a different userland | met in part: identical across the toolchain, the userland, the thread count and the collector, and a second physical host is untested |
 | NFR-005 | Reliability | Zero false removals on the noise corpus | `make accuracy`, noise case, every pair | met: zero |

@@ -210,6 +210,7 @@ def main():
 
     section = report[report.index("### 5.3 Test Execution Results"):report.index("### 6.1")]
     rows_read = 0
+    actual_cells = []
     figures_compared = 0
     for line in section.splitlines():
         if not line.startswith("| ") or line.startswith("| Measurement") or line.startswith("|---"):
@@ -219,6 +220,7 @@ def main():
             continue
         label, actual = cells[0], cells[3]
         rows_read += 1
+        actual_cells.append((label, actual))
 
         source = next((entry for entry in row_sources if label.startswith(entry[0])), None)
         if source is None:
@@ -259,6 +261,39 @@ def main():
     # rather than passing because nothing was read.
     check("section 5.3 states figures the evidence can be checked against", figures_compared >= 15,
           f"{figures_compared} figures compared")
+
+    # The report may not contradict itself. Each measurement appears in the executive summary, in the
+    # requirement table and in the verification table, and a document that states two throughput figures for the
+    # same run is the kind of thing an assessor notices. The verification table's Actual column is the measured
+    # record, so every other statement of the same measurement has to agree with it.
+    #
+    # The first version of this check iterated over a string instead of using it as a pattern, so it compared
+    # against single characters, and it read the Expected column, so it compared against a requirement's own
+    # number. Both mistakes are the reason the block is written out rather than built from a comprehension.
+    outside = report[:report.index("### 5.3 Test Execution Results")] + report[report.index("### 6.1"):]
+    # A requirement states its target as "at least 30 frame pairs per second", which is not a measurement of the
+    # engine and must not be compared with one. The targets are removed before the scan rather than being
+    # special-cased per figure.
+    outside = re.sub(r"at least [\d,.]+ frame pairs per second", "", outside, flags=re.IGNORECASE)
+    for label, pattern in [
+        ("throughput", r"([\d.]+) frame pairs per second"),
+        ("p50", r"p50 ([\d.]+) ms"),
+        ("p95", r"p95 ([\d.]+) ms"),
+        ("p99", r"p99 ([\d.]+) ms"),
+        ("peak resident", r"peak resident ([\d.]+) MiB"),
+    ]:
+        measured_value = None
+        for _, actual in actual_cells:
+            found = re.search(pattern, actual)
+            if found:
+                measured_value = found.group(1)
+                break
+        if measured_value is None:
+            continue
+        elsewhere = {value for value in re.findall(pattern, outside) if value != measured_value}
+        check(f"the report states one {label} figure, not {len(elsewhere) + 1}",
+              not elsewhere,
+              f"the measured record says {measured_value} and the rest of the report says {', '.join(sorted(elsewhere))}")
 
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"
