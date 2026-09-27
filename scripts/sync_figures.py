@@ -72,6 +72,7 @@ def rewrite(text: str, values: dict[str, str]) -> str:
     rules = [
         (r"p50 [\d.]+ ms, p95 [\d.]+ ms, p99 [\d.]+ ms",
          f"p50 {values['p50']} ms, p95 {values['p95']} ms, p99 {values['p99']} ms"),
+        (r"p95 [\d.]+ ms per 1080p frame pair", f"p95 {values['p95']} ms per 1080p frame pair"),
         (r"p95 [\d.]+ ms and p99 [\d.]+ ms", f"p95 {values['p95']} ms and p99 {values['p99']} ms"),
         (r"p95 latency [\d.]+ ms", f"p95 latency {values['p95']} ms"),
         (r"p95 at or below 12 ms", "p95 at or below 12 ms"),
@@ -92,18 +93,42 @@ def rewrite(text: str, values: dict[str, str]) -> str:
         (r"over [\d,]+ frame pairs and [\d,]+ regions",
          f"over {values['pairs']} frame pairs and {values['regions']} regions"),
     ]
-    def guarded(pattern: str, replacement: str):
-        def substitute(match: re.Match[str]) -> str:
-            before = text[max(0, match.start() - 24):match.start()].lower()
-            if any(threshold in before for threshold in THRESHOLDS):
-                return match.group(0)
-            return match.expand(replacement)
+    # A figure that follows a threshold belongs to the specification. Two mistakes are recorded here, both made
+    # while writing this function. The guard was a window of preceding text, which crossed a cell boundary in the
+    # verification table and skipped a row it should have rewritten. Then it was case-sensitive, so "At least 30",
+    # which begins a sentence in the requirement table, was replaced while "at least 30" in the results table was
+    # not. And the rules ran one after another, so a rule could match the output of the rule before it.
+    #
+    # The rules are one alternation applied in a single pass now, with a case-insensitive lookbehind on the words
+    # that precede the figure, so a target is left alone whatever its capitalisation and nothing is rewritten twice.
+    def guard_alternation(pattern: str) -> str:
+        """A lookbehind that refuses a figure introduced by a threshold, in either capitalisation.
 
-        return substitute
+        A lookbehind must be fixed width, so the threshold and its following space are spelled out per word rather
+        than being matched case-insensitively as a group.
+        """
+        variants = []
+        for threshold in THRESHOLDS:
+            variants.append(threshold)
+            variants.append(threshold.capitalize())
+            variants.append(threshold.upper())
+        return "|".join(f"(?<={re.escape(variant)} )" for variant in variants)
 
-    for pattern, replacement in rules:
-        text = re.sub(pattern, guarded(pattern, replacement), text)
-    return text
+    parts = []
+    for index, (pattern, _) in enumerate(rules):
+        # The digit boundary is what stops a partial match. A guard alone does not: when the lookbehind refused the
+        # start of "30", the engine began one character later and matched "0", which is how "At least 30" became
+        # "At least 377.9" twice while the guard was in place.
+        parts.append(f"(?P<rule{index}>(?<![\\d.])(?<!{guard_alternation(pattern)}){pattern})")
+    combined = re.compile("|".join(parts))
+
+    def substitute(match: re.Match[str]) -> str:
+        for index, (_, replacement) in enumerate(rules):
+            if match.group(f"rule{index}") is not None:
+                return replacement
+        return match.group(0)
+
+    return combined.sub(substitute, text)
 
 
 def main() -> int:
