@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Refuse to commit while a script that mutates the working tree is running.
+#
+# This exists because one of those runs overlapped a commit. The regression check put a fix back to its broken form,
+# ran the test that must notice, and restored the file; the commit read the file in between, so the broken form went
+# into the history and the suite was red at HEAD while the process gate reported green. A mutation that is committed
+# is invisible to every check that runs afterwards, because the tree looks authored to all of them.
+#
+# The two scripts take a lock for their duration, and this refuses to run while it is held. Enable it once per clone:
+#
+#   git config core.hooksPath .githooks
+set -u
+
+lock="$(git rev-parse --git-dir)/screendelta-mutation.lock"
+if [ -e "$lock" ]; then
+  echo "pre-commit: refusing to commit while a mutation is applied: $(cat "$lock" 2>/dev/null)" >&2
+  echo "pre-commit: wait for the script to finish, then check 'git status' before committing." >&2
+  exit 1
+fi
+
+# A staged change to a file that a script mutates is a change nobody read. The scripts refuse to start when
+# something is staged, which is the other half of the same guard, and this catches a manual bypass of it.
+echo "pre-commit: no mutation is applied, committing"
+exit 0

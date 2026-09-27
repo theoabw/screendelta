@@ -21,7 +21,8 @@ cd "$(dirname "$0")/.."
 
 output="${1:-docs/vv/evidence/mutation-$(date +%F).txt}"
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
+lock="$(git rev-parse --git-dir)/screendelta-mutation.lock"
+trap 'rm -f "$log" "$lock"' EXIT
 
 packages="./internal/diff/... ./internal/identity/... ./internal/score/... ./internal/stream/... ./internal/delta/... ./internal/frame/... ./internal/config/..."
 
@@ -35,6 +36,17 @@ dirty() {
   fi
   printf '%s' "$status"
 }
+
+# Nothing may be staged while this runs: a run overlapped a commit once, and the mutation went into the history.
+if ! git diff --cached --quiet 2>/dev/null; then
+  echo "mutation_check: something is staged, refusing to mutate the tree while a commit is being prepared" >&2
+  exit 2
+fi
+if [ -e "$lock" ]; then
+  echo "mutation_check: another run holds the lock, so this one would fight it" >&2
+  exit 2
+fi
+printf '%s\n' "$(basename "$0") is applying a mutation" > "$lock"
 
 if [ -n "$(dirty)" ]; then
   echo "mutation_check: the working tree is not clean, refusing to mutate it" >&2

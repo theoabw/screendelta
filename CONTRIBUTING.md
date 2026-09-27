@@ -174,3 +174,23 @@ them with `specify integration upgrade <key>`.
 integration is marked IDE-scoped rather than multi-install safe. It does not
 affect the workflow. `specify integration use <key>` changes the default surface
 without removing the others.
+
+## Committing while a check is mutating the tree
+
+`scripts/mutation_check.sh` and `scripts/regression_check.sh` change the code to see whether the tests notice, and
+restore what they changed. One of those restorations was captured by a commit: the regression check had put a fix
+back to its broken form, the commit read the file in between, and the broken form went into the history, where every
+later check saw it as authored code and the suite was red while the process gate reported green.
+
+Three guards prevent it now, and they are cheap enough to keep:
+
+1. Both scripts refuse to start when anything is staged, so a commit cannot be in flight when they begin.
+2. Both take `.git/screendelta-mutation.lock` for their duration and release it on exit.
+3. `.githooks/pre-commit` refuses to commit while that lock exists. Enable it once per clone:
+
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+
+`make hooks` reports whether it is enabled. The gate runs the test suite as well, so a committed mutation fails
+`make check-strict` rather than passing it, which is the failure this protocol exists to make impossible.

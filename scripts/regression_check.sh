@@ -17,7 +17,8 @@ cd "$(dirname "$0")/.."
 
 output="${1:-docs/vv/evidence/regression-$(date +%F).txt}"
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
+lock="$(git rev-parse --git-dir)/screendelta-mutation.lock"
+trap 'rm -f "$log" "$lock"' EXIT
 
 dirty() {
   local status
@@ -27,6 +28,17 @@ dirty() {
   fi
   printf '%s' "$status"
 }
+
+# Nothing may be staged while this runs: a run overlapped a commit once, and the reversion went into the history.
+if ! git diff --cached --quiet 2>/dev/null; then
+  echo "regression_check: something is staged, refusing to revert anything while a commit is being prepared" >&2
+  exit 2
+fi
+if [ -e "$lock" ]; then
+  echo "regression_check: another run holds the lock, so this one would fight it" >&2
+  exit 2
+fi
+printf '%s\n' "$(basename "$0") is reverting a fix" > "$lock"
 
 if [ -n "$(dirty)" ]; then
   echo "regression_check: the working tree is not clean, refusing to revert anything" >&2
