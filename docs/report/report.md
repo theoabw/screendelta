@@ -275,7 +275,7 @@ The framework is a mix, chosen per activity rather than per project:
 | Measurement | No prompting: the harness is code, and the agent's role is to build and then try to defeat it | The most valuable findings in this project came from an agent trying to pass a measurement with a deliberately wrong implementation |
 
 The single most important choice is the last one. 10 independent review passes are recorded in the audit log, and every finding came from one of them: 31 of the
-44 numbered defects, plus the 11 from the first pass, which the audit log counts separately because they predate
+56 numbered defects, plus the 11 from the first pass, which the audit log counts separately because they predate
 the numbered table. Seven of those 31 were about the measurement or about the tooling
 that checks it rather than about the engine: a success criterion that could be satisfied by an engine with broken
 classification, a memory guard that passed with a deliberate per-frame leak, a latency run inside the full test
@@ -465,7 +465,7 @@ the level below it cannot see the defect it catches.
 |---|---|---|---|
 | Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Four fuzz targets: the document decoder, the frame decoder, the comparison, and the document round trip, over 16.4 million recorded executions | `docs/vv/evidence/fuzz-2026-09-27.txt` |
 | Mutation testing | That the tests would notice if a rule were wrong, which coverage cannot say | 14 targeted changes to the rules the requirements name, each run against the packages that should care | `docs/vv/evidence/mutation-2026-09-27.txt` |
-| Regression reversion | That the fixes whose defect rows name a test are pinned by it, which is 13 of the 43 | Those 13 fixes put back one at a time, each verified against the test that must catch the reversion, after a control run proving every one of them passes on the untouched tree | `docs/vv/evidence/regression-2026-09-27.txt` |
+| Regression reversion | That the fixes whose defect rows name a test are pinned by it, which is 13 of the 55 | Those 13 fixes put back one at a time, each verified against the test that must catch the reversion, after a control run proving every one of them passes on the untouched tree | `docs/vv/evidence/regression-2026-09-27.txt` |
 | Unit and package tests | That each rule behaves as its comment says, including the boundary cases | `go test ./...`, one test per decision named for the behaviour | Test names in `docs/traceability.md` |
 | Integration and functional tests | That the parts agree: the engine, the differ, the identity map and the document validator | The corpus harness runs the real engine over generated frames and scores the documents | `docs/vv/results.md` |
 | Compliance | That the promises a consumer relies on hold rather than being asserted: no socket, no process, no write outside the declared path, and a document the published schema accepts | `tests/e2e/compliance_test.go`, which walks the syntax trees and compares the filesystem before and after a run, plus the independent consumer | `docs/vv/evidence/e2e-2026-09-27.txt` |
@@ -650,7 +650,7 @@ What worked, with the measurement or the artifact that shows it:
   input, the corpus harness and the boundary tests exist at the level the requirement is stated: for
   example the noise floor has a test for a difference exactly at the floor and one level past it, which is
   a test nobody writes from reading the implementation.
-- **Review in a separate context is cheap and effective.** Ten review passes, 42 of the 55 findings, no authoring context
+- **Review in a separate context is cheap and effective.** Ten review passes, 54 of the 67 findings, no authoring context
   shared. The cost is minutes of wall clock per round, and the value is measured by what the findings
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
@@ -700,7 +700,7 @@ Each claim is attached to something in this project rather than to a general pri
    duplication in code.
 5. **Review in a different context, with a brief that demands a counterexample.** A review prompt that asks
    for correctness returns style; one that numbers the claims and requires a demonstrating case per finding
-   returns defects. Ten review passes, 42 of the 55 findings, and the two most valuable were about the evidence rather than
+   returns defects. Ten review passes, 54 of the 67 findings, and the two most valuable were about the evidence rather than
    the code.
 6. **Keep the specification in the repository, and let it be wrong sometimes.** Both specification changes
    in this project were corrections, made in their own commits with the reason, and the history of being

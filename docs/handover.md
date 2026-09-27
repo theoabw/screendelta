@@ -7,10 +7,10 @@ it, and how to check the result. It is written for the repository owner on the d
 
 | | |
 |---|---|
-| Commits | 169 on `main`, signed, no remote configured |
+| Commits | 178 on `main`, signed, no remote configured |
 | Requirements | 33 defined, 29 verified with a committed test and recorded output |
 | Tasks | 54 planned, 53 complete |
-| Defects | 44 recorded: 43 fixed, 1 documented as inherent with its reason, none open |
+| Defects | 56 recorded: 55 fixed, 1 documented as inherent with its reason, none open |
 | Gates | `make check-strict` (which runs the test suite, the traceability check and the report check), `./scripts/regression_check.sh` and `./scripts/final_verify.sh` exit 0. `./scripts/mutation_check.sh` exits 0 with one survivor, the equivalent mutant its list records |
 | Report | `docs/report/report.md`, exported to `docs/report/report.pdf` |
 
