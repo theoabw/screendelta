@@ -267,12 +267,14 @@ The framework is a mix, chosen per activity rather than per project:
 | Verification | Adversarial role prompting: "your job is to falsify the claims below, not to comment on style" | A review prompt that asks for correctness returns code style; the one that asks for a counterexample returns defects |
 | Measurement | No prompting: the harness is code, and the agent's role is to build and then try to defeat it | The most valuable findings in this project came from an agent trying to pass a measurement with a deliberately wrong implementation |
 
-The single most important choice is the last one. Three of the five review rounds found defects in the
-measurement rather than in the engine: a success criterion that could be satisfied by an engine with
-broken classification, a memory guard that passed with a deliberate per-frame leak, and a latency run
-inside the full test suite whose tail belonged to the machine rather than to the engine. Each is recorded
-as a defect with the fix, because a measurement that reports success while measuring nothing is worse than
-one that fails.
+The single most important choice is the last one. 7 independent review passes are recorded in the audit log, and
+31 of the 44 defects came from one of them. Seven of those 31 were about the measurement or about the tooling
+that checks it rather than about the engine: a success criterion that could be satisfied by an engine with broken
+classification, a memory guard that passed with a deliberate per-frame leak, a latency run inside the full test
+suite whose tail belonged to the machine, a corpus generator that made every accuracy number irreproducible, a
+sample size overstated five times over, a report check that accepted deliberately wrong figures, and a regression
+check that scored full marks on a red baseline. Each is recorded as a defect with the fix, because a measurement
+that reports success while measuring nothing is worse than one that fails.
 
 ### 3.2 Master Prompts and System Prompts
 

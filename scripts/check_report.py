@@ -126,6 +126,21 @@ def main():
         check(f"the report counts {truth[key]} {phrase}",
               re.search(rf"\b{truth[key]} {phrase}\b", report) is not None)
 
+    # The review counts, derived from the audit log's own account of where each finding came from. The report
+    # carried "three of the five review rounds" for several rounds after both numbers had drifted, which is the
+    # kind of claim a reader cannot check and a writer does not notice.
+    audit_sources = [cells[2].strip() for cells in
+                     ([cell.strip() for cell in row.strip("|").split("|")] for row in audit_rows)]
+    review_labels = {source for source in audit_sources if "review" in source.lower()}
+    first_review = "### Round 1: independent code review of the first implementation" in plan
+    review_passes = len(review_labels) + (1 if first_review else 0)
+    from_review = sum(1 for source in audit_sources if source in review_labels)
+    check(f"the report counts {review_passes} review passes",
+          re.search(rf"\b{review_passes} independent review passes\b", report) is not None,
+          f"the audit log records {sorted(review_labels)}")
+    check(f"the report says {from_review} findings came from a review",
+          re.search(rf"\b{from_review} of the {len(audit_rows)} defects came from\b", report) is not None)
+
     check("the audit log and the defect table have the same number of rows",
           truth["defects"] == len(audit_rows),
           f"{truth['defects']} against {len(audit_rows)}")

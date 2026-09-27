@@ -24,6 +24,14 @@ says which is which:
 | NFR-008 portability | A Windows machine. Three targets build and the suite passes on two Linux userlands |
 | SC-005 a person unfamiliar with the project | The same run as NFR-007 |
 
+## Decisions already taken
+
+| Question | Answer | What it means here |
+|---|---|---|
+| Push the repository | Local for now | The 149 signed commits stay on this machine. Nothing has been pushed and no remote is configured |
+| The acceptance run | The owner runs it and reports the result | `docs/vv/acceptance.md` is ready; the timed scenario and six short ones take about ten minutes with a second person. NFR-007 and SC-005 move to verified once the result is recorded |
+| The second host | Retry the owner's own machines later | The desktop, the laptop and its WSL instance were all unreachable when attempted, so NFR-004's cross-host claim and NFR-008's Windows runtime half stay unmet with the residual recorded |
+
 ## What the owner has to do
 
 ### 1. Push the repository (about five minutes)
@@ -57,7 +65,7 @@ If the timed run takes under five minutes with no help, NFR-007 and SC-005 are m
 to verified. If it does not, the run has found a usability defect, which is a better outcome than not running it:
 record it in `docs/vv/results.md` as a defect and fix the README.
 
-### 3. Optional: close the other two
+### 3. Optional: close the other two, when a machine is reachable
 
 Both need a machine this one cannot reach. If either becomes available, the commands are:
 
