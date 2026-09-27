@@ -178,7 +178,7 @@ result.
 | NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs | `make accuracy`, corpus with generated ground truth | met: 5,134 frame pairs, F1 1.0000 |
 | NFR-007 | Usability | A new user produces a delta from their own screenshots within two minutes, from the README alone | Task timing with an external tester | not yet measured; the acceptance script exists and is not run |
 | NFR-008 | Portability | CPU only, no GPU, no network at runtime, Linux and Windows | `make cross`, which CI runs, the no-network tests, and the suite run on a second Linux userland | partly met: three targets build and the suite passes on Ubuntu and Debian; the Windows runtime half is untested |
-| NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 81.9, identity 86.1 |
+| NFR-009 | Maintainability | At least 80 percent line coverage on the geometry and identity modules | `go test -cover` | met: diff 81.9, identity 86.2 |
 | NFR-010 | Compatibility | Schema changes versioned, and a consumer can reject a version it does not understand | Decode-time rejection test, exit code 3 from the command line | met |
 | NFR-011 | Security | No network socket, no process execution, reads only the frames and configuration given, writes only to the declared output path | Two static checks over the syntax trees of every non-test file, and one dynamic check comparing the filesystem before and after a run | met: the checks fail when an import of `net/http` and a stray `os.WriteFile` are added, and pass again when they are removed |
 
@@ -494,7 +494,7 @@ Current state, from the commands named:
 | Throughput, one core | `make perf` | at least 30 frame pairs per second | 75.9 frame pairs per second | pass | NFR-002 |
 | Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 25.3 MiB over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,220 in the second | pass | NFR-003 |
-| Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.1 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
+| Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | 176,899 bytes and one SHA-256 in three environments, and identical across two thread counts and two collector settings | pass in part | NFR-004 |
 | Fuzzing | 4 fuzz targets, 16.4 million executions | no panic, and the checked invariants hold | no panic in 16.4 million executions; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
 | Mutation testing | 14 rules changed, one at a time | every mutation is caught | 13 of 14 applied mutations killed; the one survivor changes only how much work the comparison does, which is why no test can distinguish it | pass with one recorded exception | NFR-009 |
