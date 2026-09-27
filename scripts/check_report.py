@@ -379,22 +379,29 @@ def main():
               f"the summary says {claimed.group(1)} and the recorded run says {recorded_value}")
 
     # (b) The README's figures have to match a recorded value, not merely have the shape of one.
-    for label, pattern in [
-        ("p50", r"p50 ([\d.]+) ms"), ("p95", r"p95 ([\d.]+) ms"), ("p99", r"p99 ([\d.]+) ms"),
-        ("throughput", r"([\d.]+) frame pairs per second"), ("decisions", r"([\d.]+) decisions per second"),
-        ("peak heap", r"([\d.]+) MiB peak heap"), ("peak resident", r"([\d.]+) MiB peak resident"),
-        ("regions", r"([\d,]+) regions"),
+    # The README and the record state the same measurement in different shapes, so each row carries the pattern for
+    # the README and the pattern for the record. An earlier version used one pattern for both, which silently read
+    # nothing from the record and then failed every row.
+    newest = sorted(pathlib.Path("docs/vv/evidence").glob("final-*.txt"), key=lambda path: path.stat().st_mtime)
+    newest_text = newest[-1].read_text() if newest else ""
+    for label, readme_pattern, record_pattern in [
+        ("p50", r"p50 ([\d.]+) ms", r"p50 ([\d.]+) ms"),
+        ("p95", r"p95 ([\d.]+) ms", r"p95 ([\d.]+) ms"),
+        ("p99", r"p99 ([\d.]+) ms", r"p99 ([\d.]+) ms"),
+        ("throughput", r"([\d.]+) frame pairs per second", r"sustained ([\d.]+) frame pairs per second"),
+        ("decisions", r"([\d.]+) decisions per second", r"decisions per second ([\d.]+)"),
+        ("peak heap", r"([\d.]+) MiB peak heap", r"peak heap \d+ bytes \(([\d.]+) MiB\)"),
+        ("peak resident", r"([\d.]+) MiB peak resident", r"peak resident \d+ bytes \(([\d.]+) MiB\)"),
+        ("regions", r"([\d,]+) regions", r"([\d,]+) regions matched"),
     ]:
-        claimed = re.search(pattern, readme)
+        claimed = re.search(readme_pattern, readme)
         if claimed is None:
             continue
-        recorded_values = []
-        for path in pathlib.Path("docs/vv/evidence").glob("*.txt"):
-            recorded_values.extend(re.findall(pattern, path.read_text()))
+        recorded_values = re.findall(record_pattern, newest_text)
         value = float(claimed.group(1).replace(",", ""))
-        check(f"the README's {label} matches a recorded value ({claimed.group(1)})",
+        check(f"the README's {label} matches the recorded value ({claimed.group(1)} against {recorded_values[:2]})",
               any(abs(float(candidate.replace(",", "")) - value) <= 0.2 * value for candidate in recorded_values),
-              f"the README says {claimed.group(1)}; the evidence records {sorted(set(recorded_values))[:6]}")
+              f"the README says {claimed.group(1)}; the record has {recorded_values[:4]}")
 
     # (c) The decision rate, the days of work and the fixed-finding count, each of which a reviewer changed without
     # the check noticing.
@@ -412,6 +419,51 @@ def main():
     check(f"the report's fixed-finding count matches the records ({len(defect_rows) + 11 - 1})",
           fixed_claim is not None and abs(int(fixed_claim.group(1)) - (len(defect_rows) + 11 - 1)) <= 1,
           f"the report says {fixed_claim.group(1) if fixed_claim else 'nothing'}")
+
+    # A requirement's target belongs to the specification and a measurement belongs to the record. A scripted
+    # replacement over the report once overwrote a target with a measurement, which no existing check could see
+    # because targets are excluded from the consistency rule, so the two are checked against their own sources.
+    spec = pathlib.Path("specs/001-frame-delta-engine/spec.md").read_text()
+
+    def numbers(text: str) -> list[str]:
+        """The figures in a sentence, with thousands separators removed so that 10,000 is 10000."""
+        return [value.replace(",", "") for value in re.findall(r"\d+(?:[,\d]*\.?\d*)", text)]
+
+    for identifier, source in re.findall(r"^- \*\*(NFR-\d+)\*\*[^:]*: ([^\n]+)", spec, re.M):
+        target_figures = numbers(source)
+        row = re.search(rf"\| {identifier} \|[^|]*\|([^|]*)\|", report)
+        if row is None or not target_figures:
+            continue
+        stated = numbers(row.group(1))
+        missing = [figure for figure in target_figures if figure not in stated]
+        check(f"the {identifier} target in the report is the specification's ({target_figures})",
+              not missing,
+              f"the specification says {target_figures} and the report's target cell says {stated}")
+
+    # The state cell is a measurement, and it is read through the shape the row uses rather than by taking every
+    # number in the cell, which would count the digits of "p95" as a figure.
+    for identifier, pattern, source in [
+        ("NFR-001", r"met: p95 [\d.]+ ms, p99 [\d.]+ ms", r"p95 ([\d.]+) ms|p99 ([\d.]+) ms"),
+        ("NFR-002", r"met: [\d.]+ per second", r"sustained ([\d.]+) frame pairs per second"),
+        ("NFR-003", r"met: [\d.]+ MiB peak resident", r"peak resident \d+ bytes \(([\d.]+) MiB\)"),
+    ]:
+        row = re.search(rf"\| {identifier} \|[^|]*\|[^|]*\|[^|]*\|([^|]*)\|", report)
+        if row is None or final is None:
+            continue
+        in_row = re.search(pattern, row.group(1))
+        claimed = []
+        if in_row:
+            for value in re.findall(r"\d+(?:\.\d+)?", row.group(1)):
+                if value in ("95", "99"):
+                    continue
+                claimed.append(float(value))
+        found = re.findall(source, final.read_text())
+        recorded_values = [float(value) for entry in found
+                           for value in (entry if isinstance(entry, tuple) else (entry,)) if value]
+        check(f"the {identifier} state in the report is the recorded measurement ({claimed})",
+              bool(claimed) and all(
+                  any(abs(value - recorded) <= 0.2 * recorded for recorded in recorded_values) for value in claimed),
+              f"the report states {claimed} and the record has {recorded_values}")
 
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"
