@@ -24,7 +24,7 @@ The system built is **ScreenDelta**, a deterministic frame delta and element ide
 consecutive 1920 by 1080 frames, reports which rectangular areas changed, assigns each area an element
 identity that stays stable while that element is tracked, and emits one self-contained JSON document per
 frame. It is deliberately one stage of a larger pipeline: it does not classify, recognise text or drive a
-pointer, and it carries an explicit uncertainty marker for identities it has evidence for but will not claim.
+pointer, and it marks an identity it has evidence for but will not claim.
 
 Specification was formal and versioned: a project constitution, a feature specification with 16 functional
 requirements, 11 non-functional requirements and 6 success criteria, an implementation plan with research
@@ -34,14 +34,14 @@ traceability matrix checked by a script that runs in CI.
 The work used **GitHub Spec Kit v1.0.12** as the SDD tool kit, driven command by command from a DeepSeek
 backed agent harness, with the same repository reachable from three surfaces: GitHub Copilot prompts,
 opencode commands and dsh skills. Independent review ran in a separate agent context, briefed to falsify
-rather than to read, and produced six rounds and 46 findings.
+rather than to read, and produced 7 review passes and 31 of the 55 recorded findings.
 
-Verification is measurement rather than assertion, and every measurement was first defeated deliberately: F1
+Verification is measurement rather than assertion, and each measurement was defeated deliberately first: F1
 1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.65 ms per 1080p frame pair on
-one CPU core against a 12 ms target, 75.9 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
+one CPU core against a 12 ms target, 74.2 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
 against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
 requirements verified with a committed test and recorded output. 44 defects were found and recorded;
-34 are fixed and one is documented as inherent to a pixel-only stage.
+43 are fixed and one is documented as inherent to a pixel-only stage.
 
 ## 1. Introduction and Paradigm Shift (3 points)
 
@@ -115,8 +115,8 @@ project did not write implementation code that way. The specification-driven wor
 
 The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
 2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: more than 100 commits, 6,153 lines of Go and
-5,899 lines of test, with the specification, plan and task list written before the code they describe.
+is graded on what the process produced rather than on how long it took: 153 commits, 6,350 lines of Go and
+6,855 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
 
@@ -170,9 +170,9 @@ result.
 
 | ID | Attribute | Target | How measured | State |
 |---|---|---|---|---|
-| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 8.89 ms, p99 11.30 ms |
-| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 75.9 per second |
-| NFR-003 | Memory | At most 128 MB over 10,000 frames, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 22.5 MiB peak resident |
+| NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 9.18 ms, p99 10.98 ms |
+| NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 74.2 per second |
+| NFR-003 | Memory | At most 128 MB over 10,000 frames, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 25.3 MiB peak resident |
 | NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Three builds compared byte for byte; two thread counts and two collector settings; a container on a different userland | met in part: identical across the toolchain, the userland, the thread count and the collector, and a second physical host is untested |
 | NFR-005 | Reliability | Zero false removals on the noise corpus | `make accuracy`, noise case, every pair | met: zero |
 | NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs | `make accuracy`, corpus with generated ground truth | met: 5,134 frame pairs, F1 1.0000 |
@@ -337,7 +337,7 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 
 | Original prompt | Failure it caused | Corrected prompt | Result | Verified by |
 |---|---|---|---|---|
-| "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 5,134 frame pairs scored at F1 1.0000 with every asserted class correct; 22.5 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
+| "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 5,134 frame pairs scored at F1 1.0000 with every asserted class correct; 25.3 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
 attempt to pass it with a deliberately wrong implementation has failed. Three of the 44 recorded defects
@@ -418,7 +418,7 @@ The workflow as actually followed, with the gate that ends each step:
 | 4 | `/speckit.plan` | `plan.md`, `research.md`, `data-model.md`, `contracts/` | The contracts exist before the code they constrain |
 | 5 | `/speckit.checklist` | `checklists/requirements.md` | Reviewer-owned items are never ticked by the author |
 | 6 | `/speckit.analyze` | `docs/analysis/analyze-2026-09-26.md` | Five findings, all resolved or recorded |
-| 7 | `/speckit.tasks` | `tasks.md`, 53 tasks | Every requirement has at least one task; checked by `scripts/check_traceability.py` |
+| 7 | `/speckit.tasks` | `tasks.md`, 54 tasks | Every requirement has at least one task; checked by `scripts/check_traceability.py` |
 | 8 | `/speckit.implement`, task by task | Code, tests, evidence | `make check` (traceability, format, vet, tests) before any commit; an independent review before a slice is called done |
 | 9 | `/speckit.converge` | `docs/analysis/converge-2026-09-27.md` | The specification reconciled against the built system: four edge cases had no test and two had no implementation, and each was closed or recorded |
 
@@ -428,13 +428,13 @@ being refined, because the interfaces they define had to be real before the plan
 about them. The task list was updated in the same round. Second, the review gate was added after the fact:
 eleven code commits went in without an independent review, which the audit log records as a process
 failure, and the standing rule since is that a slice is not finished until a review in a separate context
-has tried to break it. That rule has since found 46 findings across six rounds.
+has tried to break it. That rule has produced 31 of the 55 recorded findings.
 
 ### 4.5 Prompts
 
 The prompts used during the specification and implementation rounds are in `docs/prompt-log/`, one entry
 per session, each with the verbatim prompt, the intent, what happened, what was corrected in the
-specification or the documents, and what the agent got wrong. Seven entries exist. The ones that carry the
+specification or the documents, and what the agent got wrong. Eight entries exist. The ones that carry the
 most information for a reader are:
 
 - `0005-system-selection.md`: the selection round, including the four systems explored and rejected first;
@@ -451,7 +451,7 @@ the level below it cannot see the defect it catches.
 
 | Level | What it establishes | Mechanism | Where the result is recorded |
 |---|---|---|---|
-| Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Four fuzz targets: the document decoder, the frame decoder, the comparison, and the document round trip, over 16.4 million recorded executions | `docs/vv/evidence/fuzz-2026-09-27.txt` |
+| Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Four fuzz targets: the document decoder, the frame decoder, the comparison, and the document round trip, over 20.0 million recorded executions | `docs/vv/evidence/fuzz-2026-09-27.txt` |
 | Mutation testing | That the tests would notice if a rule were wrong, which coverage cannot say | 14 targeted changes to the rules the requirements name, each run against the packages that should care | `docs/vv/evidence/mutation-2026-09-27.txt` |
 | Regression reversion | That the fixes whose defect rows name a test are pinned by it, which is 13 of the 43 | Those 13 fixes put back one at a time, each verified against the test that must catch the reversion, after a control run proving every one of them passes on the untouched tree | `docs/vv/evidence/regression-2026-09-27.txt` |
 | Unit and package tests | That each rule behaves as its comment says, including the boundary cases | `go test ./...`, one test per decision named for the behaviour | Test names in `docs/traceability.md` |
@@ -479,7 +479,7 @@ the level below it cannot see the defect it catches.
 6. **The independent review is an agent, not a person.** It is a different context, a different model and a
    brief that requires counterexamples, which is a real substitute for a second pair of eyes and not the
    same thing. Section 6.1 says what the single-author history cannot show.
-7. **Fuzzing measures the input paths, not the output quality.** Twelve million executions say the decoders do not panic and that one ordering property holds; they say nothing about whether the regions are the right ones, which is what the corpus measures and what the corpus's own limits bound.
+7. **Fuzzing measures the input paths, not the output quality.** Twenty million executions say the decoders do not panic and that one ordering property holds; they say nothing about whether the regions are the right ones, which is what the corpus measures and what the corpus's own limits bound.
 8. **The measurement can be gamed, and was.** Three defects were found in the harness rather than in the
    engine, all of the same kind: a green result that measured less than it claimed. Every measurement in
    this report has since been defeated deliberately at least once.
@@ -518,13 +518,13 @@ Current state, from the commands named:
 | Measurement | Command | Expected | Actual | Status | Requirement |
 |---|---|---|---|
 | Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, zero false removals | pass | NFR-005, NFR-006, SC-001 |
-| Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.18 ms, p95 8.89 ms, p99 11.30 ms | pass | NFR-001, SC-002 |
-| Throughput, one core | `make perf` | at least 30 frame pairs per second | 75.9 frame pairs per second | pass | NFR-002 |
+| Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.52 ms, p95 9.18 ms, p99 10.98 ms | pass | NFR-001, SC-002 |
+| Throughput, one core | `make perf` | at least 30 frame pairs per second | 74.2 frame pairs per second | pass | NFR-002 |
 | Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 25.3 MiB over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,220 in the second | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | 176,899 bytes and one SHA-256 in three environments, and identical across two thread counts and two collector settings | pass in part | NFR-004 |
-| Fuzzing | 4 fuzz targets, 16.4 million executions | no panic, and the checked invariants hold | no panic in 16.4 million executions; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
+| Fuzzing | 4 fuzz targets, 20.0 million executions | no panic, and the checked invariants hold | no panic in 20.0 million executions; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
 | Mutation testing | 14 rules changed, one at a time | every mutation is caught | 13 of 14 applied mutations killed; the one survivor changes only how much work the comparison does, which is why no test can distinguish it | pass with one recorded exception | NFR-009 |
 | Regression reversion | 13 recorded fixes put back, one at a time | every reversion is caught | 13 of 13 caught, against a control run that requires all thirteen tests to pass first | pass | NFR-009 |
 | Requirement traceability | `make check-strict` | every requirement traced to a task, a test and existing evidence | 33 rows, 29 verified, 0 errors, 0 warnings | pass | the process gate |
@@ -566,12 +566,12 @@ The numbers, all reproducible from the repository:
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Commits | above 100, and the command gives the exact count | `git rev-list --count HEAD` |
-| By type | 27 docs, 23 feat, 15 fix, 6 plan, 3 test, 2 spec, 2 refactor, 1 perf, 1 chore (sums to 80) | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
-| Commits carrying a `Spec:` trailer | 70 | `git log --grep='^Spec:' --oneline | wc -l` |
-| Carrying a `Req:` trailer | 68 | the same with `^Req:` |
-| Carrying a `Task:` trailer | 45 | the same with `^Task:` |
-| Carrying a `Prompt:` trailer | 76 | the same with `^Prompt:` |
+| Commits | 153, all GPG-signed, on one branch, no merges | `git rev-list --count HEAD` |
+| By type | 64 docs, 27 test, 27 fix, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore, summing to 153 | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
+| Commits carrying a `Spec:` trailer | 115 | `git log --grep='^Spec:' --oneline | wc -l` |
+| Carrying a `Req:` trailer | 113 | the same with `^Req:` |
+| Carrying a `Task:` trailer | 75 | the same with `^Task:` |
+| Carrying a `Prompt:` trailer | 121 | the same with `^Prompt:` |
 | Days of work | 2 (2026-09-26, 2026-09-27) | `git log --format='%ad' --date=short | sort | uniq -c` |
 
 The trailers are the link between a code change, the requirement it serves, the task that planned it and
@@ -600,8 +600,8 @@ people, and what replaced the missing second and third reviewers.
 | Verifier | An agent in a separate context, directed by the human | Five rounds, each with a repository, a commit range and numbered claims to falsify; the authoring context was never shared with it | Findings in `docs/vv/plan.md`, `docs/vv/results.md` |
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
-Leverage, quantified rather than asserted: more than 100 commits in two days, 6,153 lines of Go against 5,813 lines
-of test and 4,661 lines of specification, plan and process documents, 54 planned tasks of which 53 are
+Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,855 lines
+of test and 4,928 lines of specification and process documents, plan and process documents, 54 planned tasks of which 53 are
 complete, 33 requirements of which 29 are verified, and 55 recorded findings of which 43 are fixed. The
 human wrote no implementation line by hand and read every one that was committed.
 
@@ -626,7 +626,7 @@ human, and they were the majority of the elapsed time.
 
 What worked, with the measurement or the artifact that shows it:
 
-- **The specification became the interface between the human and the agents.** 53 tasks, each with a file
+- **The specification became the interface between the human and the agents.** 54 tasks, each with a file
   list, a constraint list and a verification method, meant an implementation session could be handed over
   and reviewed afterwards rather than dictated. Commits per session rose from a handful in the scaffold
   session to five to eight in the implementation rounds.
@@ -634,17 +634,17 @@ What worked, with the measurement or the artifact that shows it:
   input, the corpus harness and the boundary tests exist at the level the requirement is stated: for
   example the noise floor has a test for a difference exactly at the floor and one level past it, which is
   a test nobody writes from reading the implementation.
-- **Review in a separate context is cheap and effective.** Five rounds, 36 findings, no authoring context
+- **Review in a separate context is cheap and effective.** Seven review passes, 31 of the 55 findings, no authoring context
   shared. The cost is minutes of wall clock per round, and the value is measured by what the findings
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 4,661 lines of specification, research notes, plan and
-  decision records against 6,153 lines of Go, because every non-obvious rule had to be written down to be
+- **Documentation kept pace with the code.** 4,928 lines of specification, research notes, plan and
+  decision records against 6,350 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
-verified instead: 6,153 lines of implementation and 5,899 lines of test in two working days, with a
+verified instead: 6,350 lines of implementation and 6,855 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
 hour but defects per requirement: 55 recorded findings across 33 requirements, of which 43 are fixed, is a
 rate that only holds because the review was as cheap as it was.
@@ -683,7 +683,7 @@ Each claim is attached to something in this project rather than to a general pri
    duplication in code.
 5. **Review in a different context, with a brief that demands a counterexample.** A review prompt that asks
    for correctness returns style; one that numbers the claims and requires a demonstrating case per finding
-   returns defects. Five rounds, 36 findings, and the two most valuable were about the evidence rather than
+   returns defects. Seven review passes, 31 of the 55 findings, and the two most valuable were about the evidence rather than
    the code.
 6. **Keep the specification in the repository, and let it be wrong sometimes.** Both specification changes
    in this project were corrections, made in their own commits with the reason, and the history of being

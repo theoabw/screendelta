@@ -378,6 +378,39 @@ def looks_like_path(value: str) -> bool:
     return "/" in value or "\\" in value or bool(Path(value).suffix)
 
 
+def check_named_function(
+    findings: Findings,
+    row: dict[str, object],
+    identifier: str,
+    label: str,
+    path: Path,
+    value: str,
+) -> bool:
+    """Require a "file::TestName" value to name a function the file defines."""
+    name = value.split("::", 1)[1].split("#")[0].strip().strip("`").strip()
+    if not name:
+        findings.error(
+            f"docs/traceability.md:{row['line']}: {identifier} names {label} "
+            f"'{value}', which has no function after the double colon"
+        )
+        return False
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as error:
+        findings.error(
+            f"docs/traceability.md:{row['line']}: {identifier} names {label} "
+            f"'{value}', which cannot be read: {error}"
+        )
+        return False
+    if re.search(rf"^func {re.escape(name)}\b", source, re.M):
+        return True
+    findings.error(
+        f"docs/traceability.md:{row['line']}: {identifier} names the test "
+        f"'{name}' in {path.relative_to(REPO_ROOT)}, which that file does not define"
+    )
+    return False
+
+
 def check_file_value(
     findings: Findings,
     row: dict[str, object],
@@ -419,6 +452,10 @@ def check_file_value(
     resolved = REPO_ROOT / path
     if resolved.exists():
         if resolved.is_file():
+            # A value of the form "path::TestName" names a function, and the name is checked too: four rows named
+            # tests that had been renamed or never existed, and the file half kept the check green.
+            if "::" in value and not check_named_function(findings, row, identifier, label, resolved, value):
+                return
             return
         findings.error(
             f"docs/traceability.md:{line}: {identifier} names {label} "
