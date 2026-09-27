@@ -177,7 +177,7 @@ result.
 |---|---|---|---|---|
 | NFR-001 | Performance | p95 at or below 12 ms, p99 at or below 25 ms per 1080p frame pair on one CPU core | `make perf`, per-pair timing, percentiles, GOMAXPROCS=1 | met: p95 8.97 ms, p99 9.46 ms |
 | NFR-002 | Throughput | At least 30 frame pairs per second at 1080p on one core | `make perf`, sustained over 300 pairs | met: 77.9 per second |
-| NFR-003 | Memory | At most 128 MB over 10,000 frames at 1080p, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 23.2 MiB peak resident |
+| NFR-003 | Memory | At most 128 MB over 10,000 frames at 1080p, no growth with stream length | `make memcheck`, resident and heap sampled every 1,000 frames | met: 33.0 MiB peak resident in the highest recorded run |
 | NFR-004 | Determinism | Byte-identical output, independent of host, thread count and scheduling | Three builds compared byte for byte; two thread counts and two collector settings; a container on a different userland | met in part: identical across the toolchain, the userland, the thread count and the collector, and a second physical host is untested |
 | NFR-005 | Reliability | Zero false removals on the noise corpus | `make accuracy`, noise case, every pair | met: zero |
 | NFR-006 | Accuracy | Region F1 at or above 0.98 on 5,000 or more generated pairs, and moved-region attribution at or above 0.95 | `make accuracy`, corpus with generated ground truth, which asserts both clauses | met: 5,134 frame pairs, F1 1.0000, and 20 of 20 movements attributed as movements |
@@ -533,7 +533,7 @@ Current state, from the commands named:
 | Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, moved attribution at or above 0.95, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, 20 of 20 movements attributed (1.0000), zero false removals | pass | NFR-005, NFR-006, SC-001 |
 | Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.35 ms, p95 8.97 ms, p99 9.46 ms | pass | NFR-001, SC-002 |
 | Throughput, one core | `make perf` | at least 30 frame pairs per second | 77.9 frame pairs per second | pass | NFR-002 |
-| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 23.2 MiB over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
+| Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 33.0 MiB in the recorded run over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,225 in the second | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | 176,899 bytes and one SHA-256 in three environments, and identical across two thread counts and two collector settings | pass in part | NFR-004 |

@@ -24,12 +24,12 @@ go test ./internal/score/... -run TestCorpus -count=1 -v
 === NAME  TestCorpus
     corpus_test.go:198: every case together: 5134 frame pairs scored, 27094 regions matched, precision 1.0000 recall 1.0000 F1 1.0000 (tp 27094 fp 0 fn 0, false removals 0, reports on no-change pairs 0)
     corpus_test.go:204: moved-region attribution: 20 of 20 movements reported as moved (1.0000, NFR-006 asks for 0.95)
---- PASS: TestCorpus (13.75s)
-    --- PASS: TestCorpus/changed-label (0.01s)
-    --- PASS: TestCorpus/moving-button (0.04s)
+--- PASS: TestCorpus (12.92s)
+    --- PASS: TestCorpus/changed-label (0.00s)
+    --- PASS: TestCorpus/moving-button (0.03s)
     --- PASS: TestCorpus/occluded-button (0.01s)
     --- PASS: TestCorpus/noise (0.23s)
-    --- PASS: TestCorpus/sweep (13.47s)
+    --- PASS: TestCorpus/sweep (12.66s)
 PASS
 exit=0
 
@@ -37,30 +37,30 @@ exit=0
 SCREENDELTA_LATENCY_ASSERT=1 GOMAXPROCS=1 go test -p 1 -count 1 -v -run 'TestLatency|TestThroughput' ./internal/perf/...
 === RUN   TestLatencyPercentiles
     perf_test.go:236: 1920x1080, small change, one core, 400 pairs after 60 warm-up
-    perf_test.go:237: mean 8.29 ms, p50 8.35 ms, p90 8.76 ms, p95 8.97 ms, p99 9.46 ms, worst 10.13 ms, fastest 6.75 ms
+    perf_test.go:237: mean 8.27 ms, p50 8.33 ms, p90 8.76 ms, p95 8.95 ms, p99 9.41 ms, worst 9.72 ms, fastest 6.82 ms
     perf_test.go:239: 456 of 460 frames reported at least one region
---- PASS: TestLatencyPercentiles (5.56s)
+--- PASS: TestLatencyPercentiles (5.49s)
 === RUN   TestLatencyOnALargerChange
-    perf_test.go:293: 1920x1080, large change, one core: p50 38.44 ms, p95 42.08 ms, p99 46.10 ms
+    perf_test.go:293: 1920x1080, large change, one core: p50 37.96 ms, p95 40.63 ms, p99 42.89 ms
     perf_test.go:295: large records what a screen costs when about half of it changes in one frame; the small profile is the one the requirement is asserted on
---- PASS: TestLatencyOnALargerChange (5.92s)
+--- PASS: TestLatencyOnALargerChange (5.84s)
 === RUN   TestThroughput
-    perf_test.go:318: sustained 77.9 frame pairs per second on one core (300 pairs in 3.852s)
---- PASS: TestThroughput (3.85s)
+    perf_test.go:318: sustained 74.1 frame pairs per second on one core (300 pairs in 4.05s)
+--- PASS: TestThroughput (4.05s)
 PASS
 exit=0
 
 == make memcheck ==
 go test ./internal/stream/... -run 'TestMemoryCeiling|TestAllocationsDoNotGrowWithStreamLength' -count=1 -v
 === RUN   TestAllocationsDoNotGrowWithStreamLength
-    memory_test.go:130: bytes allocated per frame: first window 8225, second window 8220
+    memory_test.go:130: bytes allocated per frame: first window 8225, second window 8221
 --- PASS: TestAllocationsDoNotGrowWithStreamLength (0.04s)
 === RUN   TestMemoryCeiling
-    memory_test.go:201: streamed 10000 frames at 1920x1080 in 2.503s
-    memory_test.go:202: peak heap 25201656 bytes (24.0 MiB), engine buffers 16588800 bytes
-    memory_test.go:204: peak resident 24346624 bytes (23.2 MiB)
-    memory_test.go:208: heap at frame 1000: 25201656 bytes, at frame 10000: 25201656 bytes
---- PASS: TestMemoryCeiling (2.50s)
+    memory_test.go:201: streamed 10000 frames at 1920x1080 in 5.473s
+    memory_test.go:202: peak heap 25201048 bytes (24.0 MiB), engine buffers 16588800 bytes
+    memory_test.go:204: peak resident 34586624 bytes (33.0 MiB)
+    memory_test.go:208: heap at frame 1000: 25201048 bytes, at frame 10000: 25201048 bytes
+--- PASS: TestMemoryCeiling (5.48s)
 PASS
 exit=0
 
@@ -76,8 +76,8 @@ exit=0
 capture: frames written: 8
 go run ./tools/demo --source corpus/real --passes 20 --assert-rate 20
 source corpus/real, 8 frames replayed 20 times, 160 frames processed
-capture 1280x720, elapsed 450ms
-frames per second 355.4, decisions 119, decisions per second 264.4
+capture 1280x720, elapsed 446ms
+frames per second 358.7, decisions 119, decisions per second 266.8
 exit=0
 
 == coverage of the measured modules ==
@@ -91,16 +91,15 @@ vet diagnostics: 0
 python3 scripts/check_traceability.py --require-specs
 traceability: 33 requirements in 1 spec(s), 33 matrix rows, 29 verified, 0 error(s), 0 warning(s)
 python3 scripts/check_report.py
-repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '171', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
+repository state: {'requirements': 33, 'verified': 29, 'defects': 44, 'findings': 55, 'fixed': 43, 'commits': '173', 'tasks_done': 53, 'tasks_total': 54, 'functional': 16, 'nonfunctional': 11, 'criteria': 6}
 
+FAIL  the README's peak resident matches the recorded value (23.2 against ['33.0']): the README says 23.2; the record has ['33.0']
+FAIL  the NFR-003 state in the report is the recorded measurement ([23.2]): the report states [23.2] and the record has [33.0]
 
-every claim in the report and the README holds against this commit
-go test ./...
-?   	github.com/theoabw/screendelta/tools/consumer	[no test files]
-?   	github.com/theoabw/screendelta/tools/corpusgen	[no test files]
-?   	github.com/theoabw/screendelta/tools/demo	[no test files]
-exit=0
+2 claim(s) do not hold: the README's peak resident matches the recorded value (23.2 against ['33.0']), the NFR-003 state in the report is the recorded measurement ([23.2])
+make: *** [Makefile:35: check-report] Error 1
+exit=2
 
 == verdict ==
-9 checks run, 0 failed, including the process gate above.
+9 checks run, 1 failed, including the process gate above.
 the working tree was clean when the record was written, apart from this record, which is excluded because this script writes it
