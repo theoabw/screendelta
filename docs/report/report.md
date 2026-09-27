@@ -615,7 +615,7 @@ people, and what replaced the missing second and third reviewers.
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
 Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,882 lines of
-test and 4,982 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
+test and 4,989 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
 requirements of which 29 are verified, and 67 findings were recorded, of which 66 are fixed. The human wrote no
 implementation line by hand and every one that was committed was read.
 
@@ -655,7 +655,7 @@ What worked, with the measurement or the artifact that shows it:
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 4,982 lines of specification, research notes, plan and
+- **Documentation kept pace with the code.** 4,989 lines of specification, research notes, plan and
   decision records against 6,350 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 

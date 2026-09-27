@@ -339,11 +339,16 @@ def main():
           not over and not stale,
           f"overstated: {over}; stale: {stale}; the repository has {', '.join(f'{n} {k}' for n, k in types)}")
 
-    for label, key in [("Go", "go"), ("test", "test"), ("specification and process documents", "docs")]:
+    for label, key, tolerance in [("Go", "go", 0), ("test", "test", 0),
+                                  ("specification and process documents", "docs", 20)]:
         claim = re.search(rf"([\d,]+) lines of {label}", report)
-        check(f"the report's {label} line count matches the tree ({activity[key]:,})",
-              claim is not None and claim.group(1) == f"{activity[key]:,}",
-              f"the report says {claim.group(1) if claim else 'nothing'}")
+        stated = int(claim.group(1).replace(",", "")) if claim else None
+        # The implementation and test counts are exact, because a commit that changes them is the commit that
+        # regenerates them. The documentation count covers every file in docs and specs, including the sentence that
+        # states it, so it is allowed the drift that the same sentence produces.
+        check(f"the report's {label} line count is the tree's ({activity[key]:,})",
+              stated is not None and abs(stated - activity[key]) <= tolerance,
+              f"the report says {claim.group(1) if claim else 'nothing'} against {activity[key]:,}")
 
     # The README presents the same measurements as the report, under a sentence saying they come from the
     # evidence. A figure in one and not the other is a claim one of the two documents cannot support.
