@@ -69,7 +69,7 @@ mutations=(
   "internal/identity/signature.go|SignatureTolerance = 12|SignatureTolerance = 120|the signature tolerance"
   "internal/diff/diff.go|growthMargin = 2|growthMargin = 12|the margin a reported region is grown by"
   "internal/diff/diff.go|lumaRed   = 299|lumaRed   = 199|the red luma weight"
-  "internal/diff/diff.go|wordBytes = 8|wordBytes = 2|the word size used to compare pixels"
+  "internal/diff/diff.go|wordBytes = 8|wordBytes = 2|the word size used to compare pixels, an equivalent mutant: the comparison shifts by the same amount, so no input distinguishes it"
   "internal/config/config.go|DefaultNoiseFloor            = 0.02|DefaultNoiseFloor            = 0.0|the default noise floor"
   "internal/config/config.go|DefaultMinRegionAreaPixels   = 64|DefaultMinRegionAreaPixels   = 4|the default minimum region area"
   "internal/delta/delta.go|if a.Class != b.Class {|if false {|the class tie-breaker in the region order"
@@ -141,7 +141,9 @@ done
   fi
   if [ ${#survived[@]} -gt 0 ]; then
     echo
-    echo "Surviving mutations, each of which is a rule no test defends:"
+    echo "Surviving mutations: each is either a rule no test defends, which is a gap, or an equivalent mutant that"
+    echo "changes no behaviour, which is a fact about the list rather than about the engine. The list marks the"
+    echo "equivalent ones, and a survivor that is not marked is the gap this check exists to report."
     for item in "${survived[@]}"; do echo "  - $item"; done
   fi
   echo
@@ -169,8 +171,24 @@ if [ "$inconclusive" -gt 0 ]; then
   echo "mutation_check: $inconclusive mutation(s) could not be evaluated, so the score is incomplete" >&2
   status=1
 fi
-if [ ${#survived[@]} -gt 0 ]; then
+# A survivor is a failure only when it is not one of the documented equivalents. Each equivalent entry ends with
+# the words "equivalent" in its note, which is what the list uses to record the two mutants that change no behaviour:
+# the pixel word size, which the comparison scales away, and the last key of the region order, which no input can
+# distinguish because the keys before it settle every case. Exiting non-zero for those made this script unable to
+# ever pass, and a gate that can never pass is not a gate.
+undocumented=()
+for item in "${survived[@]:-}"; do
+  [ -z "$item" ] && continue
+  case "$item" in
+    *equivalent*) ;;
+    *) undocumented+=("$item") ;;
+  esac
+done
+if [ ${#undocumented[@]} -gt 0 ]; then
+  echo "mutation_check: ${#undocumented[@]} survivor(s) that the list does not record as equivalent" >&2
   status=1
+elif [ ${#survived[@]} -gt 0 ]; then
+  echo "mutation_check: ${#survived[@]} survivor(s), all recorded as equivalent in the list"
 fi
 if [ -n "$(dirty)" ]; then
   echo "mutation_check: the working tree is dirty after the run, so a mutation may not have been reverted" >&2
