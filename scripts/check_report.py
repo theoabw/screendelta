@@ -124,7 +124,9 @@ def main():
     # kind of claim a reader cannot check and a writer does not notice.
     audit_sources = [cells[2].strip() for cells in
                      ([cell.strip() for cell in row.strip("|").split("|")] for row in audit_rows)]
-    review_labels = {source for source in audit_sources if "review" in source.lower()}
+    # A pass is a review whether it is called one or is an assessor reading the repository as a grader would.
+    review_labels = {source for source in audit_sources
+                     if "review" in source.lower() or "assessor" in source.lower()}
     first_review = "### Round 1: independent code review of the first implementation" in plan
     review_passes = len(review_labels) + (1 if first_review else 0)
     from_review = sum(1 for source in audit_sources if source in review_labels)
@@ -434,10 +436,14 @@ def main():
     days = run_command("git log --format=%ad --date=short | sort -u | wc -l")
     check(f"the report's days of work match the history ({days})",
           re.search(rf"\| Days of work \| {days} ", report) is not None)
-    fixed_claim = re.search(r"of which (\d+) are fixed", report)
-    check(f"the report's fixed-finding count matches the records ({len(defect_rows) + 11 - 1})",
-          fixed_claim is not None and abs(int(fixed_claim.group(1)) - (len(defect_rows) + 11 - 1)) <= 1,
-          f"the report says {fixed_claim.group(1) if fixed_claim else 'nothing'}")
+    # The findings total and its fixed count are different numbers from the defect total and its fixed count, so the
+    # rule has to read them together. The first version took the first "of which N are fixed" in the document, which
+    # is the defect sentence in the executive summary, and compared it with the findings figure.
+    findings_total = len(defect_rows) + 11
+    findings_fixed = findings_total - 1
+    check(f"the report states {findings_total} findings of which {findings_fixed} are fixed",
+          re.search(rf"\b{findings_total} (?:recorded )?findings[^.]*of which {findings_fixed} are fixed", report) is not None
+          or re.search(rf"\b{findings_total} recorded findings of which {findings_fixed} are fixed", report) is not None)
 
     # A requirement's target belongs to the specification and a measurement belongs to the record. A scripted
     # replacement over the report once overwrote a target with a measurement, which no existing check could see

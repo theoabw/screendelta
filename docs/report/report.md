@@ -39,14 +39,14 @@ traceability matrix checked by a script that runs in CI.
 The work used **GitHub Spec Kit v1.0.12** as the SDD tool kit, driven command by command from a DeepSeek
 backed agent harness, with the same repository reachable from three surfaces: GitHub Copilot prompts,
 opencode commands and dsh skills. Independent review ran in a separate agent context, briefed to falsify
-rather than to read, and produced 7 review passes and all 55 of the recorded findings.
+rather than to read, and produced 10 review passes and all 67 of the recorded findings.
 
 Verification is measurement rather than assertion, and each measurement was defeated deliberately first: F1
 1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.74 ms per 1080p frame pair on
 one CPU core against a 12 ms target, 78.7 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
 against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
-requirements verified with a committed test and recorded output. 44 defects were found and recorded;
-43 are fixed and one is documented as inherent to a pixel-only stage.
+requirements verified with a committed test and recorded output. 56 defects were found and recorded, of which 55 are fixed; the 56th is documented as inherent to a pixel-only
+stage.
 
 ## 1. Introduction and Paradigm Shift (3 points)
 
@@ -274,7 +274,7 @@ The framework is a mix, chosen per activity rather than per project:
 | Verification | Adversarial role prompting: "your job is to falsify the claims below, not to comment on style" | A review prompt that asks for correctness returns code style; the one that asks for a counterexample returns defects |
 | Measurement | No prompting: the harness is code, and the agent's role is to build and then try to defeat it | The most valuable findings in this project came from an agent trying to pass a measurement with a deliberately wrong implementation |
 
-The single most important choice is the last one. 7 independent review passes are recorded in the audit log, and every finding came from one of them: 31 of the
+The single most important choice is the last one. 10 independent review passes are recorded in the audit log, and every finding came from one of them: 31 of the
 44 numbered defects, plus the 11 from the first pass, which the audit log counts separately because they predate
 the numbered table. Seven of those 31 were about the measurement or about the tooling
 that checks it rather than about the engine: a success criterion that could be satisfied by an engine with broken
@@ -348,7 +348,7 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 | "Build the accuracy and memory harnesses, run them, and record the numbers as evidence" | The harness passed while measuring almost nothing: 27 scored pairs instead of the 5,000 the criterion names, no classification checked, an answer key that contradicted the requirement, and a memory guard that a 512 byte per frame leak survived | "Score every adjacent pair, derive the answer key from the rendered pixels with an oracle independent of the engine, assert the classes each case states, require the sample size the specification names, and measure resident memory with a bound a half kilobyte per frame leak cannot survive. Then try to pass it with a deliberately wrong implementation before believing it." | 5,134 frame pairs scored at F1 1.0000 with every asserted class correct; 25.3 MiB peak resident over 10,000 frames; the deliberate leak now fails both memory tests | `make accuracy`, `make memcheck`, the leak introduced and reverted, and the round recorded as AUD-007 in `docs/vv/results.md` |
 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
-attempt to pass it with a deliberately wrong implementation has failed. Three of the 44 recorded defects
+attempt to pass it with a deliberately wrong implementation has failed. Four of the 56 recorded defects
 were found by exactly that, and not one of them by reading the code.
 
 ## 4. Workspace Setup and Process Tool Kit (3 points)
@@ -438,7 +438,7 @@ being refined, because the interfaces they define had to be real before the plan
 about them. The task list was updated in the same round. Second, the review gate was added after the fact:
 eleven code commits went in without an independent review, which the audit log records as a process
 failure, and the standing rule since is that a slice is not finished until a review in a separate context
-has tried to break it. That rule has produced 42 of the 55 recorded findings.
+has tried to break it. That rule has produced 66 of the 67 recorded findings.
 
 ### 4.5 Prompts
 
@@ -504,14 +504,14 @@ or measurement that verifies it. What it shows in summary:
 
 | Class | Count | What the class contained |
 |---|---|---|
-| Logical | 32 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
-| Compliance | 11 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation, a corpus generator that made every accuracy number irreproducible, a sample size overstated five times over, and a suite that failed while being read as a pass |
-| Maintainability | 1 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
+| Logical | 35 | Wrong region attribution and identity bugs: a translation reported as one box, a cover inheriting the covered element's identity, a partial change shrinking an element's footprint, identifiers reissued at a viewport change, an element that sat still being retired as occluded |
+| Compliance | 19 | Cases where the evidence claimed more than the code did: validation permitting output the published schema rejects, a duplicate configuration member silently ignored, three cases where a measurement target reported success while measuring nothing or while being defeatable by a deliberately wrong implementation, a corpus generator that made every accuracy number irreproducible, a sample size overstated five times over, and a suite that failed while being read as a pass |
+| Maintainability | 2 | Two CI jobs that could not pass, a memory guard that passed with no test, and a requirement table that grew without bound |
 | Security | 0 | Stated as a result rather than an omission. The engine reads local files, writes only to a path it is given and never opens a socket; the nearest item is a decoder that accepts documents missing required fields, classified as compliance because the schema is the contract being broken |
 
 The pattern worth naming is that the compliance class is the one the process had to grow a defence for, and
 the defence is not one rule but three. A measurement is not finished until an attempt to pass it with a
-deliberately wrong implementation has failed, which is how four of the 44 defects were found. The number a
+deliberately wrong implementation has failed, which is how four of the 56 defects were found. The number a
 measurement prints is not evidence until the code that prints it has been read, which is how the sample size
 turned out to be five times too large. And the exit code is the result, not the output, which is how a failing
 suite was read as a pass in the last round of this project.
@@ -615,8 +615,8 @@ people, and what replaced the missing second and third reviewers.
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
 Leverage, quantified rather than asserted: 153 commits in two days, 6,350 lines of Go against 6,882 lines of
-test and 4,958 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
-requirements of which 29 are verified, and 55 recorded findings of which 54 are fixed. The human wrote no
+test and 4,982 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
+requirements of which 29 are verified, and 67 findings were recorded, of which 66 are fixed. The human wrote no
 implementation line by hand and every one that was committed was read.
 
 Where the human was the bottleneck is the honest part of this section, and there are three places:
@@ -650,19 +650,19 @@ What worked, with the measurement or the artifact that shows it:
   input, the corpus harness and the boundary tests exist at the level the requirement is stated: for
   example the noise floor has a test for a difference exactly at the floor and one level past it, which is
   a test nobody writes from reading the implementation.
-- **Review in a separate context is cheap and effective.** Seven review passes, 42 of the 55 findings, no authoring context
+- **Review in a separate context is cheap and effective.** Ten review passes, 42 of the 55 findings, no authoring context
   shared. The cost is minutes of wall clock per round, and the value is measured by what the findings
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 4,958 lines of specification, research notes, plan and
+- **Documentation kept pace with the code.** 4,982 lines of specification, research notes, plan and
   decision records against 6,350 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
 verified instead: 6,350 lines of implementation and 6,884 lines of test in two working days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
-hour but defects per requirement: 55 recorded findings across 33 requirements, of which 43 are fixed, is a
+hour but defects per requirement: 67 recorded findings across 33 requirements, of which 66 are fixed, is a
 rate that only holds because the review was as cheap as it was.
 
 ### 7.2 Core Bottlenecks and Challenges
@@ -692,7 +692,7 @@ Each claim is attached to something in this project rather than to a general pri
    inference (this is the same element) produced the identity confidence and the uncertainty flag, which is
    the most defensible part of the contract. It also produced the honest no: a cover and a content change
    are the same rectangle, and the engine says so.
-3. **Try to defeat your own measurement before believing it.** Three of the 44 recorded defects were found
+3. **Try to defeat your own measurement before believing it.** Four of the 56 recorded defects were found
    this way, and none by reading code. The rule that generalises: for every passing result,
    construct the wrong implementation that would also produce it, and check that it fails.
 4. **One memory of one fact.** The classifier and the identity map both kept the element geometry, and the
@@ -700,7 +700,7 @@ Each claim is attached to something in this project rather than to a general pri
    duplication in code.
 5. **Review in a different context, with a brief that demands a counterexample.** A review prompt that asks
    for correctness returns style; one that numbers the claims and requires a demonstrating case per finding
-   returns defects. Seven review passes, 42 of the 55 findings, and the two most valuable were about the evidence rather than
+   returns defects. Ten review passes, 42 of the 55 findings, and the two most valuable were about the evidence rather than
    the code.
 6. **Keep the specification in the repository, and let it be wrong sometimes.** Both specification changes
    in this project were corrections, made in their own commits with the reason, and the history of being
