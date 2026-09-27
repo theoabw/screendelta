@@ -656,16 +656,9 @@ func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature
 			continue
 		}
 		// A caller that measures appearance gets the appearance rule; a caller that does not keeps the
-		// geometry-only behaviour, which is what the package promised before appearance existed.
-		if signature != nil {
-			if !element.SignatureSet {
-				continue
-			}
-			if signature.Distance(element.Signature) > returnAppearanceCeiling*SignatureCells {
-				continue
-			}
-		}
-
+		// geometry-only behaviour, which is what the package promised before appearance existed. The ceiling
+		// is generous on purpose: it refuses hopeless candidates rather than deciding the question, which the
+		// comparison against the live element does.
 		distance := 0
 		if signature != nil {
 			if !element.SignatureSet {
@@ -673,9 +666,6 @@ func (m *Map) bestRetired(rect rectangle, frameWidth, frameHeight int, signature
 			}
 			distance = signature.Distance(element.Signature)
 			if distance > returnAppearanceCeiling*SignatureCells {
-				// The content is not this element by any reading, whatever the geometry says. The ceiling is
-				// generous on purpose: it is there to refuse hopeless candidates rather than to decide the
-				// question, which the comparison against the live element does.
 				continue
 			}
 		}

@@ -147,7 +147,10 @@ def main():
     # the recorded run by up to a fifth because they move on a shared machine; everything else has to match the
     # recorded text exactly.
     def evidence_named(keyword):
-        for path in sorted(pathlib.Path("docs/vv/evidence").glob("*.txt")):
+        # The newest file with this keyword in its name, not the first alphabetically: a check that validates
+        # against an old run is a check that can pass on a superseded figure.
+        matches = sorted(pathlib.Path("docs/vv/evidence").glob("*.txt"), key=lambda path: path.stat().st_mtime)
+        for path in reversed(matches):
             if keyword in path.name:
                 return path
         return None
