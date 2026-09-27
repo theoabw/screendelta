@@ -146,7 +146,11 @@ func (m *Map) Return(bounds delta.Bounds, signature *Signature, frameWidth, fram
 	// is a statement about the element's own pixels, not about the area that changed, and only the caller
 	// can measure it: without this, repainting the inside of a small part of a cover was read as evidence
 	// that the whole cover had gone.
-	if gone != nil && !gone[live.ID] {
+	//
+	// A nil set means the caller reported nothing, which is read as "no element's pixels changed" rather
+	// than as "the rule does not apply": a map that was not passed is not evidence about any element, and a
+	// rule that a nil argument can switch off is not a rule.
+	if !gone[live.ID] {
 		return ReturnDecision{}
 	}
 	// The comparison is relative rather than against an absolute allowance. A returning element whose

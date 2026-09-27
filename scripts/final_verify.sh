@@ -87,7 +87,7 @@ mv "$temporary" "$output"
     echo "the working tree is not clean, so the record describes a tree that is not this commit:"
     printf '%s\n' "$dirty" | head -5
   else
-    echo "the working tree was clean when the record was written"
+    echo "the working tree was clean when the record was written, apart from this record, which is excluded because this script writes it"
   fi
 } >> "$output"
 

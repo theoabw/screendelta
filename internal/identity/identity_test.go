@@ -1005,7 +1005,7 @@ func TestReturnNeedsEvidenceInBothDirections(t *testing.T) {
 		liveElement := m.Appear(cover, frameWidth, frameHeight, 4, ptrSignature(filledSignature(200)))
 		m.EndFrame(4, []delta.Bounds{cover}, frameWidth, frameHeight)
 
-		decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 5, nil)
+		decision := m.Return(bounds, &appearance, frameWidth, frameHeight, 5, map[uint64]bool{liveElement.ID: true})
 		if !decision.IsReturn {
 			t.Fatalf("a returning element was not recognised: %+v", decision)
 		}
@@ -1144,11 +1144,12 @@ func TestAReturnWithAnIncompatibleAppearanceIsRefused(t *testing.T) {
 // TestAReturnNeedsTheOverlappedElementsOwnPixels pins the rule that a return is a statement about the element's
 // own pixels rather than about the area that changed, which only the caller can measure.
 //
-// The regression check found this rule was not pinned: reverting it left TestRepaintingInsideACoverDoesNotRetireTheCover
-// passing, because the appearance ceiling refuses that particular area for a second reason. A fix that two rules
-// defend needs a case where only one of them can answer, and this is that case at the layer that owns the rule: the
-// area looks like the retired element, and the element on the screen is one whose own pixels the caller did not
-// report as changed, so the answer has to be no.
+// The regression check found this rule was not pinned by the test its defect row named: reverting the gate left that
+// test passing, because the scenario it builds gives the engine a second reason to answer no. A rule needs a case at
+// the layer that owns it, where the other reasons are held equal and only the rule can answer, and this is that case:
+// the area looks like the retired element, and the element on screen is one whose own pixels the caller did not
+// report as changed, so the answer has to be no. The same scenario with the change reported has to produce the
+// return, which is what makes this a test of the rule rather than of the absence of one.
 func TestAReturnNeedsTheOverlappedElementsOwnPixels(t *testing.T) {
 	build := func() (*identity.Map, uint64, uint64, identity.Signature) {
 		m := identity.New(1, 8)

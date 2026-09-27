@@ -1208,6 +1208,15 @@ func TestThePixelEvidenceIgnoresTheGrowthRing(t *testing.T) {
 	if got := differ.changedFraction(whole, frames[1]); got != 1 {
 		t.Fatalf("the footprint with its growth ring measured %v, want 1: the ring belongs to the background, and counting it says an element that changed entirely did not", got)
 	}
+
+	// A footprint that is half inside the change has to measure about a half. Without this the assertion above
+	// also holds when the measurement short-circuits and returns one because it has no mask to consult, which a
+	// review demonstrated by making that guard unconditional: the test could not tell "measured one" from "did not
+	// measure at all".
+	half := delta.Bounds{X: 95 / fw, Y: 100 / fh, W: 20 / fw, H: 10 / fh}
+	if got := differ.changedFraction(half, frames[1]); got <= 0 || got >= 1 {
+		t.Fatalf("a footprint half inside the change measured %v, want a value strictly between zero and one", got)
+	}
 }
 
 // TestAWholeScreenChangeIsOneBoundedRegion covers one of the specification's edge cases: a theme switch or a
