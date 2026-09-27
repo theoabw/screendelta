@@ -373,7 +373,7 @@ surfaces, all three configured in this repository:
 
 A solo project still needs all three for one reason that is worth stating: the authoring pass and the
 review pass must run in *different* contexts, or the review is the author agreeing with themselves.
-Changing surface is the cheapest way to guarantee that, and it is what kept the five review rounds from
+Changing surface is the cheapest way to guarantee that, and it is what kept the review passes from
 inheriting the assumptions of the code they were reading. The review rounds in this project ran in a
 separate harness with no access to the authoring conversation, given only the repository, the commit range
 and the claims to falsify.
@@ -453,7 +453,7 @@ the level below it cannot see the defect it catches.
 
 | Level | What it establishes | Mechanism | Where the result is recorded |
 |---|---|---|---|
-| Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Four fuzz targets: the document decoder, the frame decoder, the comparison, and the document round trip, over 20.0 million recorded executions | `docs/vv/evidence/fuzz-2026-09-27.txt` |
+| Fuzzing | That the input paths fail explicitly rather than panicking, and that an invariant holds for inputs nobody thought of | Four fuzz targets: the document decoder, the frame decoder, the comparison, and the document round trip, over 16.4 million recorded executions | `docs/vv/evidence/fuzz-2026-09-27.txt` |
 | Mutation testing | That the tests would notice if a rule were wrong, which coverage cannot say | 14 targeted changes to the rules the requirements name, each run against the packages that should care | `docs/vv/evidence/mutation-2026-09-27.txt` |
 | Regression reversion | That the fixes whose defect rows name a test are pinned by it, which is 13 of the 43 | Those 13 fixes put back one at a time, each verified against the test that must catch the reversion, after a control run proving every one of them passes on the untouched tree | `docs/vv/evidence/regression-2026-09-27.txt` |
 | Unit and package tests | That each rule behaves as its comment says, including the boundary cases | `go test ./...`, one test per decision named for the behaviour | Test names in `docs/traceability.md` |
@@ -482,7 +482,7 @@ the level below it cannot see the defect it catches.
 6. **The independent review is an agent, not a person.** It is a different context, a different model and a
    brief that requires counterexamples, which is a real substitute for a second pair of eyes and not the
    same thing. Section 6.1 says what the single-author history cannot show.
-7. **Fuzzing measures the input paths, not the output quality.** Twenty million executions say the decoders do not panic and that one ordering property holds; they say nothing about whether the regions are the right ones, which is what the corpus measures and what the corpus's own limits bound.
+7. **Fuzzing measures the input paths, not the output quality.** 16.4 million executions say the decoders do not panic and that one ordering property holds; they say nothing about whether the regions are the right ones, which is what the corpus measures and what the corpus's own limits bound.
 8. **The measurement can be gamed, and was.** Three defects were found in the harness rather than in the
    engine, all of the same kind: a result that checked less than it claimed. Every measurement in
    this report has since been defeated deliberately at least once.
@@ -512,8 +512,8 @@ perfect score whether the material is different on every run or not.
 
 ### 5.3 Test Execution Results
 
-The running record is `docs/vv/results.md`, with raw output under `docs/vv/evidence/`. Fourteen rows are
-recorded, five of them withdrawn and rewritten in place after a review showed the first version was not
+The running record is `docs/vv/results.md`, with raw output under `docs/vv/evidence/`. The measurement table there
+records each run, five of them withdrawn and rewritten in place after a review showed the first version was not
 trustworthy, with the defect that caused each withdrawal in the same table.
 
 Current state, from the commands named:
@@ -527,7 +527,7 @@ Current state, from the commands named:
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,220 in the second | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |
 | Determinism | three builds compared byte for byte, plus the e2e run | byte-identical output | 176,899 bytes and one SHA-256 in three environments, and identical across two thread counts and two collector settings | pass in part | NFR-004 |
-| Fuzzing | 4 fuzz targets, 20.0 million executions | no panic, and the checked invariants hold | no panic in 20.0 million executions; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
+| Fuzzing | 4 fuzz targets, 16.4 million executions | no panic, and the checked invariants hold | no panic in 16.4 million executions; the region order invariant failed once and produced AUD-036, which is fixed | pass after the fix | FR-015, NFR-004 |
 | Mutation testing | 14 rules changed, one at a time | every mutation is caught | 13 of 14 applied mutations killed; the one survivor changes only how much work the comparison does, which is why no test can distinguish it | pass with one recorded exception | NFR-009 |
 | Regression reversion | 13 recorded fixes put back, one at a time | every reversion is caught | 13 of 13 caught, against a control run that requires all thirteen tests to pass first | pass | NFR-009 |
 | Requirement traceability | `make check-strict` | every requirement traced to a task, a test and existing evidence | 33 rows, 29 verified, 0 errors, 0 warnings | pass | the process gate |
@@ -569,12 +569,12 @@ The numbers, all reproducible from the repository:
 | Measure | Value | How to reproduce |
 |---|---|---|
 | Commits | 159 when this table was written, and the command gives the current count | `git rev-list --count HEAD` |
-| By type | 67 docs, 29 fix, 27 test, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore when this table was written | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
-| Commits carrying a `Spec:` trailer | 115 | `git log --grep='^Spec:' --oneline | wc -l` |
+| By type | 67 docs, 29 fix, 27 test, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore when this table was written | `git log --format='%s' \| cut -d: -f1 \| sort \| uniq -c` |
+| Commits carrying a `Spec:` trailer | 115 | `git log --grep='^Spec:' --oneline \| wc -l` |
 | Carrying a `Req:` trailer | 113 | the same with `^Req:` |
 | Carrying a `Task:` trailer | 75 | the same with `^Task:` |
 | Carrying a `Prompt:` trailer | 121 | the same with `^Prompt:` |
-| Days of work | 2 (2026-09-26, 2026-09-27) | `git log --format='%ad' --date=short | sort | uniq -c` |
+| Days of work | 2 (2026-09-26, 2026-09-27) | `git log --format='%ad' --date=short \| sort \| uniq -c` |
 
 The trailers are the link between a code change, the requirement it serves, the task that planned it and
 the session that prompted it, and they are the reason the traceability matrix can be checked by a script

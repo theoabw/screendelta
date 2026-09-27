@@ -317,8 +317,11 @@ def main():
           and int(stated_commits.group(1)) <= activity["commits"]
           and activity["commits"] - int(stated_commits.group(1)) <= drift)
     for label, count in [("Spec", "spec"), ("Req", "req"), ("Task", "task"), ("Prompt", "prompt")]:
-        check(f"the report's {label} trailer count matches ({activity[count]})",
-              re.search(rf"\| (?:Commits )?[Cc]arrying a `{label}:` trailer \| {activity[count]} \|", report) is not None)
+        stated = re.search(rf"\| (?:Commits )?[Cc]arrying a `{label}:` trailer \| (\d+) \|", report)
+        check(f"the report's {label} trailer count is a past state of the repository ({stated.group(1) if stated else 'missing'} against {activity[count]})",
+              stated is not None
+              and int(stated.group(1)) <= activity[count]
+              and activity[count] - int(stated.group(1)) <= drift)
     breakdown = run_command("git log --format='%s' | sed 's/(.*//; s/:.*//' | sort | uniq -c | sort -rn")
     types = [(int(number), kind) for number, kind in (line.split() for line in breakdown.splitlines())]
     # Each type count is a past state too, so it may not exceed the repository's and may not be stale by more than

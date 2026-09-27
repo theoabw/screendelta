@@ -42,7 +42,7 @@ this chapter exists to catch.
 | Region detection F1 | 1.0000 | 2026-09-26 |
 | False removals on noise | 0 | 2026-09-26 |
 | Frames streamed for the memory measurement | 10,000 at 1920x1080, and 10,000 at 320x240 through the real pipeline | 2026-09-26 |
-| Peak resident over that stream | 22.5 MiB against a 128 MiB ceiling | 2026-09-26 |
+| Peak resident over that stream | 22.5 MiB against a 128 MiB ceiling; superseded by the most recent recorded run, which reports the peak in `docs/vv/evidence/final-2026-09-27.txt` | 2026-09-26 |
 | Allocation per frame at steady state | 8,220 bytes | 2026-09-26 |
 | Line coverage, `internal/diff` | 91.8 percent | 2026-09-26 |
 | p95 latency per 1080p frame pair, one core | 9.72 ms against a 12 ms target, with appearance signatures and footprint evolution added | 2026-09-26 |
