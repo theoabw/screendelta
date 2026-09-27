@@ -119,7 +119,7 @@ result means the measurement ran.
 
 ## Open items
 
-- Latency and throughput are unmeasured, so no performance claim appears in the README yet.
+- Latency and throughput are measured; `make perf` records them in `docs/vv/evidence/final-2026-09-27.txt` and the README states them.
 - The corpus is synthesised. Real screenshots are a sanity check, not a scored set, and the
   report's threats-to-validity section says so.
 - Identifier stability across frames is measured by a unit test at present; the occlusion and

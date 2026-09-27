@@ -21,6 +21,11 @@ type caseScore struct {
 	ClassChecked  int
 	ClassMismatch []string
 	Regions       int
+	// NFR-006 asks for two things: region F1, and how often a rectangle that moved is attributed to a movement
+	// rather than to a removal and an addition. The second clause had no measurement, so the requirement was
+	// being reported as met on half of itself.
+	MovedExpected   int
+	MovedAttributed int
 }
 
 // runCase renders a case in memory, runs the real engine over every frame, and scores every
@@ -83,6 +88,12 @@ func runCase(t *testing.T, name string, opts corpus.Options) caseScore {
 		for _, m := range matched {
 			want := expectation.Classes[m.Expected]
 			result.ClassChecked++
+			if want == "moved" {
+				result.MovedExpected++
+				if string(m.Class) == "moved" {
+					result.MovedAttributed++
+				}
+			}
 			if string(m.Class) != want {
 				result.ClassMismatch = append(result.ClassMismatch,
 					fmt.Sprintf("transition %d rectangle %d: reported %s, expected %s",
@@ -137,6 +148,7 @@ func TestCorpus(t *testing.T) {
 	}
 
 	overall := make([]score.Counts, 0, len(cases))
+	results := make([]caseScore, 0, len(cases))
 	// Pairs and regions are counted separately, because they are different numbers and the requirement is
 	// stated in pairs. Adding expected regions to no-change pairs and calling the sum pairs overstated the
 	// sample size by a factor of five.
@@ -146,6 +158,7 @@ func TestCorpus(t *testing.T) {
 			result := runCase(t, tc.name, tc.opts)
 			t.Logf("%s: %d pairs, %d regions reported, %s", tc.name, result.Pairs, result.Regions, result.Counts)
 			overall = append(overall, result.Counts)
+			results = append(results, result)
 			totalPairs += result.Pairs
 
 			if result.Pairs < tc.minPairs {
@@ -177,8 +190,22 @@ func TestCorpus(t *testing.T) {
 	}
 
 	total := score.Sum(overall...)
+	movedExpected, movedAttributed := 0, 0
+	for _, result := range results {
+		movedExpected += result.MovedExpected
+		movedAttributed += result.MovedAttributed
+	}
 	t.Logf("every case together: %d frame pairs scored, %d regions matched, %s",
 		totalPairs, total.TruePositives+total.FalsePositives+total.FalseNegatives, total)
+	if movedExpected == 0 {
+		t.Fatal("no rectangle in the corpus moved, so the attribution clause of NFR-006 is unmeasured")
+	}
+	attribution := float64(movedAttributed) / float64(movedExpected)
+	t.Logf("moved-region attribution: %d of %d movements reported as moved (%.4f, NFR-006 asks for 0.95)",
+		movedAttributed, movedExpected, attribution)
+	if attribution < 0.95 {
+		t.Fatalf("moved-region attribution %.4f is below the 0.95 NFR-006 requires", attribution)
+	}
 	if totalPairs < 5000 {
 		t.Fatalf("the suite scored %d pairs, fewer than the 5,000 SC-001 requires", totalPairs)
 	}

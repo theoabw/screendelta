@@ -179,7 +179,8 @@ def main():
 
     # row prefix | evidence file | extractors for the recorded values of this row's statistics | tolerance
     row_sources = [
-        ("Accuracy", final, [r"([\d,]+) frame pairs scored", r"([\d,]+) regions matched", r"F1 ([\d.]+)"], False),
+        ("Accuracy", final, [r"([\d,]+) frame pairs scored", r"([\d,]+) regions matched", r"F1 ([\d.]+)",
+                             r"of (\d+) movements reported as moved", r"movements reported as moved \(([\d.]+)"], False),
         ("Latency", final, [r"p50 ([\d.]+) ms", r"p95 ([\d.]+) ms", r"p99 ([\d.]+) ms"], True),
         ("Throughput", final, [r"sustained ([\d.]+) frame pairs per second"], True),
         ("Memory", final, [r"peak heap \d+ bytes \(([\d.]+) MiB\)", r"peak resident \d+ bytes \(([\d.]+) MiB\)"], True),

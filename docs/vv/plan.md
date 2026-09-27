@@ -111,9 +111,8 @@ findings in `docs/vv/results.md`.
 
 ### Reading the log
 
-Of 36 recorded findings plus the 11 from round 1: 35 are fixed, and one is documented as inherent with its
-reason. Nothing is open. The classes are 27 logical, 7 compliance and
-1 maintainability, and none security. The compliance entries are the ones worth
+Of 44 recorded findings plus the 11 from round 1: 54 are fixed, and one is documented as inherent with its
+reason. Nothing is open. The classes are 32 logical, 11 compliance and 1 maintainability, and none security. The compliance entries are the ones worth
 reading, because they are all cases where the evidence said something the code did not do, which is the
 failure mode this project spent the most effort on.
 

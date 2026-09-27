@@ -341,7 +341,7 @@ The full table is `docs/prompt-log/iteration-log.md`. One case, in the form the 
 
 The general lesson, which the corrected prompt states as a rule: a measurement is not finished until an
 attempt to pass it with a deliberately wrong implementation has failed. Three of the 44 recorded defects
-were found by exactly that, and none of them by reading the code.
+were found by exactly that, and not one of them by reading the code.
 
 ### 4.1 SDD Tool Kit
 
@@ -446,7 +446,7 @@ most information for a reader are:
 
 ### 5.1 V&V Strategy
 
-The strategy has eight levels, listed below from the widest net to the narrowest, and the reason for each is that
+The strategy has nine levels, listed below from the widest net to the narrowest, and the reason for each is that
 the level below it cannot see the defect it catches.
 
 | Level | What it establishes | Mechanism | Where the result is recorded |
@@ -456,6 +456,7 @@ the level below it cannot see the defect it catches.
 | Regression reversion | That the fixes whose defect rows name a test are pinned by it, which is 13 of the 43 | Those 13 fixes put back one at a time, each verified against the test that must catch the reversion, after a control run proving every one of them passes on the untouched tree | `docs/vv/evidence/regression-2026-09-27.txt` |
 | Unit and package tests | That each rule behaves as its comment says, including the boundary cases | `go test ./...`, one test per decision named for the behaviour | Test names in `docs/traceability.md` |
 | Integration and functional tests | That the parts agree: the engine, the differ, the identity map and the document validator | The corpus harness runs the real engine over generated frames and scores the documents | `docs/vv/results.md` |
+| Compliance | That the promises a consumer relies on hold rather than being asserted: no socket, no process, no write outside the declared path, and a document the published schema accepts | `tests/e2e/compliance_test.go`, which walks the syntax trees and compares the filesystem before and after a run, plus the independent consumer | `docs/vv/evidence/e2e-2026-09-27.txt` |
 | Measurement | That the non-functional targets hold, and that the harness that says so is not lying | `make accuracy`, `make perf`, `make memcheck`, each defeated deliberately before it is believed | `docs/vv/evidence/` |
 | Requirement verification | That every requirement has a task, a test and recorded output, and that nothing is claimed on a file that does not exist | `make check-strict`, which runs the traceability script over the matrix and the specification | `docs/traceability.md` |
 | User acceptance | That a person who has not read the code can use the engine from the README alone | The script in `docs/vv/acceptance.md`, run by external testers | Not yet run; the criterion is unverified and marked so |
@@ -517,7 +518,7 @@ Current state, from the commands named:
 
 | Measurement | Command | Expected | Actual | Status | Requirement |
 |---|---|---|---|
-| Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, zero false removals | pass | NFR-005, NFR-006, SC-001 |
+| Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, moved attribution at or above 0.95, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, 20 of 20 movements attributed (1.0000), zero false removals | pass | NFR-005, NFR-006, SC-001 |
 | Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.52 ms, p95 9.18 ms, p99 10.98 ms | pass | NFR-001, SC-002 |
 | Throughput, one core | `make perf` | at least 30 frame pairs per second | 74.2 frame pairs per second | pass | NFR-002 |
 | Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 25.3 MiB over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
@@ -537,17 +538,16 @@ in progress and the matrix says which, and the honest summary of the gap is this
   inherent to a single frame pair, they are written into the specification with their reason, and both are
   pinned by tests. Verifying them is a decision about what the requirement says, and the evidence file says
   so rather than implying the engine got better.
-- **Two requirements are one step from verified and are held back deliberately**: NFR-004, because the
-  output is shown independent of the toolchain, the userland, the thread count and the collector's scheduling,
-  and a second physical host is not available; and NFR-008, because three targets build and the suite passes on
-  two Linux userlands while the Windows runtime half is untested.
-- **Two requirements need testing that exists but has not been written**: FR-016 (no network, no stray
-  writes) and NFR-008 (the Windows cross-build is in CI, the platform smoke test is not).
-- **Two need a human who is not the author**: NFR-007 and SC-005 (usability), which is what the acceptance
-  script is for, and SC-006 (an independent consumer), which needs a second implementation written against
-  the schema alone.
-- **One is a demonstration rather than a measurement**: SC-004 (sustained decision rate), which the demo
-  pipeline is intended to produce.
+- **Four requirements are unmet, and each is unmet for a reason the matrix names.** NFR-004, because the
+  output is shown independent of the toolchain, the userland, the thread count and the collector's scheduling and
+  a second physical host is not available. NFR-007 and SC-005, because usability needs a person who is not the
+  author, which is what the acceptance script is for. And NFR-008, because three targets build and the suite
+  passes on two Linux userlands while the Windows runtime half needs a Windows machine.
+
+Everything else the specification asks for is verified, including the demonstrations the acceptance criteria name:
+the independent consumer accepts the engine's output (SC-006), the pipeline sustains 294.8 decisions per second on
+real screenshots (SC-004), the engine holds no socket and writes only where it is told (FR-016), and the identity
+rules are verified against a specification that records their two boundaries as inherent rather than as defects.
 
 One defect is documented as inherent rather than fixed: an element that disappears from exactly the
 footprint it occupied looks identical to a content change, and the engine reports a change, because the
