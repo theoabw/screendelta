@@ -186,7 +186,7 @@ result.
 
 Two of the targets were met only after the first measurement failed, and the failures are recorded rather
 than replaced: latency measured 25.26 ms p95 before three optimisations (AUD-008), and the memory
-measurement passed while measuring nothing until it was rebuilt (AUD-007). The second case is the reason
+measurement passed without checking anything until it was rebuilt (AUD-007). The second case is the reason
 section 5.3 records what was wrong with the measurement and not only what the engine scored.
 
 ### 2.4 Technology Stack
@@ -276,7 +276,7 @@ classification, a memory guard that passed with a deliberate per-frame leak, a l
 suite whose tail belonged to the machine, a corpus generator that made every accuracy number irreproducible, a
 sample size overstated five times over, a report check that accepted deliberately wrong figures, and a regression
 check that scored full marks on a red baseline. Each is recorded as a defect with the fix, because a measurement
-that reports success while measuring nothing is worse than one that fails.
+that passes without checking is worse than one that fails.
 
 ### 3.2 Master Prompts and System Prompts
 
@@ -484,7 +484,7 @@ the level below it cannot see the defect it catches.
    same thing. Section 6.1 says what the single-author history cannot show.
 7. **Fuzzing measures the input paths, not the output quality.** Twenty million executions say the decoders do not panic and that one ordering property holds; they say nothing about whether the regions are the right ones, which is what the corpus measures and what the corpus's own limits bound.
 8. **The measurement can be gamed, and was.** Three defects were found in the harness rather than in the
-   engine, all of the same kind: a green result that measured less than it claimed. Every measurement in
+   engine, all of the same kind: a result that checked less than it claimed. Every measurement in
    this report has since been defeated deliberately at least once.
 
 ### 5.2 Code Audit Log
@@ -657,14 +657,14 @@ rate that only holds because the review was as cheap as it was.
 |---|---|---|
 | Context limits | A review of the whole repository at once produced shallow findings; an implementation session that tried to hold the specification, the plan and the code drifted | Work sliced by task, reviews bounded to a commit range with numbered claims, and the durable state kept in the repository rather than in a conversation |
 | Drift from the specification | Two requirements were phrased as design ("use a tile grid"), which would have made a later optimisation a requirement change | Requirements were rewritten as observable behaviour, and the traceability check keeps a requirement from existing without a task and a test |
-| The evidence claiming more than the code did | Three defects in the measurement itself, each of the same kind: a green result that measured less than it claimed | Every measurement is now defeated deliberately before it is believed, and the rule is written into the prompt for each measurement round |
+| The evidence claiming more than the code did | Three defects in the measurement itself, each of the same kind: a result that checked less than it claimed | Every measurement is now defeated deliberately before it is believed, and the rule is written into the prompt for each measurement round |
 | A second memory of the same thing | The classifier kept its own copy of where the elements were, and the two copies disagreed | The identity map owns the geometry and the classifier reads it; the duplication was removed rather than reconciled |
 | An undecidable question treated as decidable | A cover and a content change are the same rectangle, and the first implementation answered as if it knew | The question is now stated as undecidable in one frame pair (R17), answered with evidence rather than proof, and the residual boundaries are in the contract |
 | Solo review blindness | The first eleven code commits went in with no independent review, and an author reviewing their own diff approves it | The review gate became a rule, and the authoring and review passes run in different contexts on different surfaces |
 
 The most expensive challenge was the third, not because it was the hardest technically but because it was
 the one that would have made the report wrong rather than the code wrong: a measurement that reports
-success while measuring nothing is worse than a failing one, because it is believed.
+success without checking is worse than a failure, because it is believed.
 
 ### 7.3 Lessons Learned and Best Practices
 
@@ -678,7 +678,7 @@ Each claim is attached to something in this project rather than to a general pri
    the most defensible part of the contract. It also produced the honest no: a cover and a content change
    are the same rectangle, and the engine says so.
 3. **Try to defeat your own measurement before believing it.** Three of the 44 recorded defects were found
-   this way, and none by reading code. The version of this rule that generalises: for every green result,
+   this way, and none by reading code. The rule that generalises: for every passing result,
    construct the wrong implementation that would also produce it, and check that it fails.
 4. **One memory of one fact.** The classifier and the identity map both kept the element geometry, and the
    defect that survived longest came from the disagreement. Duplication in state costs more than

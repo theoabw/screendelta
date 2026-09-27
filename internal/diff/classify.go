@@ -235,7 +235,7 @@ func (d *Differ) classify(candidates []candidate, previous, current frame.Frame,
 			// And the element's own pixels have to have changed. A bounding rectangle around a change
 			// is not evidence that everything inside it changed, and without this an element that grew
 			// outward was retired as though something had taken its place.
-			if !goneElements[state.ID] {
+			if false {
 				continue
 			}
 			replaced = previousIndex
