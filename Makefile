@@ -10,11 +10,11 @@ help: ## List available targets
 	@echo "Available targets:"
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
-all: fmt-check vet test check ## Run everything a commit must pass
+all: fmt-check vet check ## Run everything a commit must pass
 
-check: trace check-report ## Run every automated check
+check: trace check-report test ## Run every automated check
 
-check-strict: trace-strict check-report ## Run every check, failing while no specification exists
+check-strict: trace-strict check-report test ## Run every check, failing while no specification exists
 
 trace: ## Fail when requirement traceability is incomplete
 	$(PYTHON) scripts/check_traceability.py

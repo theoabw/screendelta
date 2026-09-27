@@ -39,7 +39,7 @@ opencode commands and dsh skills. Independent review ran in a separate agent con
 rather than to read, and produced 7 review passes and 31 of the 55 recorded findings.
 
 Verification is measurement rather than assertion, and each measurement was defeated deliberately first: F1
-1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.65 ms per 1080p frame pair on
+1.0000 over 5,134 generated frame pairs with zero false removals, p95 latency 9.10 ms per 1080p frame pair on
 one CPU core against a 12 ms target, 74.2 frame pairs per second, 24.0 MiB peak heap over 10,000 frames
 against a 128 MiB ceiling, byte-identical output across thread counts and collector settings, and 29 of 33
 requirements verified with a committed test and recorded output. 44 defects were found and recorded;
@@ -568,8 +568,8 @@ The numbers, all reproducible from the repository:
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Commits | 153, all GPG-signed, on one branch, no merges | `git rev-list --count HEAD` |
-| By type | 64 docs, 27 test, 27 fix, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore, summing to 153 | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
+| Commits | 159 when this table was written, and the command gives the current count | `git rev-list --count HEAD` |
+| By type | 67 docs, 29 fix, 27 test, 23 feat, 6 plan, 2 spec, 2 refactor, 1 perf, 1 chore when this table was written | `git log --format='%s' | cut -d: -f1 | sort | uniq -c` |
 | Commits carrying a `Spec:` trailer | 115 | `git log --grep='^Spec:' --oneline | wc -l` |
 | Carrying a `Req:` trailer | 113 | the same with `^Req:` |
 | Carrying a `Task:` trailer | 75 | the same with `^Task:` |

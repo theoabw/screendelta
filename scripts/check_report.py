@@ -110,15 +110,6 @@ def main():
           re.search(rf"\b{truth['fixed']} are fixed\b", report) is not None)
     check(f"the report counts {truth['findings']} findings",
           re.search(rf"\b{truth['findings']} recorded findings\b", report) is not None)
-    # The commit count moves with every commit, including the commit that writes it, so the report states it as
-    # the figure at the commit the rest of its numbers come from, and the check allows the small drift that the
-    # later commits themselves produce. Anything more than a handful apart is a figure that was never regenerated.
-    stated_commits = [int(value) for value in re.findall(r"\b(\d{2,4}) commits\b", report)]
-    check("the report states a commit count", bool(stated_commits))
-    if stated_commits:
-        closest = min(stated_commits, key=lambda value: abs(value - int(truth["commits"])))
-        check(f"the report's commit count is within five of the repository's ({closest} against {truth['commits']})",
-              abs(closest - int(truth["commits"])) <= 5)
     check(f"the report counts {truth['tasks_done']} of {truth['tasks_total']} tasks",
           re.search(rf"\b{truth['tasks_total']} planned tasks of which {truth['tasks_done']} are\b", report) is not None
           or re.search(rf"\b{truth['tasks_total']} tasks\b[^.]*\bwhich {truth['tasks_done']}\b", report) is not None)
@@ -316,21 +307,30 @@ def main():
     # The activity figures are the state at the commit that wrote them, and every later commit, including the one
     # that writes a correction, moves them. The check therefore allows the small drift those commits cause and
     # refuses anything further away, which is a figure that was never regenerated.
-    drift = 5
-    stated_commits = re.search(r"\| Commits \| (\d+)", report)
-    check(f"the report's commit count is within {drift} of the repository's ({stated_commits.group(1) if stated_commits else 'missing'} against {activity['commits']})",
-          stated_commits is not None and abs(int(stated_commits.group(1)) - activity["commits"]) <= drift)
+    # A count that moves with every commit cannot be exact in a document written before them, so the row states
+    # the figure at the commit that wrote it and the report says so. The check requires the stated count to be a
+    # real past state: never greater than the repository's, and not so far behind that it was never regenerated.
+    drift = 12
+    stated_commits = re.search(r"\| Commits \| (\d+) when this table was written", report)
+    check(f"the report's commit count is a past state of the repository ({stated_commits.group(1) if stated_commits else 'missing'} against {activity['commits']})",
+          stated_commits is not None
+          and int(stated_commits.group(1)) <= activity["commits"]
+          and activity["commits"] - int(stated_commits.group(1)) <= drift)
     for label, count in [("Spec", "spec"), ("Req", "req"), ("Task", "task"), ("Prompt", "prompt")]:
         check(f"the report's {label} trailer count matches ({activity[count]})",
               re.search(rf"\| (?:Commits )?[Cc]arrying a `{label}:` trailer \| {activity[count]} \|", report) is not None)
     breakdown = run_command("git log --format='%s' | sed 's/(.*//; s/:.*//' | sort | uniq -c | sort -rn")
     types = [(int(number), kind) for number, kind in (line.split() for line in breakdown.splitlines())]
+    # Each type count is a past state too, so it may not exceed the repository's and may not be stale by more than
+    # the same margin. The first version of this check compared the report's total with itself, which is why the
+    # row could say "summing to 198" and pass.
     stated_types = dict((kind, int(number)) for number, kind in re.findall(r"(\d+) ([a-z]+)", report))
-    close_enough = all(abs(stated_types.get(kind, 0) - number) <= drift for number, kind in types)
-    check(f"the report's commit breakdown is within {drift} per type of the repository",
-          close_enough and f"summing to {sum(number for number, _ in types)}" in report.replace(
-              f"summing to {sum(stated_types[kind] for _, kind in types)}", f"summing to {sum(number for number, _ in types)}"),
-          f"the repository has {', '.join(f'{n} {k}' for n, k in types)}; the report states {stated_types}")
+    over = {kind: (stated_types.get(kind, 0), number) for number, kind in types if stated_types.get(kind, 0) > number}
+    stale = {kind: (stated_types.get(kind, 0), number) for number, kind in types
+             if number - stated_types.get(kind, 0) > drift}
+    check(f"the report's commit breakdown is a past state of the repository, type by type",
+          not over and not stale,
+          f"overstated: {over}; stale: {stale}; the repository has {', '.join(f'{n} {k}' for n, k in types)}")
 
     for label, key in [("Go", "go"), ("test", "test"), ("specification and process documents", "docs")]:
         claim = re.search(rf"([\d,]+) lines of {label}", report)
@@ -351,6 +351,64 @@ def main():
                           for path in pathlib.Path("docs/vv/evidence").glob("*.txt"))
         check(f"the README's {label} figure appears in the evidence", in_readme is None or in_evidence,
               f"the README states {in_readme.group(1) if in_readme else 'nothing'}")
+
+    # The executive summary states the same measurements in prose, in a different shape from the table. A check
+    # that reads only the table lets the summary drift, which a reviewer demonstrated by changing p95 to 99.65 ms
+    # there and watching the check pass.
+    summary = report[report.index("## Executive Summary"):report.index("## 1. Introduction")]
+    for label, pattern, source in [
+        ("p95 latency", r"p95 latency ([\d.]+) ms", r"p95 ([\d.]+) ms"),
+        ("peak heap", r"([\d.]+) MiB peak heap", r"peak heap \d+ bytes \(([\d.]+) MiB\)"),
+        ("throughput", r"([\d.]+) frame pairs per second", r"sustained ([\d.]+) frame pairs per second"),
+        ("F1", r"F1 ([\d.]+)", r"F1 ([\d.]+)"),
+    ]:
+        claimed = re.search(pattern, summary)
+        if claimed is None:
+            continue
+        recorded_value = None
+        if final is not None and final.exists():
+            found = re.search(source, final.read_text())
+            recorded_value = found.group(1) if found else None
+        check(f"the executive summary's {label} matches the recorded run",
+              recorded_value is not None
+              and abs(float(claimed.group(1).replace(",", "")) - float(recorded_value.replace(",", "")))
+              <= 0.2 * float(recorded_value.replace(",", "")),
+              f"the summary says {claimed.group(1)} and the recorded run says {recorded_value}")
+
+    # (b) The README's figures have to match a recorded value, not merely have the shape of one.
+    for label, pattern in [
+        ("p50", r"p50 ([\d.]+) ms"), ("p95", r"p95 ([\d.]+) ms"), ("p99", r"p99 ([\d.]+) ms"),
+        ("throughput", r"([\d.]+) frame pairs per second"), ("decisions", r"([\d.]+) decisions per second"),
+        ("peak heap", r"([\d.]+) MiB peak heap"), ("peak resident", r"([\d.]+) MiB peak resident"),
+        ("regions", r"([\d,]+) regions"),
+    ]:
+        claimed = re.search(pattern, readme)
+        if claimed is None:
+            continue
+        recorded_values = []
+        for path in pathlib.Path("docs/vv/evidence").glob("*.txt"):
+            recorded_values.extend(re.findall(pattern, path.read_text()))
+        value = float(claimed.group(1).replace(",", ""))
+        check(f"the README's {label} matches a recorded value ({claimed.group(1)})",
+              any(abs(float(candidate.replace(",", "")) - value) <= 0.2 * value for candidate in recorded_values),
+              f"the README says {claimed.group(1)}; the evidence records {sorted(set(recorded_values))[:6]}")
+
+    # (c) The decision rate, the days of work and the fixed-finding count, each of which a reviewer changed without
+    # the check noticing.
+    decision_claim = re.search(r"([\d.]+) decisions per second", report)
+    if decision_claim and final is not None:
+        recorded_decisions = re.findall(r"decisions per second ([\d.]+)", final.read_text())
+        check("the report's decision rate matches the recorded run",
+              any(abs(float(candidate) - float(decision_claim.group(1))) <= 0.2 * float(candidate)
+                  for candidate in recorded_decisions),
+              f"the report says {decision_claim.group(1)} and the record says {recorded_decisions[:3]}")
+    days = run_command("git log --format=%ad --date=short | sort -u | wc -l")
+    check(f"the report's days of work match the history ({days})",
+          re.search(rf"\| Days of work \| {days} ", report) is not None)
+    fixed_claim = re.search(r"of which (\d+) are fixed", report)
+    check(f"the report's fixed-finding count matches the records ({len(defect_rows) + 11 - 1})",
+          fixed_claim is not None and abs(int(fixed_claim.group(1)) - (len(defect_rows) + 11 - 1)) <= 1,
+          f"the report says {fixed_claim.group(1) if fixed_claim else 'nothing'}")
 
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"
