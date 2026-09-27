@@ -519,10 +519,10 @@ trustworthy, with the defect that caused each withdrawal in the same table.
 Current state, from the commands named:
 
 | Measurement | Command | Expected | Actual | Status | Requirement |
-|---|---|---|---|
+|---|---|---|---|---|---|
 | Accuracy over generated frames | `make accuracy` | F1 at or above 0.98, moved attribution at or above 0.95, zero false removals, at least 5,000 pairs | 5,134 pairs and 27,094 regions, F1 1.0000, 20 of 20 movements attributed (1.0000), zero false removals | pass | NFR-005, NFR-006, SC-001 |
 | Latency, one core, 1080p | `make perf` | p95 at or below 12 ms, p99 at or below 25 ms | p50 8.62 ms, p95 9.22 ms, p99 9.99 ms | pass | NFR-001, SC-002 |
-| Throughput, one core | `make perf` | at least 74.4 frame pairs per second | 74.4 frame pairs per second | pass | NFR-002 |
+| Throughput, one core | `make perf` | at least 30 frame pairs per second | 74.4 frame pairs per second | pass | NFR-002 |
 | Memory over 10,000 frames | `make memcheck` | at most 128 MB, no growth with stream length | peak heap 24.0 MiB and peak resident 30.5 MiB over the run, with the heap measuring the same at the first and the last sample | pass | NFR-003, SC-003 |
 | Allocation steady state | the allocation guard | no growth between two consecutive windows | 8,220 bytes per frame in the first window and 8,220 in the second | pass | NFR-003 |
 | Coverage | `go test -cover` | at least 80 percent on the geometry and identity modules | diff 81.9, identity 86.2 percent, and 87.2 and 96.4 on the other two | pass | NFR-009 |

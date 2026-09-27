@@ -465,6 +465,30 @@ def main():
                   any(abs(value - recorded) <= 0.2 * recorded for recorded in recorded_values) for value in claimed),
               f"the report states {claimed} and the record has {recorded_values}")
 
+    # Every markdown table has to be a table. The verification table's separator row had four columns under a
+    # six-column header, so pandoc rejected it and the PDF rendered the section's most important table as a
+    # paragraph of pipe characters. Nothing else noticed, because the source looked like a table.
+    for name, content in [("the report", report), ("the README", readme),
+                          ("the handover", pathlib.Path("docs/handover.md").read_text())]:
+        lines = content.splitlines()
+        broken = 0
+        for index in range(len(lines) - 1):
+            line = lines[index]
+            if not line.strip().startswith("|"):
+                continue
+            separator = lines[index + 1].strip()
+            if not re.fullmatch(r"\|[\s:|-]+\|", separator):
+                continue
+            header = len(re.findall(r"(?<!\\)\|", line)) - 1
+            for offset in range(index + 2, len(lines)):
+                row = lines[offset]
+                if not row.strip().startswith("|"):
+                    break
+                if len(re.findall(r"(?<!\\)\|", row)) - 1 != header:
+                    broken += 1
+        check(f"every table in {name} has rows shaped like its header", broken == 0,
+              f"{broken} row(s) would be rejected by the renderer")
+
     # Every repository path either document cites has to exist.
     pattern = r"`((?:docs|specs|internal|tests|cmd|tools|scripts)/[^`\s]+)`"
     for path, document in [("the report", report), ("the README", readme)]:
