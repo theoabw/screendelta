@@ -72,9 +72,13 @@ decision in `specs/001-frame-delta-engine/research.md` with the reason recorded.
 
 ### 1.2 The Vibe Coding
 
-Vibe coding, in the sense used here, is prompting an agent with an outcome and accepting what it produces
-without a specification to check it against. It was used for exactly three things, each deliberately
-bounded:
+Vibe coding, in the sense used here, is prompting an agent with an outcome and accepting what it produces without a
+specification to check it against. The idea was built that way first, deliberately and without a specification to
+consult: one prompt, "write a Go program that takes two screenshots and prints the areas that changed as JSON", and
+whatever came back was kept as it arrived. It is 148 lines in `vibe/`, it runs, and section 3.0 measures what it does
+and does not do against the engine that replaced it.
+
+The pass was then used for three further things, each bounded:
 
 - **exploration before the specification existed**, where an agent was asked what a chainable GUI change
   detector could usefully promise, which produced the candidate list in `docs/ideas.md` and was thrown
@@ -84,10 +88,12 @@ bounded:
 - **wording**, where error messages, documentation and commit messages were drafted by an agent and
   corrected by hand.
 
-What was kept from the unstructured phase is small and auditable: the idea scores, the process layer and
-the wording. What was not kept is the code: no implementation line was written before the requirement it
-implements existed, which the repository enforces rather than promises, because
-`scripts/check_traceability.py` fails when a requirement has no task and a task has no test.
+What was kept from the unstructured work is small and auditable: the prototype, the idea scores, the process layer and
+the wording. What was not kept is any implementation line in the engine itself: nothing there was written before the
+requirement it implements existed, which the repository enforces rather than promises, because
+`scripts/check_traceability.py` fails when a requirement has no task and a task has no test. The prototype is the
+exception, and it is kept outside the engine's packages on purpose, as evidence of what the unconstrained pass
+produced rather than as code anything depends on.
 
 The cost of the unstructured phase was real and is recorded in `docs/prompt-log/0005-system-selection.md`:
 four candidate systems were explored in detail before the fifth was chosen, and the first two were
@@ -262,6 +268,34 @@ implementation could not satisfy the original wording.
 
 ## 3. The Approach and Prompting Framework (5 points)
 
+### 3.0 The Two Passes, and What the Second One Bought
+
+The idea was built twice, which is the comparison the course asks for. The first pass is in `vibe/`: one prompt, one
+file, no specification, no contract and no test. The second is the engine, built with Spec Kit over the rest of this
+report. Both were run on the same eight real 1280 by 720 screenshots, and the differences are measured rather than
+described.
+
+| Property | The vibe-coded pass | The specified engine |
+|---|---|---|
+| Lines | 148 in one file | 5,784 in the engine, plus 6,884 of tests |
+| Document against the published schema | Missing four of five required top-level fields and five of seven per region | Complete |
+| Two identical frames | `{"regions":null}` | A document with an empty list and a fingerprint |
+| Bounds | Integer pixels, so a document means one frame size | Fractions of the frame |
+| Identity, classification, conditions, noise floor | None | All four, each with a test |
+| Region counts on seven consecutive real pairs | 3, 7, 4, 4, 5, 8, 12 | 3, 6, 4, 4, 5, 8, 10 |
+| Time per pair, including process start | 64 to 70 ms | 35 to 41 ms |
+
+Four of those deserve naming. The vibe pass is **slower** on the one operation both implement, by about a factor of
+two, because the engine's extra length is spent on a measured noise floor, word-at-a-time comparison and buffer reuse,
+and those are the things the specification asked for. Its empty result is **`null` where the contract requires a
+list**, which no prompt would have caught and a schema does. It is **deterministic on these inputs by luck**, because
+the loop ranges over a slice; nothing in it guarantees the property, and the engine moves it from luck to a total
+order with a test. And it **passes the noise pair** it was tried on for a reason nobody wrote down.
+
+The honest summary of the first pass: it produced something that works on the happy path in one response, and it
+produced nothing that a consumer could rely on. The specification's cost is visible in the line count, and what it
+bought is visible in the six rows below it.
+
 ### 3.1 Prompting Framework
 
 The framework is a mix, chosen per activity rather than per project:
@@ -269,10 +303,12 @@ The framework is a mix, chosen per activity rather than per project:
 | Activity | Technique | Why |
 |---|---|---|
 | Exploration before the specification | Role prompting with a named constraint ("you are choosing a system that a single agent team can finish and that a course can grade on process") | The first attempts failed by exploring systems with no constraint to optimise for, which section 1.2 records |
+| The vibe-coded pass | One outcome-level prompt, accepted as it came, with no follow-up and no review | The pass is evidence about what an unconstrained prompt produces, so correcting it would destroy what it is for |
 | Writing the specification | Structured, one Spec Kit command per step, with the command's own template as the prompt | The template asks for the fields the process needs; a free-form prompt produced a specification with no measurable criteria |
 | Implementation | Chain of thought inside a task-bounded brief: goal, files, constraints, existing patterns, how to verify | An agent given a task from `tasks.md` has a bounded problem, and the brief carries the conventions it would otherwise guess |
 | Verification | Adversarial role prompting: "your job is to falsify the claims below, not to comment on style" | A review prompt that asks for correctness returns code style; the one that asks for a counterexample returns defects |
 | Measurement | No prompting: the harness is code, and the agent's role is to build and then try to defeat it | The most valuable findings in this project came from an agent trying to pass a measurement with a deliberately wrong implementation |
+
 
 The single most important choice is the last one. 10 independent review passes are recorded in the audit log, and every finding came from one of them: 31 of the
 56 numbered defects, plus the 11 from the first pass, which the audit log counts separately because they predate
@@ -615,7 +651,7 @@ people, and what replaced the missing second and third reviewers.
 | Auditor | Human against `CONTRIBUTING.md`, plus the traceability check | The check runs in CI and in `make check`; the audit log records the one process failure (eleven commits without review) and the rule that followed | `docs/vv/plan.md`, `CONTRIBUTING.md` |
 
 Leverage, quantified rather than asserted: 185 commits in two days, 6,350 lines of Go against 6,882 lines of
-test and 4,989 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
+test and 5,037 lines of specification and process documents, 54 planned tasks of which 53 are complete, 33
 requirements of which 29 are verified, and 67 findings were recorded, of which 66 are fixed. The human wrote no
 implementation line by hand and every one that was committed was read.
 
@@ -650,12 +686,19 @@ What worked, with the measurement or the artifact that shows it:
   input, the corpus harness and the boundary tests exist at the level the requirement is stated: for
   example the noise floor has a test for a difference exactly at the floor and one level past it, which is
   a test nobody writes from reading the implementation.
+- **A specification is what makes a result dependable, and the two passes show the size of the difference.** The
+  unconstrained pass produced working code on the happy path in one response, and its output cannot be consumed by
+  anything: the document fails the published schema, an empty result is `null` where the contract wants a list, and
+  bounds are pixels, so a document means one frame size. The engine took 40 times the lines and answers all of that,
+  and it is also twice as fast on the one operation both implement, because its length is spent on measurement rather
+  than on ceremony. Neither number is an argument against prompting; together they are the argument for specifying.
+
 - **Review in a separate context is cheap and effective.** Ten review passes, 54 of the 67 findings, no authoring context
   shared. The cost is minutes of wall clock per round, and the value is measured by what the findings
   would have cost later: the aliasing defect (AUD-001 in the first round) would have corrupted documents
   in a streaming consumer, and the tile-boundary defect (AUD-004) was invisible to every test that existed
   until the corpus reached 5,000 pairs.
-- **Documentation kept pace with the code.** 4,989 lines of specification, research notes, plan and
+- **Documentation kept pace with the code.** 5,037 lines of specification, research notes, plan and
   decision records against 6,350 lines of Go, because every non-obvious rule had to be written down to be
   implemented, and the writing was cheap once the decision was made.
 
