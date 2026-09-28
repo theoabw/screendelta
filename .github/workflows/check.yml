@@ -1,0 +1,36 @@
+name: check
+
+# The repository's own gate, on every push and every pull request.
+#
+# `make check-strict` runs the test suite, the traceability check and the report check, so a change that leaves a
+# requirement untraced, a figure in the report that the repository does not support, or a failing test cannot pass
+# quietly. `make cross` builds the three targets the portability requirement names.
+#
+# The mutation and regression checks are deliberately not here: both mutate the working tree to see whether the
+# tests notice, which is a thing to do on a machine with nothing else on it, and the report says so.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+      - name: Install the tools the checks call
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3
+      - name: The gate
+        run: make check-strict
+      - name: Build the three targets
+        run: make cross
