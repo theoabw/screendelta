@@ -14,7 +14,7 @@ the file to read before and after the remaining steps below.
 
 | | |
 |---|---|
-| Commits | 184 on `main`, signed, no remote configured |
+| Commits | 186 on `main`, signed, no remote configured |
 | Requirements | 33 defined, 29 verified with a committed test and recorded output |
 | Tasks | 54 planned, 53 complete |
 | Defects | 56 recorded: 55 fixed, 1 documented as inherent with its reason, none open |
@@ -35,7 +35,7 @@ says which is which:
 
 | Question | Answer | What it means here |
 |---|---|---|
-| Push the repository | Local for now | The 154 signed commits stay on this machine. Nothing has been pushed and no remote is configured |
+| Push the repository | Local for now | The 186 signed commits stay on this machine. Nothing has been pushed and no remote is configured |
 | The acceptance run | The owner runs it and reports the result | `docs/vv/acceptance.md` is ready; the timed scenario and six short ones take about ten minutes with a second person. NFR-007 and SC-005 move to verified once the result is recorded |
 | The second host | Retry the owner's own machines later | The desktop, the laptop and its WSL instance were all unreachable when attempted, so NFR-004's cross-host claim and NFR-008's Windows runtime half stay unmet with the residual recorded |
 
