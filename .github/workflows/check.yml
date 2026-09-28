@@ -22,10 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The checks read the history: the commit count, the trailer counts and the days of work all come from
+          # git log, and the default shallow clone shows a single commit, so the gate failed on the runner while
+          # passing locally. The first run of this workflow is what found that, which is the reason to have it.
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
-          cache: true
+          cache: false
       - name: Install the tools the checks call
         run: |
           sudo apt-get update -qq
