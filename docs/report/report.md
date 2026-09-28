@@ -118,9 +118,9 @@ with no artifact accumulating between prompts, which is why its three failure mo
 project did not write implementation code that way. The specification-driven workflow actually followed is
 `docs/process/sdd-workflow.svg`, and section 7.4 proposes the version of it worth reusing.
 
-The development timeline so far is two working days of agent-assisted construction, 2026-09-26 and
-2026-09-27, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
-is graded on what the process produced rather than on how long it took: 153 commits, 6,350 lines of Go and
+The development timeline so far is three calendar days of agent-assisted construction, 2026-09-26 to
+2026-09-28, against a submission deadline of 2026-10-25. That is worth stating plainly, because the report
+is graded on what the process produced rather than on how long it took: 190 commits, 6,350 lines of Go and
 6,884 lines of test, with the specification, plan and task list written before the code they describe.
 The feature workflow this repository commits to is drawn in `docs/process/sdd-workflow.svg` and described
 in section 7.4.
@@ -586,7 +586,7 @@ The numbers, all reproducible from the repository:
 | Commits carrying a `Req:` trailer | 114 | the same with `^Req:` |
 | Commits carrying a `Task:` trailer | 76 | the same with `^Task:` |
 | Commits carrying a `Prompt:` trailer | 122 | the same with `^Prompt:` |
-| Days of work | 2 (2026-09-26, 2026-09-27) | `git log --format='%ad' --date=short \| sort \| uniq -c` |
+| Days of work | 3 (2026-09-26 to 2026-09-28) | `git log --format='%ad' --date=short \| sort \| uniq -c` |
 
 The trailers are the link between a code change, the requirement it serves, the task that planned it and
 the session that prompted it, and they are the reason the traceability matrix can be checked by a script
@@ -660,7 +660,7 @@ What worked, with the measurement or the artifact that shows it:
   implemented, and the writing was cheap once the decision was made.
 
 How much time construction gained is hard to state honestly, so the report gives the count that can be
-verified instead: 6,350 lines of implementation and 6,884 lines of test in two working days, with a
+verified instead: 6,350 lines of implementation and 6,884 lines of test across three calendar days, with a
 specification and a review trail that a reader can audit. The comparison that matters is not lines per
 hour but defects per requirement: 67 recorded findings across 33 requirements, of which 66 are fixed, is a
 rate that only holds because the review was as cheap as it was.

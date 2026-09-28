@@ -92,3 +92,10 @@ traced as `planned` in `docs/traceability.md`, and `make check-strict` reports 3
 requirements, 32 matrix rows and zero errors. The technology stack is deliberately
 left to the plan, constrained by the constitution to single-command distribution,
 predictable numeric behaviour and a native image path within the latency budget.
+
+## Redactions
+
+Two passages were redacted before this repository was published, because they named systems and private projects of
+the author's rather than anything the course asked about. The list of rejected ideas lost the names of those tools, and
+one quoted prompt that referred to two of them is marked as redacted in place. The reasoning, the sequence and the
+outcome are unchanged, and nothing else in this log was edited.
