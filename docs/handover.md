@@ -14,7 +14,7 @@ the file to read before and after the remaining steps below.
 
 | | |
 |---|---|
-| Commits | 186 on `main`, signed, no remote configured |
+| Commits | 190 on `main`, no remote configured |
 | Requirements | 33 defined, 29 verified with a committed test and recorded output |
 | Tasks | 54 planned, 53 complete |
 | Defects | 56 recorded: 55 fixed, 1 documented as inherent with its reason, none open |
@@ -35,7 +35,7 @@ says which is which:
 
 | Question | Answer | What it means here |
 |---|---|---|
-| Push the repository | Local for now | The 186 signed commits stay on this machine. Nothing has been pushed and no remote is configured |
+| Push the repository | Local for now | The 190 commits stay on this machine. Nothing has been pushed and no remote is configured |
 | The acceptance run | The owner runs it and reports the result | `docs/vv/acceptance.md` is ready; the timed scenario and six short ones take about ten minutes with a second person. NFR-007 and SC-005 move to verified once the result is recorded |
 | The second host | Retry the owner's own machines later | The desktop, the laptop and its WSL instance were all unreachable when attempted, so NFR-004's cross-host claim and NFR-008's Windows runtime half stay unmet with the residual recorded |
 
@@ -61,8 +61,8 @@ git remote add origin <the project URL>
 git push -u origin main
 ```
 
-Then submit that URL in Moodle, as the course requires. The commits are signed and the history is the graded
-artefact, so push rather than squash: the granularity is part of what is being assessed.
+Then submit that URL in Moodle, as the course requires. The history is the graded artefact, so push rather than
+squash: the granularity is part of what is being assessed.
 
 ### 2. Run the acceptance test (about ten minutes, needs a second person)
 
